@@ -33,6 +33,8 @@ No model weights are bundled in this repository. The workflow also contains opti
 
 ## Why H3 Continuum exists
 
+**H3 Continuum Sampler is an integrated sampler that includes H3 sampling, deferred Video/Audio VAE decoding, Context trimming, and automatic multi-chunk assembly.** The VAE model weights are not bundled or loaded internally; connect externally loaded `video_vae` and `audio_vae` inputs.
+
 Continuum was created to make SVI-style long-form continuation practical with native MiniMax H3: generate several manageable chunks, carry motion and audio context forward, and assemble one result without manually rebuilding the graph for every clip.
 
 The main benefit is not only continuity. A native monolithic 15-second H3 generation can put substantial pressure on VRAM. Continuum samples shorter chunks separately, carries only the required raw AV latent context, stores completed chunk data outside the active sampling path, and defers decoding until sampling is complete. This can make a 3 x 5-second sequence less likely to run out of VRAM on a 16GB GPU, although resolution, model precision, accelerators, offload settings, and available system RAM still determine the actual limit.
