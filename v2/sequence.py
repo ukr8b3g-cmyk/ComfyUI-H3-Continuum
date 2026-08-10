@@ -13,7 +13,7 @@ from ..compatibility import accelerator_summary, check_comfy_h3_runtime
 from ..constants import (
     DIAGNOSTICS_FULL, DIAGNOSTICS_OFF, DIAGNOSTICS_OPTIONS, FPS,
     CONTINUUM_ACTUAL_PREFIX_STEPS, SEAM_CORRECTION_AUTO, SEAM_CORRECTION_OFF,
-    SEAM_CORRECTION_OPTIONS, V2_CONTINUITY_AUTO,
+    SEAM_CORRECTION_OPTIONS, V2_CONTINUITY_AUTO, normalize_diagnostics_mode,
 )
 from ..continuation import POLICY_REPLACE, prepare_conditioning
 from ..model_patch import clone_model_for_chunk, patch_model
@@ -76,7 +76,7 @@ def _conditioning_cache(*,clip,prompts,assets,final_has_last_frame):
     return cache
 
 def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,sigmas:torch.Tensor,first_frame:torch.Tensor|None,last_frame:torch.Tensor|None,prompt_plan:dict[str,Any],width:int,height:int,continuity:str,base_seed:int,audio_continuity:bool,exact_total_duration:bool,diagnostics_mode:str,reroll_from_chunk:int,reroll_nonce:int,strict_compatibility:bool,debug:bool,seam_correction:str=SEAM_CORRECTION_OFF,enable_preview:bool=True,session:dict[str,Any]|None=None,initial_state:dict[str,Any]|None=None):
-    plan=validate_prompt_plan(prompt_plan); chunks=int(plan["chunks"]); chunk_seconds=float(plan["chunk_seconds"]); prompts=list(plan["prompts"]); prompt_hashes=list(plan["hashes"]); width,height=int(width),int(height)
+    diagnostics_mode=normalize_diagnostics_mode(diagnostics_mode); plan=validate_prompt_plan(prompt_plan); chunks=int(plan["chunks"]); chunk_seconds=float(plan["chunk_seconds"]); prompts=list(plan["prompts"]); prompt_hashes=list(plan["hashes"]); width,height=int(width),int(height)
     if width<=0 or height<=0 or width%32 or height%32: raise SequenceRuntimeError("width and height must be positive multiples of 32")
     if session is not None and initial_state is not None: raise SequenceRuntimeError("connect either a session or an initial_state, not both")
     if diagnostics_mode not in DIAGNOSTICS_OPTIONS: raise SequenceRuntimeError(f"unknown diagnostics mode: {diagnostics_mode!r}")

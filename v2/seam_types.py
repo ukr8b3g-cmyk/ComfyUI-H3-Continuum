@@ -22,8 +22,11 @@ class SeamDecision:
     cut_rewind_frames: int = 0
     legacy_score: float = 0.0
     cut_score: float = 0.0
+    candidate_score: float = 0.0
     corrected_score: float = 0.0
     improvement: float = 0.0
+    native_window_peak: float = 0.0
+    candidate_window_peak: float = 0.0
     video_blend_frames: int = 0
     luma_gain: float = 1.0
     chroma_bias: tuple[float,float,float] = (0.0,0.0,0.0)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from ..constants import (
+    DIAGNOSTICS_ACCEPTED_OPTIONS,
     DIAGNOSTICS_OPTIONS,
     PROMPT_FORMAT_OPTIONS,
     PROMPT_MODE_OPTIONS,
@@ -12,6 +13,7 @@ from ..constants import (
     SEAM_CORRECTION_OFF,
     SEAM_CORRECTION_OPTIONS,
     V2_CONTINUITY_OPTIONS,
+    normalize_diagnostics_mode,
 )
 from .prompts import (
     apply_prompt_overrides,
@@ -56,7 +58,7 @@ def _repair_v200_example_widget_shift(
     back losslessly.
     """
 
-    if isinstance(exact_total_duration, str) and exact_total_duration in DIAGNOSTICS_OPTIONS:
+    if isinstance(exact_total_duration, str) and exact_total_duration in DIAGNOSTICS_ACCEPTED_OPTIONS:
         if isinstance(diagnostics, (int, float, bool)) and not isinstance(diagnostics, str):
             LOG.warning(
                 "H3 Continuum V2 detected the malformed 2.0.0 bundled workflow widget "
@@ -66,7 +68,7 @@ def _repair_v200_example_widget_shift(
             return (
                 bool(audio_continuity),
                 True,
-                exact_total_duration,
+                normalize_diagnostics_mode(exact_total_duration),
                 int(diagnostics),
                 int(reroll_from_chunk),
                 bool(reroll_nonce),
@@ -75,7 +77,7 @@ def _repair_v200_example_widget_shift(
     return (
         bool(audio_continuity),
         bool(exact_total_duration),
-        diagnostics,
+        normalize_diagnostics_mode(diagnostics),
         int(reroll_from_chunk),
         int(reroll_nonce),
         bool(strict_compatibility),
@@ -94,6 +96,10 @@ class H3ContinuumSamplerV2:
         "MiniMax H3 integrated continuation",
         "H3 Continuum V2",
     ]
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, diagnostics):
+        return True if diagnostics in DIAGNOSTICS_ACCEPTED_OPTIONS else f"unknown report detail: {diagnostics!r}"
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -170,7 +176,14 @@ class H3ContinuumSamplerV2:
                         "tooltip": "Trim or minimally pad the assembled result to chunks × seconds × 24fps.",
                     },
                 ),
-                "diagnostics": (DIAGNOSTICS_OPTIONS, {"default": DIAGNOSTICS_OPTIONS[0]}),
+                "diagnostics": (
+                    DIAGNOSTICS_OPTIONS,
+                    {
+                        "default": DIAGNOSTICS_OPTIONS[0],
+                        "display_name": "Report Detail",
+                        "tooltip": "Controls report verbosity only; it does not change generation or seam correction.",
+                    },
+                ),
                 "reroll_from_chunk": (
                     "INT",
                     {
@@ -201,9 +214,10 @@ class H3ContinuumSamplerV2:
                     {
                         "default": SEAM_CORRECTION_AUTO,
                         "tooltip": (
-                            "Auto keeps the legacy video boundary unless the guarded candidate "
-                            "improves it. Off preserves the V2.0.2 decode path. Basic always runs "
-                            "the conservative decoded A/V boundary correction."
+                            "Auto keeps native video unless a no-blend candidate improves the boundary "
+                            "and five-frame transition without component regression; audio is guarded "
+                            "independently. Off preserves the decode path. Basic applies the decoded "
+                            "A/V correction including conservative video blend."
                         ),
                     },
                 ),
@@ -513,12 +527,23 @@ class H3ContinuumAdvanced:
     """Package optional continuation inputs and infrequent sampler settings."""
 
     @classmethod
+    def VALIDATE_INPUTS(cls, diagnostics):
+        return True if diagnostics in DIAGNOSTICS_ACCEPTED_OPTIONS else f"unknown report detail: {diagnostics!r}"
+
+    @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "audio_continuity": ("BOOLEAN", {"default": True}),
                 "exact_total_duration": ("BOOLEAN", {"default": True}),
-                "diagnostics": (DIAGNOSTICS_OPTIONS, {"default": DIAGNOSTICS_OPTIONS[0]}),
+                "diagnostics": (
+                    DIAGNOSTICS_OPTIONS,
+                    {
+                        "default": DIAGNOSTICS_OPTIONS[0],
+                        "display_name": "Report Detail",
+                        "tooltip": "Controls report verbosity only; it does not change generation or seam correction.",
+                    },
+                ),
                 "reroll_from_chunk": (
                     "INT",
                     {"default": 0, "min": 0, "max": 16, "step": 1},
@@ -563,7 +588,7 @@ class H3ContinuumAdvanced:
             {
                 "audio_continuity": bool(audio_continuity),
                 "exact_total_duration": bool(exact_total_duration),
-                "diagnostics": diagnostics,
+                "diagnostics": normalize_diagnostics_mode(diagnostics),
                 "reroll_from_chunk": int(reroll_from_chunk),
                 "reroll_nonce": int(reroll_nonce),
                 "strict_compatibility": bool(strict_compatibility),
@@ -633,7 +658,13 @@ class H3ContinuumSampler:
                 ),
                 "seam_correction": (
                     SEAM_CORRECTION_OPTIONS,
-                    {"default": SEAM_CORRECTION_AUTO},
+                    {
+                        "default": SEAM_CORRECTION_AUTO,
+                        "tooltip": (
+                            "Auto is native-first: video correction is adopted only when the boundary "
+                            "and five-frame transition clearly improve; audio is guarded independently."
+                        ),
+                    },
                 ),
             },
             "optional": {

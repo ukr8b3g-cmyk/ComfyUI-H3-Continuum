@@ -5,6 +5,8 @@ import torch
 import torch.nn.functional as F
 from .seam_types import AudioSeamMetrics, SeamDecision, VideoSeamMetrics
 COMPARE_SIZE=96; MAX_CUT_REWIND=3; MIN_RELATIVE_IMPROVEMENT=0.10; MIN_ABSOLUTE_IMPROVEMENT=0.003; SAFE_SCORE_LIMIT=0.35
+AUTO_MIN_RELATIVE_IMPROVEMENT=0.20; AUTO_WINDOW_FRAMES=5; AUTO_MIN_WINDOW_RELATIVE_IMPROVEMENT=0.05; AUTO_MIN_WINDOW_ABSOLUTE_IMPROVEMENT=0.0005
+AUTO_COMPONENT_RELATIVE_TOLERANCE=0.01; AUTO_COMPONENT_ABSOLUTE_TOLERANCE=0.0001
 WEIGHT_PIXEL=0.35; WEIGHT_LUMA=0.20; WEIGHT_CHROMA=0.10; WEIGHT_EDGE=0.15; WEIGHT_TEMPORAL=0.20
 
 def _video_shape(frames,label):
@@ -67,20 +69,37 @@ def apply_video_blend(previous_frames,aligned_next_frames,*,blend_frames):
     for index in range(blend_frames):
         progress=float(index+1)/float(blend_frames+1); alpha=0.5-0.5*math.cos(math.pi*progress); previous[index].mul_(1.0-alpha).add_(current[index],alpha=alpha)
     return previous
+def _seam_window_peak(previous_images,next_images,*,window_frames=AUTO_WINDOW_FRAMES):
+    if previous_images.shape[0]<1 or next_images.shape[0]<2: raise ValueError("video seam window scoring needs one previous and two next frames")
+    count=min(max(2,int(window_frames)),int(next_images.shape[0])); sequence=torch.cat((previous_images[-1:],next_images[:count]),dim=0); rgb=_downsample_rgb(sequence)
+    pixel_delta=torch.mean(torch.abs(rgb[1:]-rgb[:-1]),dim=(1,2,3)); mean_luma=_luma(rgb).mean(dim=(1,2)); luma_delta=torch.abs(mean_luma[1:]-mean_luma[:-1]); combined=0.75*pixel_delta+0.25*luma_delta
+    peak=float(torch.max(combined).item())
+    if not math.isfinite(peak): raise ValueError("video seam window score is not finite")
+    return max(0.0,min(1.0,peak))
+def _auto_rejection_reason(legacy,candidate,*,improvement,absolute_improvement,native_window_peak,candidate_window_peak):
+    if candidate.score>SAFE_SCORE_LIMIT: return "Auto kept native video; candidate score exceeded the safe limit"
+    if improvement<AUTO_MIN_RELATIVE_IMPROVEMENT or absolute_improvement<MIN_ABSOLUTE_IMPROVEMENT: return "Auto kept native video; candidate improvement was below the conservative threshold"
+    for label in ("pixel_mae_norm","luma_norm","chroma_norm","edge_norm","temporal_norm","motion"):
+        before=float(getattr(legacy,label)); after=float(getattr(candidate,label)); limit=before*(1.0+AUTO_COMPONENT_RELATIVE_TOLERANCE)+AUTO_COMPONENT_ABSOLUTE_TOLERANCE
+        if after>limit: return f"Auto kept native video; {label} regressed"
+    window_absolute=native_window_peak-candidate_window_peak; window_relative=window_absolute/max(native_window_peak,1e-12)
+    if window_relative<AUTO_MIN_WINDOW_RELATIVE_IMPROVEMENT or window_absolute<AUTO_MIN_WINDOW_ABSOLUTE_IMPROVEMENT: return "Auto kept native video; the five-frame transition peak did not clearly improve"
+    return None
 def correct_seam(previous_images,next_raw_images,*,context_frames,automatic=False):
-    rewind,legacy,selected=choose_adaptive_cut(previous_images,next_raw_images,context_frames=context_frames); cut_index=int(context_frames)-rewind; previous_stop=int(previous_images.shape[0])-rewind
+    native_current=next_raw_images[int(context_frames):]; native_window_peak=_seam_window_peak(previous_images,native_current); rewind,legacy,selected=choose_adaptive_cut(previous_images,next_raw_images,context_frames=context_frames); cut_index=int(context_frames)-rewind; previous_stop=int(previous_images.shape[0])-rewind
     if previous_stop<2 or cut_index<0: raise ValueError("adaptive cut would exhaust a seam side")
     current=next_raw_images[cut_index:].clone().contiguous(); kept_previous=previous_images[:previous_stop]; current,gain,bias,corrected=apply_color_guard(kept_previous,current)
-    blend_frames=min(choose_video_blend(selected),cut_index,previous_stop); video_patch=None
+    blend_frames=0 if automatic else min(choose_video_blend(selected),cut_index,previous_stop); video_patch=None; score_previous=kept_previous[-2:].clone()
     if blend_frames>0:
-        video_patch=apply_video_blend(kept_previous[-blend_frames:],next_raw_images[cut_index-blend_frames:cut_index],blend_frames=blend_frames); score_previous=kept_previous[-2:].clone(); replaced=min(blend_frames,2); score_previous[-replaced:].copy_(video_patch[-replaced:]); corrected=_boundary_metrics(score_previous,current[:2])
-    improvement=(legacy.score-corrected.score)/max(legacy.score,1e-12)
+        video_patch=apply_video_blend(kept_previous[-blend_frames:],next_raw_images[cut_index-blend_frames:cut_index],blend_frames=blend_frames); replaced=min(blend_frames,2); score_previous[-replaced:].copy_(video_patch[-replaced:]); corrected=_boundary_metrics(score_previous,current[:2])
+    candidate_window_peak=_seam_window_peak(score_previous,current); improvement=(legacy.score-corrected.score)/max(legacy.score,1e-12); absolute_improvement=legacy.score-corrected.score
     if corrected.score>legacy.score*1.01:
-        return next_raw_images[int(context_frames):].clone().contiguous(),SeamDecision(legacy_score=legacy.score,cut_score=legacy.score,corrected_score=legacy.score,fallback_reason="corrected score was worse than legacy"),None
-    absolute_improvement=legacy.score-corrected.score
-    if automatic and (improvement<MIN_RELATIVE_IMPROVEMENT or absolute_improvement<MIN_ABSOLUTE_IMPROVEMENT):
-        return next_raw_images[int(context_frames):].clone().contiguous(),SeamDecision(legacy_score=legacy.score,cut_score=selected.score,corrected_score=legacy.score,fallback_reason="Auto kept the legacy video seam; improvement was below threshold"),None
-    return current,SeamDecision(cut_rewind_frames=rewind,legacy_score=legacy.score,cut_score=selected.score,corrected_score=corrected.score,improvement=improvement,video_blend_frames=blend_frames,luma_gain=gain,chroma_bias=bias),video_patch
+        return native_current.clone().contiguous(),SeamDecision(legacy_score=legacy.score,cut_score=selected.score,candidate_score=corrected.score,corrected_score=legacy.score,native_window_peak=native_window_peak,candidate_window_peak=candidate_window_peak,fallback_reason="corrected score was worse than native video"),None
+    if automatic:
+        fallback_reason=_auto_rejection_reason(legacy,corrected,improvement=improvement,absolute_improvement=absolute_improvement,native_window_peak=native_window_peak,candidate_window_peak=candidate_window_peak)
+        if fallback_reason is not None:
+            return native_current.clone().contiguous(),SeamDecision(legacy_score=legacy.score,cut_score=selected.score,candidate_score=corrected.score,corrected_score=legacy.score,improvement=improvement,native_window_peak=native_window_peak,candidate_window_peak=candidate_window_peak,fallback_reason=fallback_reason),None
+    return current,SeamDecision(cut_rewind_frames=rewind,legacy_score=legacy.score,cut_score=selected.score,candidate_score=corrected.score,corrected_score=corrected.score,improvement=improvement,native_window_peak=native_window_peak,candidate_window_peak=candidate_window_peak,video_blend_frames=blend_frames,luma_gain=gain,chroma_bias=bias),video_patch
 
 def _audio_mid(waveform):
     if not torch.is_tensor(waveform) or waveform.ndim!=3: raise ValueError("audio seam waveform must be [B,C,S]")
