@@ -13,12 +13,11 @@ Native long-form MiniMax H3 video and audio continuation for ComfyUI.
 
 The ZIP contains the workflow, its reference image, and a short setup guide. Extract it, copy `H3_Continuum_V2_reference.webp` into `ComfyUI/input/`, then drag `H3_Continuum_V2.json` onto the ComfyUI canvas.
 
-It is a practical 3 x 5-second starting point for an RTX 5060 Ti 16GB system. Change `chunks`, `chunk_seconds`, resolution, seed, and prompts as needed. The graph uses the stable facade nodes and keeps session, reroll, and report wiring optional.
+It is a practical 3 x 5-second starting point for compatible MiniMax H3 ComfyUI systems. The bundled profile was validated on an RTX 5060 Ti 16GB system with 64GB of system RAM, but the workflow is not limited to that GPU. Adjust `chunks`, `chunk_seconds`, resolution, seed, prompts, and optional accelerators to suit the available hardware. The graph uses the stable facade nodes and keeps session, reroll, and report wiring optional.
 
 Related projects:
 
 - [ComfyUI Spectrum MiniMax H3](https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3) is the optional sampling accelerator used by the bundled graph.
-- [H3 Motion Context](https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context) is a separate clip-chaining implementation. See the comparison below; it is not required by Continuum.
 
 ### Models referenced by the workflow
 
@@ -39,9 +38,9 @@ Continuum was created to make SVI-style long-form continuation practical with na
 
 The main benefit is not only continuity. A native monolithic 15-second H3 generation can put substantial pressure on VRAM. Continuum samples shorter chunks separately, carries only the required raw AV latent context, stores completed chunk data outside the active sampling path, and defers decoding until sampling is complete. This can make a 3 x 5-second sequence less likely to run out of VRAM on a 16GB GPU, although resolution, model precision, accelerators, offload settings, and available system RAM still determine the actual limit.
 
-The standard workflow uses the INT8 ConvRot H3 checkpoint, SageAttention CUDA++, and optional Spectrum acceleration as a practical RTX 5060 Ti 16GB starting point. Spectrum is not required for continuity and should be disabled for native-trajectory quality comparisons.
+The standard workflow uses the INT8 ConvRot H3 checkpoint, SageAttention CUDA++, and optional Spectrum acceleration as the validated reference profile. On different GPUs or software stacks, start with SageAttention `Auto` or bypass optional accelerators and confirm compatibility locally. Spectrum is not required for continuity and should be disabled for native-trajectory quality comparisons.
 
-Continuum was developed independently before H3 Motion Context was discovered. Both address H3 continuation, but they use different workflow and orchestration designs. No H3 Motion Context source code is used by Continuum.
+Continuum was developed independently around its integrated multi-chunk workflow, AV timeline validation, and compatibility requirements. Other H3 continuation approaches are discussed only where their workflow and implementation differences are relevant.
 
 ## Recommended quality-first profile
 
