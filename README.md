@@ -41,6 +41,37 @@ The standard workflow uses the INT8 ConvRot H3 checkpoint, SageAttention CUDA++,
 
 Continuum was developed independently before H3 Motion Context was discovered. Both address H3 continuation, but they use different workflow and orchestration designs. No H3 Motion Context source code is used by Continuum.
 
+## Recommended quality-first profile
+
+Continuum targets a useful reduction in long-form generation time while retaining comparatively high quality. It does not select every available accelerator for maximum speed.
+
+| Component | Bundled RTX 5060 Ti profile | General recommendation |
+| --- | --- | --- |
+| MiniMax H3 model | `minimax_h3_fl2va_pruned_int8_convrot.safetensors` | Use a compatible official H3 model; the INT8 ConvRot build is the tested 16GB profile. |
+| SageAttention | `sageattn_qk_int8_pv_fp8_cuda++`, compile off | Use `Auto` when the installed SageAttention build and GPU-specific backend are unknown. |
+| Spectrum | Enabled with the settings below | Optional; disable it for a native-trajectory quality reference. |
+| Sol-Attn | Disabled | Currently not recommended in the standard continuity profile. Local A/B runs showed more visible boundary artifacts in some outputs; this is not a universal incompatibility claim. |
+| Turbo LoRA | Disabled | Not tested with this Continuum profile. No quality or compatibility claim is made yet. |
+| Seam Correction | `Auto` | Safe general starting point. In the current local A/B sample, `Off` produced the least noticeable visual boundary. Compare `Auto` and `Off` first. |
+
+Recommended Spectrum values used by this profile:
+
+```text
+blend_weight             = 0.50
+warmup_steps             = 1
+offline_smoothing_replay = true
+bootstrap_first_forecast = true
+audio_blend_weight       = 0.00
+```
+
+Continuum automatically requests Actual Prefix 2 for continuation chunks. This is not an extra user-facing Spectrum setting and does not increase the configured solver-step count.
+
+### Seam Correction A/B note
+
+The bundled workflow keeps `Auto` as a conservative general default. In the current 3 x 5-second local comparison, however, `Off` gave the most natural-looking join. `Auto` may apply a measured color adjustment or short blend that improves its numeric seam score but is not always preferred by visual inspection.
+
+For a new model, prompt, resolution, or accelerator combination, render the same seed with `Auto` and `Off`. Prefer `Off` when Native Continuity already produces a clean boundary; use `Auto` when it visibly reduces a remaining luminance, color, or audio discontinuity.
+
 ## Quick start
 
 1. Install the custom node and restart ComfyUI.
@@ -148,12 +179,14 @@ When troubleshooting, start with fewer accelerators and add them back one at a t
 The bundled workflow uses **Scale Image to Total Pixels** before `first_frame`:
 
 - `upscale_method: area` is appropriate for reducing a larger source image with stable averaging.
-- `megapixels: 0.60` preserves the source aspect ratio while targeting approximately 0.6 million pixels.
+- `megapixels: 0.50` preserves the source aspect ratio while targeting approximately 0.5 million pixels.
 - `resolution_steps: 32` rounds width and height to model-friendly multiples of 32.
-- The bundled portrait is reduced from 848 x 1264 to approximately 640 x 960; the exact rounded size is supplied to the Continuum sampler through the image-size nodes.
+- The bundled portrait is reduced from 848 x 1264 to approximately 576 x 864; the exact rounded size is supplied to the Continuum sampler through the image-size nodes.
 - If a 16GB GPU runs out of VRAM, reduce this first to `0.30 MP`, which is approximately 448 x 672 for the same portrait.
 
 This node changes generation resolution, not the Continuum context length. Increasing megapixels raises VRAM use and generation time for every chunk.
+
+The screenshot shows the same control at 0.60 MP for illustration. The current bundled JSON uses 0.50 MP.
 
 ![H3 Continuum Sampler controls](docs/images/h3-continuum-sampler.png)
 
@@ -180,7 +213,7 @@ Use **H3 Continuum Advanced** only when the basic node is not enough:
 - `prompt_plan`: accepts an externally prepared prompt plan.
 - `audio_continuity`: keeps audio context across chunk boundaries.
 - `exact_total_duration`: trims or pads the assembled result to the requested duration.
-- `Report Detail`: controls report verbosity; use Detailed Report for diagnostics.
+- `Report Detail`: `Basic` is the standard default. Use Detailed Report only for troubleshooting.
 - `reroll_from_chunk`: regenerates from a selected chunk; `0` disables reroll.
 - `reroll_nonce`: changes a reroll without replacing the main seed.
 - `strict_compatibility`: fails closed when the native H3 layout contract is incompatible.
@@ -449,6 +482,57 @@ New workflows should normally use the compact **H3 Continuum Sampler** facade.
 
 Continuum does not copy, vendor, or bundle source code from Spectrum or H3 Motion Context. Compatibility uses ComfyUI's MODEL/payload behavior. For a supported Spectrum build, Continuum emits a small API v1 metadata hint requesting at least two actual solver steps at the start of a continuation chunk; unsupported builds ignore it and continue normally.
 
+## Spectrum Actual Prefix 2 interoperability
+
+Spectrum accelerates sampling by forecasting selected post-transformer hidden features from Actual H3 evaluations. A continuation chunk introduces a new AV Context and Packed Layout. Forecasting immediately after that transition could start before Spectrum has enough Actual features for the new context.
+
+Continuum avoids that conflict without disabling or modifying Spectrum:
+
+```text
+Stable input MODEL
+  -> call-local MODEL clone for the chunk
+  -> build and validate the continuation AV Context
+  -> freeze the branch-specific Packed Layout signature
+  -> Actual solver step 0
+  -> Actual solver step 1
+  -> allow the normal Spectrum forecast schedule
+```
+
+- The input MODEL is not mutated; every chunk receives an isolated clone and Spectrum runtime.
+- The read-only `h3_continuum` API v1 hint is emitted only when valid previous Context exists.
+- The effective prefix is the larger of Spectrum's own warmup and Continuum's requested prefix, clamped to the configured solver-step count.
+- Context rows and generated Target rows remain separate in the native H3 Packed Layout.
+- The Packed Layout is checked per logical branch and must remain structurally stable during Native Actual calls.
+- Chunk 1 emits no hint and follows the normal Spectrum path.
+- Offline Replay reuses the recorded Actual anchors and does not apply the prefix a second time.
+- Older or unsupported Spectrum builds ignore the metadata and continue normally.
+
+Actual Prefix 2 does not add two solver steps and does not run the whole sample twice. With a 20-step schedule, the result still uses 20 solver steps. Under the standard Spectrum `warmup_steps=1` profile, it normally replaces one early forecast with one additional Actual Transformer evaluation. If the configured warmup is already two or more, it adds no evaluation.
+
+This design gives Spectrum two Context-specific Actual anchors before forecasting. It trades a small amount of the maximum possible acceleration for more stable continuation behavior.
+
+### Report output and optional Detailed Report
+
+![H3 Continuum Detailed Report](docs/images/h3-continuum-detailed-report.png)
+
+The bundled workflow uses `Basic` reporting and leaves `H3 Continuum Result.report` unconnected. No additional report-display extension is required for the standard workflow.
+
+The screenshot above is an optional troubleshooting example using `Detailed Report` and an external text display node. That display node is not included in the bundled template.
+
+```text
+Continuum report:
+interop=emitted actual_prefix=2 consumer=not_observable
+
+Spectrum log:
+Spectrum H3: accepted H3 Continuum API v1, actual prefix=2
+```
+
+`consumer=not_observable` is not an error. Interop API v1 is deliberately a one-way, read-only hint without an acknowledgement side channel. Spectrum's `accepted` log confirms that the hint was consumed.
+
+### Independently developed scope
+
+The general idea of continuing one clip from another is not claimed as unique. Continuum's AV timeline validation, branch-local Packed Layout guard, call-local MODEL isolation, Spectrum Actual Prefix 2 contract, integrated multi-chunk orchestration, and seam-correction pipeline were developed independently for this project. No Spectrum or H3 Motion Context source code is copied or bundled.
+
 ### License and external-content boundaries
 
 - This repository is licensed under [GPL-3.0](LICENSE).
@@ -463,8 +547,10 @@ The MIT license of the template repository does not change the licenses of model
 
 - GPU: NVIDIA GeForce RTX 5060 Ti 16GB.
 - System memory: 64GB RAM.
+- Runtime: Python 3.13.12, PyTorch 2.13.0+cu130, CUDA 13.0.
+- SageAttention: 2.2.0+cu130, using KJNodes FP8 CUDA++ with compile disabled.
 - Verified baseline environment: 3 x 5-second runs at approximately 448 x 672 (0.3 MP), using the INT8 ConvRot checkpoint and SageAttention CUDA++.
-- Bundled template profile: 3 x 5 seconds at 0.6 MP. Treat this higher-resolution profile as a starting point and monitor VRAM on the first run.
+- Bundled template profile: 3 x 5 seconds at 0.5 MP. Treat this higher-resolution profile as a starting point and monitor VRAM on the first run.
 - Longer-than-15-second chains are supported by the node design but have not yet been validated in this environment.
 - OOM avoidance is not guaranteed; peak usage depends on resolution, precision, model patches, Spectrum settings, ComfyUI offload behavior, and other loaded nodes.
 

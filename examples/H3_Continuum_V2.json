@@ -1,8 +1,8 @@
 {
   "id": "8686e43d-1cc3-4503-bb9f-2a7a180bda3e",
   "revision": 0,
-  "last_node_id": 216,
-  "last_link_id": 84,
+  "last_node_id": 220,
+  "last_link_id": 87,
   "nodes": [
     {
       "id": 149,
@@ -252,96 +252,6 @@
       ]
     },
     {
-      "id": 148,
-      "type": "CreateVideo",
-      "pos": [
-        1220,
-        810
-      ],
-      "size": [
-        210,
-        110
-      ],
-      "flags": {
-        "collapsed": true
-      },
-      "order": 18,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "link": 75
-        },
-        {
-          "name": "audio",
-          "shape": 7,
-          "type": "AUDIO",
-          "link": 76
-        }
-      ],
-      "outputs": [
-        {
-          "name": "VIDEO",
-          "type": "VIDEO",
-          "links": [
-            24
-          ]
-        }
-      ],
-      "title": "Create 3x5s Video",
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.30.0",
-        "Node name for S&R": "CreateVideo"
-      },
-      "widgets_values": [
-        24,
-        8
-      ],
-      "color": "#232",
-      "bgcolor": "#353"
-    },
-    {
-      "id": 183,
-      "type": "easy cleanGpuUsed",
-      "pos": [
-        1230,
-        860
-      ],
-      "size": [
-        170,
-        30
-      ],
-      "flags": {
-        "collapsed": true
-      },
-      "order": 20,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "anything",
-          "type": "*",
-          "link": 24
-        }
-      ],
-      "outputs": [
-        {
-          "name": "output",
-          "type": "*",
-          "links": [
-            31
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfyui-easy-use",
-        "ver": "1.3.6",
-        "Node name for S&R": "easy cleanGpuUsed"
-      },
-      "widgets_values": []
-    },
-    {
       "id": 182,
       "type": "easy cleanGpuUsed",
       "pos": [
@@ -379,46 +289,6 @@
         "Node name for S&R": "easy cleanGpuUsed"
       },
       "widgets_values": []
-    },
-    {
-      "id": 191,
-      "type": "SaveVideo",
-      "pos": [
-        1420,
-        820
-      ],
-      "size": [
-        800,
-        110
-      ],
-      "flags": {},
-      "order": 21,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "video",
-          "type": "VIDEO",
-          "link": 31
-        }
-      ],
-      "outputs": [
-        {
-          "name": "video",
-          "type": "VIDEO",
-          "links": []
-        }
-      ],
-      "title": "Save 3x5s Video",
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.30.0",
-        "Node name for S&R": "SaveVideo"
-      },
-      "widgets_values": [
-        "video/MiniMax_H3_Continuum_V2_3x5s",
-        "auto",
-        "auto"
-      ]
     },
     {
       "id": 154,
@@ -537,7 +407,7 @@
       "widgets_values": [
         true,
         true,
-        "Detailed Report",
+        "Basic",
         0,
         0,
         true,
@@ -675,53 +545,6 @@
       ]
     },
     {
-      "id": 206,
-      "type": "H3ContinuumResult",
-      "pos": [
-        840,
-        1910
-      ],
-      "size": [
-        180,
-        70
-      ],
-      "flags": {
-        "collapsed": true
-      },
-      "order": 19,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "result",
-          "type": "H3_CONTINUUM_RESULT",
-          "link": 80
-        }
-      ],
-      "outputs": [
-        {
-          "name": "last_state",
-          "type": "H3_CONTINUUM_STATE",
-          "links": null
-        },
-        {
-          "name": "session",
-          "type": "H3_CONTINUUM_SESSION",
-          "links": null
-        },
-        {
-          "name": "report",
-          "type": "STRING",
-          "links": []
-        }
-      ],
-      "properties": {
-        "Node name for S&R": "H3ContinuumResult"
-      },
-      "widgets_values": [],
-      "color": "#232",
-      "bgcolor": "#353"
-    },
-    {
       "id": 213,
       "type": "MarkdownNote",
       "pos": [
@@ -825,49 +648,6 @@
         false,
         true,
         0
-      ]
-    },
-    {
-      "id": 119,
-      "type": "ImageScaleToTotalPixels",
-      "pos": [
-        -1780,
-        590
-      ],
-      "size": [
-        280,
-        110
-      ],
-      "flags": {},
-      "order": 11,
-      "mode": 0,
-      "showAdvanced": true,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 1
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            2,
-            21
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.30.0",
-        "Node name for S&R": "ImageScaleToTotalPixels"
-      },
-      "widgets_values": [
-        "area",
-        0.6,
-        32
       ]
     },
     {
@@ -1022,12 +802,234 @@
         1344,
         768,
         "Balanced — 22 frames",
-        196384033697407,
+        569141751424404,
         "randomize",
         "Auto"
       ],
       "color": "#232",
       "bgcolor": "#353"
+    },
+    {
+      "id": 119,
+      "type": "ImageScaleToTotalPixels",
+      "pos": [
+        -1780,
+        590
+      ],
+      "size": [
+        280,
+        110
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "showAdvanced": true,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            2,
+            21
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "ImageScaleToTotalPixels"
+      },
+      "widgets_values": [
+        "area",
+        0.5,
+        32
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    },
+    {
+      "id": 148,
+      "type": "CreateVideo",
+      "pos": [
+        1220,
+        810
+      ],
+      "size": [
+        210,
+        110
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 18,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 75
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 76
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            24
+          ]
+        }
+      ],
+      "title": "Create 3x5s Video",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "CreateVideo"
+      },
+      "widgets_values": [
+        24,
+        8
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 206,
+      "type": "H3ContinuumResult",
+      "pos": [
+        840,
+        1910
+      ],
+      "size": [
+        180,
+        70
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "result",
+          "type": "H3_CONTINUUM_RESULT",
+          "link": 80
+        }
+      ],
+      "outputs": [
+        {
+          "name": "last_state",
+          "type": "H3_CONTINUUM_STATE",
+          "links": null
+        },
+        {
+          "name": "session",
+          "type": "H3_CONTINUUM_SESSION",
+          "links": null
+        },
+        {
+          "name": "report",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3ContinuumResult"
+      },
+      "widgets_values": [],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 183,
+      "type": "easy cleanGpuUsed",
+      "pos": [
+        1420,
+        820
+      ],
+      "size": [
+        170,
+        30
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 20,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "anything",
+          "type": "*",
+          "link": 24
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "*",
+          "links": [
+            31
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-easy-use",
+        "ver": "1.3.6",
+        "Node name for S&R": "easy cleanGpuUsed"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 191,
+      "type": "SaveVideo",
+      "pos": [
+        1320,
+        870
+      ],
+      "size": [
+        800,
+        1298
+      ],
+      "flags": {},
+      "order": 21,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 31
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "links": []
+        }
+      ],
+      "title": "Save 3x5s Video",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "SaveVideo"
+      },
+      "widgets_values": [
+        "video/MiniMax_H3_Continuum_V2_3x5s",
+        "auto",
+        "auto"
+      ]
     }
   ],
   "links": [
@@ -1260,10 +1262,10 @@
     "VHS_latentpreview": false,
     "VHS_latentpreviewrate": 0,
     "ds": {
-      "scale": 0.5745603243243441,
+      "scale": 0.5223275675675871,
       "offset": [
-        2310.364833293102,
-        -320.3179717553252
+        3362.062236252056,
+        -10.960586173195098
       ]
     },
     "VHS_MetadataImage": false,
