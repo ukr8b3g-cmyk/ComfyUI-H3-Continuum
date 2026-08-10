@@ -8,6 +8,7 @@ from ..constants import (
     DIAGNOSTICS_OPTIONS,
     PROMPT_FORMAT_OPTIONS,
     PROMPT_MODE_OPTIONS,
+    SEAM_CORRECTION_AUTO,
     SEAM_CORRECTION_OFF,
     SEAM_CORRECTION_OPTIONS,
     V2_CONTINUITY_OPTIONS,
@@ -198,10 +199,11 @@ class H3ContinuumSamplerV2:
                 "seam_correction": (
                     SEAM_CORRECTION_OPTIONS,
                     {
-                        "default": SEAM_CORRECTION_OFF,
+                        "default": SEAM_CORRECTION_AUTO,
                         "tooltip": (
-                            "Off preserves the V2.0.2 decode path. Basic applies "
-                            "conservative decoded A/V boundary correction."
+                            "Auto keeps the legacy video boundary unless the guarded candidate "
+                            "improves it. Off preserves the V2.0.2 decode path. Basic always runs "
+                            "the conservative decoded A/V boundary correction."
                         ),
                     },
                 ),

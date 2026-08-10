@@ -1,4 +1,4 @@
-ComfyUI-H3-Continuum 2.1.4 — Package Validation
+ComfyUI-H3-Continuum 2.1.5 — Package Validation
 Date: 2026-08-10
 
 Release scope:
@@ -9,7 +9,7 @@ Release scope:
 Completed checks:
 - Python bytecode syntax compilation: PASS
 - Python grammar compilation: PASS
-- Unit and orchestration tests: PASS (70 tests)
+- Unit and orchestration tests: PASS (71 tests)
 - Package import and node registration: PASS (10 nodes)
 - V1 node-ID compatibility: PASS
 - V1 State schema compatibility: PASS
@@ -25,7 +25,7 @@ Completed checks:
 - V2 Sequence Prompt Auto detection and override priority: PASS
 - Native Continuity call-local MODEL isolation and Spectrum Interop hint emission: PASS
 - Basic Seam Correction and complete Off bypass: PASS
-- V2.1.4 Advanced UI and Legacy-node registration checks: PASS
+- V2.1.5 frontend serialization stability and Legacy-node registration checks: PASS
 - Deterministic per-chunk seed and reroll derivation: PASS
 - Conservative Auto-context selection: PASS
 - Session validation, branch-safe reuse, and V1 State extraction: PASS
@@ -36,7 +36,7 @@ Completed checks:
 - Shared MODEL / shared conditioning-cache orchestration test: PASS
 - V2 2.0.0 malformed widget-serialization migration regression: PASS
 - Example V2 3x5s workflow structural validation: PASS (17 nodes, 20 links)
-- Repository manifest regenerated after all V2.1.4 files: PASS
+- Repository manifest regenerated after all V2.1.5 files: PASS
 
 Runtime verifier included:
 - tools/verify_runtime.py checks the installed ComfyUI native H3 API.

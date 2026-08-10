@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.5
+
+- Restore compact Individual Clip Overrides and Advanced accordions without removing or reordering backend slots.
+- Add `Seam Correction: Auto / Off / Basic` and make guarded Auto the new-node default.
+- Consolidate the Sampler V2 frontend behavior into one extension wrapper.
+- Preserve backend widget type, serialization behavior, and relative widget order.
+- Keep all backend input and output slots registered instead of removing and re-adding them.
+- Collapse advanced widgets only through computeSize and DOM display state.
+- Add static widget-order and workflow-value mapping regressions for UI serialization stability.
+
+
 ## 2.1.4
 
 - Rename the public package and repository branding to ComfyUI-H3-Continuum.

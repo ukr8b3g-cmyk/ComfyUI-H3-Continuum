@@ -3,7 +3,7 @@ from pathlib import Path
 from ComfyUI_H3_Continuum_Join.nodes import NODE_CLASS_MAPPINGS
 from ComfyUI_H3_Continuum_Join.constants import (
     PROMPT_FORMAT_OPTIONS,
-    SEAM_CORRECTION_OFF,
+    SEAM_CORRECTION_AUTO,
 )
 
 
@@ -43,14 +43,15 @@ def test_v2_sampler_registers_preview_setting_bridge_and_sixteen_prompt_inputs()
         assert prompt_input[1]["forceInput"] is True
 
 
-def test_v2_sampler_defaults_to_the_legacy_seam_path():
+def test_v2_sampler_defaults_to_auto_seam_correction():
     schema = NODE_CLASS_MAPPINGS["H3ContinuumSamplerV2"].INPUT_TYPES()
-    assert schema["required"]["seam_correction"][1]["default"] == SEAM_CORRECTION_OFF
+    assert schema["required"]["seam_correction"][1]["default"] == SEAM_CORRECTION_AUTO
 
 
-def test_v2_interface_keeps_sequence_socket_and_collapsible_overrides():
+def test_v2_interface_keeps_sequence_socket_and_stable_override_slots():
     root = Path(__file__).resolve().parents[1]
     source = (root / "web" / "h3_continuum_v2.js").read_text(encoding="utf-8")
     assert 'const SEQUENCE_PROMPT_INPUT = "sequence_prompt"' in source
-    assert "Individual Clip Overrides" in source
-    assert "!inputIsConnected(input)" in source
+    assert "syncPromptInputs(node)" in source
+    assert "node.removeInput(" not in source
+    assert "node.addInput(" not in source

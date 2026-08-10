@@ -43,6 +43,24 @@ def test_corrected_cut_preserves_the_total_frame_count():
     assert corrected_total == legacy_total
 
 
+def test_auto_keeps_a_clean_legacy_video_boundary():
+    previous = _frames([0.2, 0.2, 0.2, 0.2])
+    current = _frames([0.2, 0.2, 0.2, 0.2])
+
+    corrected, decision, patch = correct_seam(
+        previous,
+        current,
+        context_frames=2,
+        automatic=True,
+    )
+
+    assert torch.equal(corrected, current[2:])
+    assert decision.cut_rewind_frames == 0
+    assert decision.corrected_score == decision.legacy_score
+    assert decision.fallback_reason.startswith("Auto kept the legacy video seam")
+    assert patch is None
+
+
 def test_high_motion_disables_video_blend():
     metrics = VideoSeamMetrics(
         pixel_mae_norm=0.1,

@@ -271,6 +271,7 @@ def correct_seam(
     next_raw_images: torch.Tensor,
     *,
     context_frames: int,
+    automatic: bool = False,
 ) -> tuple[torch.Tensor, SeamDecision, torch.Tensor | None]:
     rewind, legacy, selected = choose_adaptive_cut(
         previous_images,
@@ -313,6 +314,23 @@ def correct_seam(
                 cut_score=legacy.score,
                 corrected_score=legacy.score,
                 fallback_reason="corrected score was worse than legacy",
+            ),
+            None,
+        )
+
+    absolute_improvement = legacy.score - corrected.score
+    if automatic and (
+        improvement < MIN_RELATIVE_IMPROVEMENT
+        or absolute_improvement < MIN_ABSOLUTE_IMPROVEMENT
+    ):
+        fallback = next_raw_images[int(context_frames) :].clone().contiguous()
+        return (
+            fallback,
+            SeamDecision(
+                legacy_score=legacy.score,
+                cut_score=selected.score,
+                corrected_score=legacy.score,
+                fallback_reason="Auto kept the legacy video seam; improvement was below threshold",
             ),
             None,
         )

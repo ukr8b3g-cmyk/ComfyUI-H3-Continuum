@@ -21,6 +21,7 @@ from ..constants import (
     DIAGNOSTICS_OPTIONS,
     FPS,
     CONTINUUM_ACTUAL_PREFIX_STEPS,
+    SEAM_CORRECTION_AUTO,
     SEAM_CORRECTION_OFF,
     SEAM_CORRECTION_OPTIONS,
     V2_CONTINUITY_AUTO,
@@ -467,6 +468,7 @@ def run_sequence(
             video_vae=video_vae,
             audio_vae=audio_vae,
             diagnostics_mode=diagnostics_mode,
+            automatic=seam_correction == SEAM_CORRECTION_AUTO,
         )
     duration_report = ""
     if exact_total_duration:

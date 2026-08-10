@@ -1,5 +1,5 @@
 名称: ComfyUI-H3-Continuum
-バージョン: 2.1.4
+バージョン: 2.1.5
 対象: ComfyUI native MiniMax H3
 主ノード: H3 Continuum Sampler V2
 ライセンス: GPL-3.0-or-later

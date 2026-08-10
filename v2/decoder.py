@@ -227,8 +227,9 @@ def decode_sequence_with_seam(
     video_vae: Any,
     audio_vae: Any,
     diagnostics_mode: str,
+    automatic: bool = False,
 ) -> tuple[torch.Tensor, dict[str, Any], list[str]]:
-    """Decode with V2.1 Basic correction while preserving legacy output length."""
+    """Decode with guarded V2.1 correction while preserving legacy output length."""
 
     if not entries:
         raise ValueError("cannot decode an empty Continuum sequence")
@@ -275,6 +276,7 @@ def decode_sequence_with_seam(
                     image_buffer[:frame_cursor],
                     limited_raw_images,
                     context_frames=trim_frames,
+                    automatic=automatic,
                 )
                 frame_start = frame_cursor - int(decision.cut_rewind_frames)
                 trim_frames -= int(decision.cut_rewind_frames)
@@ -385,7 +387,8 @@ def decode_sequence_with_seam(
     audio = {"waveform": audio_buffer.contiguous(), "sample_rate": audio_rate}
     reports.append(
         f"assembled {len(entries)} chunks into {total_retained_frames} frames with "
-        "V2.1 Basic seam correction and cumulative sample-boundary alignment"
+        f"V2.1 {'Auto' if automatic else 'Basic'} seam correction and "
+        "cumulative sample-boundary alignment"
     )
     return image_buffer.contiguous(), audio, reports
 
