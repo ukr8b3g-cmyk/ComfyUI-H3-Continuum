@@ -1,0 +1,1 @@
+# No extra pip dependencies. Uses PyTorch and safetensors bundled with ComfyUI.

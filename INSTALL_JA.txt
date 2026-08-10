@@ -1,0 +1,47 @@
+H3 Continuum Join 2.1.0 — インストール
+
+1. ComfyUIを終了します。
+2. ZIPを展開します。
+3. フォルダーを次へ配置します。
+
+   D:\StabilityMatrix\Data\Packages\ComfyUI_W\custom_nodes\ComfyUI-H3-Continuum-Join\
+
+4. ComfyUIを再起動します。
+5. ノード検索で「H3 Continuum Sampler V2」を確認します。
+
+自動インストール:
+
+   install_windows.bat
+
+または:
+
+   powershell -ExecutionPolicy Bypass -File .\install_windows.ps1
+
+V2標準配線:
+
+H3 UNET → SageAttention → Sol-Attn → LoRA → Spectrum
+                                                ↓
+CLIP / Video VAE / Audio VAE / Sampler / Sigmas
+                                                ↓
+                                H3 Continuum Sampler V2
+                                                ↓
+                                    IMAGE + AUDIO → CreateVideo
+
+標準値:
+- chunks: 3
+- chunk_seconds: 5.0
+- continuity: Balanced — 22 frames
+- audio_continuity: true
+- exact_total_duration: true
+- diagnostics: Basic
+- strict_compatibility: true
+- seam_correction: Off（2.0.2互換）/ Basic（V2.1境界補正）
+
+Prompt入力:
+- chunksの数だけ表示されるClip N Promptへ、ComfyUI標準のText (Multiline)を接続します。
+
+生成中サムネイル:
+- Settings > H3 Continuum > Preview > Show latent preview
+- 初期値はONです。OFFにしても最終生成結果は変更されません。
+
+V1ワークフローも引き続き使用できます。

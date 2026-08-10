@@ -1,0 +1,29 @@
+{
+  "h3_continuum_sampler_v2": {
+    "chunks": 3,
+    "chunk_seconds": 5.0,
+    "continuity": "Balanced — 22 frames",
+    "audio_continuity": true,
+    "exact_total_duration": true,
+    "diagnostics": "Basic",
+    "reroll_from_chunk": 0,
+    "reroll_nonce": 0,
+    "strict_compatibility": true,
+    "debug": false
+  },
+  "sampling": {
+    "sampler": "res_multistep",
+    "scheduler": "simple",
+    "steps": 20,
+    "denoise": 1.0,
+    "turbo_lora": false
+  },
+  "spectrum": {
+    "enabled": true,
+    "blend_weight": 0.5,
+    "degree": 1,
+    "warmup_steps": 1,
+    "offline_smoothing_replay": true,
+    "audio_blend_weight": 0.0
+  }
+}

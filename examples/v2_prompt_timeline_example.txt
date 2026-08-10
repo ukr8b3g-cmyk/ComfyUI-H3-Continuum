@@ -1,0 +1,8 @@
+[0-5s]
+The same woman begins singing in a single continuous shot. The melody and camera movement remain unresolved at the boundary.
+
+[5-10s]
+Continue the exact performance, mouth motion, breath, vocal key, piano tempo, and camera movement with no reset.
+
+[10-15s]
+Continue seamlessly, then resolve the final vocal note and piano phrase naturally in the last second.

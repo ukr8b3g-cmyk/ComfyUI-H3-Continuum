@@ -1,0 +1,24 @@
+{
+  "h3_continuum_join": {
+    "continuity": "Balanced — 22 frames",
+    "extend_seconds": 5.0,
+    "audio_continuity": true,
+    "first_frame_policy": "Use Continuum context; keep visual identity tokens (Recommended)",
+    "preserve_last_frame": true,
+    "strict_compatibility": true,
+    "debug": false
+  },
+  "spectrum": {
+    "blend_weight": 0.5,
+    "degree": 1,
+    "warmup_steps": 1,
+    "offline_smoothing_replay": true,
+    "audio_blend_weight": 0.0
+  },
+  "validation_matrix": [
+    "Sage only",
+    "Sage + Sol",
+    "Sage + Spectrum",
+    "Sage + Sol + Spectrum"
+  ]
+}

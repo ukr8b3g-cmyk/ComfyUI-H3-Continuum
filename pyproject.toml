@@ -1,0 +1,18 @@
+[project]
+name = "comfyui-h3-continuum-join"
+version = "2.1.4"
+description = "Integrated N-chunk continuation for ComfyUI native MiniMax H3 video and audio"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "ukr8b3g-cmyk" }]
+dependencies = []
+keywords = ["comfyui", "minimax-h3", "video", "audio", "continuation"]
+
+[project.urls]
+Repository = "https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum-Join"
+
+[tool.comfy]
+PublisherId = "ukr8b3g-cmyk"
+DisplayName = "H3 Continuum Join"
+Icon = ""

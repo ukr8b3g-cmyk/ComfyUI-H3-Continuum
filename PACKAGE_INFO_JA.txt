@@ -1,0 +1,31 @@
+名称: H3 Continuum Join
+バージョン: 2.1.0
+対象: ComfyUI native MiniMax H3
+主ノード: H3 Continuum Sampler V2
+ライセンス: GPL-3.0-or-later
+追加pip依存: なし（ComfyUI同梱のPyTorch / safetensorsを使用）
+
+V2ノード:
+- H3 Continuum Sampler V2
+- H3 Continuum Prompt Plan
+- H3 Continuum Save Session
+- H3 Continuum Load Session
+- H3 Continuum Session Info
+
+V1互換ノード:
+- H3 Continuum Join
+- H3 Continuum Finish
+- H3 Continuum Assemble
+- H3 Continuum Save State
+- H3 Continuum Load State
+
+設計:
+- V1のnative video/audio latent continuation coreを再利用
+- Nチャンクを1ノードで統合管理
+- Prompt/Identity conditioningをSampling前にキャッシュ
+- H3チャンク間のVAE Decodeなし
+- CPU Session、再開、指定チャンク以降のリロール
+- 累積フレーム基準の音声sample境界
+- SageAttention / Sol-Attn / Spectrumは外部ノードとして併用
+- Spectrumのprivate APIには依存しない
+- グローバルH3 Monkey Patchなし

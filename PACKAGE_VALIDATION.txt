@@ -1,0 +1,48 @@
+H3 Continuum Join 2.1.0 — Package Validation
+Date: 2026-08-10
+
+Release scope:
+- Integrated H3 Continuum Sampler V2 for 1–16 native MiniMax H3 chunks.
+- V1 Join / Finish / Assemble / State nodes preserved with unchanged node IDs.
+- External SageAttention, Sol-Attn, LoRA, and Spectrum composition retained.
+
+Completed checks:
+- Python bytecode syntax compilation: PASS
+- Python 3.10 grammar parse: PASS (42 Python files)
+- Unit and orchestration tests: PASS (44 tests)
+- Package import and node registration: PASS (10 nodes)
+- V1 node-ID compatibility: PASS
+- V1 State schema compatibility: PASS
+- Native H3 17k+5 temporal-grid tests: PASS
+- 5 / 22 / 39-frame latent-context mapping: PASS
+- Signed 40 Hz audio-grid offset tests: PASS
+- PackedLayout in-place MM-RoPE patch tests: PASS
+- Sol-Attn position_ids identity preservation: PASS
+- Sol-Attn-style *args/**kwargs PackedLayout wrapper compatibility: PASS
+- Genuine native-H3 API removal still fails closed: PASS
+- Spectrum/public-wrapper marker detection: PASS
+- V2 Fixed / List / Timeline prompt parsing: PASS
+- Deterministic per-chunk seed and reroll derivation: PASS
+- Conservative Auto-context selection: PASS
+- Session validation, branch-safe reuse, and V1 State extraction: PASS
+- Atomic safetensors + JSON State/Session round-trip: PASS
+- Cumulative 24 fps / PCM sample-boundary alignment: PASS
+- Exact-duration AV correction and final-anchor preservation tests: PASS
+- Decode-after-all-sampling orchestration test: PASS
+- Shared MODEL / shared conditioning-cache orchestration test: PASS
+- V2 2.0.0 malformed widget-serialization migration regression: PASS
+- Example V2 3x5s workflow structural validation: PASS (17 nodes, 20 links)
+- Release ZIP manifest verification: performed after archive creation
+- Release ZIP extraction and test rerun: performed after archive creation
+
+Runtime verifier included:
+- tools/verify_runtime.py checks the installed ComfyUI native H3 API.
+- It constructs and patches a real native PackedLayout without loading the H3 checkpoint.
+- It verifies all 10 registered node IDs and the V2 prompt-plan core.
+
+Not performed in this build container:
+- Full MiniMax H3 checkpoint generation on an RTX GPU.
+- Perceptual A/B validation of Sage, Sol-Attn, and Spectrum combinations.
+- Timing comparison against the equivalent V1 3x5-second workflow on the user's RTX 5060 Ti.
+
+The first-machine GPU validation matrix is documented in docs/VALIDATION_JA.md.
