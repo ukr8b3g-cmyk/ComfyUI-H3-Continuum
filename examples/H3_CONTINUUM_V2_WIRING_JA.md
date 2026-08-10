@@ -36,8 +36,7 @@ Sampler V2.session ─→ Save Session（任意）
 ## 3×5秒の初期値
 
 ```text
-Prompt Format: Auto
-Sequence Prompt: Text (Multiline)を1個接続
+prompt_mode: Fixed — one prompt
 chunks: 3
 chunk_seconds: 5.0
 continuity: Balanced — 22 frames

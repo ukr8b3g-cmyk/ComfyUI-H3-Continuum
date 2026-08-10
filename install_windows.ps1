@@ -5,7 +5,8 @@ param(
 $ErrorActionPreference = "Stop"
 $source = (Resolve-Path $PSScriptRoot).Path
 $customNodes = Join-Path $ComfyUIRoot "custom_nodes"
-$destination = Join-Path $customNodes "ComfyUI-H3-Continuum-Join"
+$destination = Join-Path $customNodes "ComfyUI-H3-Continuum"
+$legacyDestination = Join-Path $customNodes "ComfyUI-H3-Continuum-Join"
 
 if (-not (Test-Path $ComfyUIRoot -PathType Container)) {
     throw "ComfyUI root not found: $ComfyUIRoot"
@@ -20,10 +21,13 @@ if ([System.StringComparer]::OrdinalIgnoreCase.Equals($source, $destination)) {
     exit 0
 }
 
-if (Test-Path $destination) {
-    $backup = "$destination.backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-    Move-Item -LiteralPath $destination -Destination $backup
-    Write-Host "Existing installation moved to: $backup"
+$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+foreach ($old in @($destination, $legacyDestination)) {
+    if ((Test-Path $old) -and -not [System.StringComparer]::OrdinalIgnoreCase.Equals($source, $old)) {
+        $backup = "$old.backup-$stamp"
+        Move-Item -LiteralPath $old -Destination $backup
+        Write-Host "Existing installation moved to: $backup"
+    }
 }
 
 New-Item -ItemType Directory -Force -Path $destination | Out-Null
@@ -42,5 +46,5 @@ if (Test-Path $python) {
     Write-Warning "venv Python was not found; installation was copied but runtime verification was skipped."
 }
 
-Write-Host "Installed H3 Continuum Join 2.0 to: $destination"
-Write-Host "Restart ComfyUI."
+Write-Host "Installed H3 Continuum 2.1.6 to: $destination"
+Write-Host "Restart ComfyUI. If the browser cached the old frontend, use a hard reload."

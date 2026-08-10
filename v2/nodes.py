@@ -86,8 +86,8 @@ def _repair_v200_example_widget_shift(
 class H3ContinuumSamplerV2:
     DESCRIPTION = (
         "Integrated N-chunk MiniMax H3 continuation sampler. Precomputes prompt/image "
-        "conditioning, isolates accelerator runtime state per chunk, captures latent "
-        "state before decoding, then decodes and assembles the final AV stream."
+        "conditioning, isolates accelerator runtime state per chunk, captures "
+        "latent state before decoding, then decodes and assembles the final AV stream."
     )
     SEARCH_ALIASES = [
         "H3 long video sampler",
@@ -228,7 +228,7 @@ class H3ContinuumSamplerV2:
                     "BOOLEAN",
                     {
                         "default": True,
-                        "tooltip": "Controlled by Settings > H3 Continuum > Show latent preview.",
+                        "tooltip": "Show the in-progress latent thumbnail for this sampler node.",
                     },
                 ),
                 **{
@@ -236,7 +236,7 @@ class H3ContinuumSamplerV2:
                         "STRING",
                         {
                             "forceInput": True,
-                            "tooltip": f"Connect Text (Multiline) for Clip {index}.",
+                            "tooltip": f"Optional prompt override for Clip {index}.",
                         },
                     )
                     for index in range(1, 17)
@@ -360,7 +360,16 @@ class H3ContinuumPromptPlanPreview:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "prompt_mode": (PROMPT_MODE_OPTIONS, {"default": PROMPT_MODE_OPTIONS[0]}),
+                "prompt_mode": (
+                    PROMPT_FORMAT_OPTIONS,
+                    {
+                        "default": PROMPT_FORMAT_OPTIONS[0],
+                        "tooltip": (
+                            "Auto detects Fixed text, --- separated List text, or "
+                            "[0-5s] / [Chunk 1] Timeline sections."
+                        ),
+                    },
+                ),
                 "prompt_script": ("STRING", {"default": "Prompt", "multiline": True}),
                 "chunks": ("INT", {"default": 3, "min": 1, "max": 16, "step": 1}),
                 "chunk_seconds": (
@@ -458,7 +467,311 @@ class H3ContinuumSessionInfo:
         return session, state, report
 
 
+class H3ContinuumClipOverrides:
+    """Build a static prompt-override pack without per-clip sockets."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "prompt_mode": (
+                    PROMPT_FORMAT_OPTIONS,
+                    {
+                        "default": PROMPT_FORMAT_OPTIONS[0],
+                        "display_name": "Prompt Format",
+                    },
+                ),
+                "override_script": (
+                    "STRING",
+                    {
+                        "forceInput": True,
+                        "display_name": "Override Script",
+                        "tooltip": (
+                            "Connect one Text (Multiline). Use ---, [Chunk N], or "
+                            "timeline sections according to Prompt Format."
+                        ),
+                    },
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("H3_CONTINUUM_CLIP_OVERRIDES",)
+    RETURN_NAMES = ("prompt_overrides",)
+    FUNCTION = "build"
+    CATEGORY = CATEGORY
+
+    def build(self, prompt_mode, override_script):
+        return (
+            {
+                "prompt_mode": str(prompt_mode),
+                "prompt_script": str(override_script),
+            },
+        )
+
+
+class H3ContinuumAdvanced:
+    """Package optional continuation inputs and infrequent sampler settings."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "audio_continuity": ("BOOLEAN", {"default": True}),
+                "exact_total_duration": ("BOOLEAN", {"default": True}),
+                "diagnostics": (DIAGNOSTICS_OPTIONS, {"default": DIAGNOSTICS_OPTIONS[0]}),
+                "reroll_from_chunk": (
+                    "INT",
+                    {"default": 0, "min": 0, "max": 16, "step": 1},
+                ),
+                "reroll_nonce": (
+                    "INT",
+                    {"default": 0, "min": 0, "max": 0xFFFFFFFF, "step": 1},
+                ),
+                "strict_compatibility": ("BOOLEAN", {"default": True}),
+                "debug": ("BOOLEAN", {"default": False}),
+                "show_preview": ("BOOLEAN", {"default": True}),
+            },
+            "optional": {
+                "last_frame": ("IMAGE",),
+                "session": ("H3_CONTINUUM_SESSION",),
+                "initial_state": ("H3_CONTINUUM_STATE",),
+                "prompt_plan": ("H3_CONTINUUM_PROMPT_PLAN",),
+            },
+        }
+
+    RETURN_TYPES = ("H3_CONTINUUM_ADVANCED",)
+    RETURN_NAMES = ("advanced",)
+    FUNCTION = "build"
+    CATEGORY = CATEGORY
+
+    def build(
+        self,
+        audio_continuity,
+        exact_total_duration,
+        diagnostics,
+        reroll_from_chunk,
+        reroll_nonce,
+        strict_compatibility,
+        debug,
+        show_preview,
+        last_frame=None,
+        session=None,
+        initial_state=None,
+        prompt_plan=None,
+    ):
+        return (
+            {
+                "audio_continuity": bool(audio_continuity),
+                "exact_total_duration": bool(exact_total_duration),
+                "diagnostics": diagnostics,
+                "reroll_from_chunk": int(reroll_from_chunk),
+                "reroll_nonce": int(reroll_nonce),
+                "strict_compatibility": bool(strict_compatibility),
+                "debug": bool(debug),
+                "show_preview": bool(show_preview),
+                "last_frame": last_frame,
+                "session": session,
+                "initial_state": initial_state,
+                "prompt_plan": prompt_plan,
+            },
+        )
+
+
+class H3ContinuumSampler:
+    """Stable, compact facade over the fully compatible V2 sampler core."""
+
+    DESCRIPTION = (
+        "Compact H3 Continuum sampler facade. Uses the legacy V2 execution core "
+        "without dynamic sockets or frontend display patches."
+    )
+    SEARCH_ALIASES = ["H3 Continuum", "MiniMax H3 long video"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "clip": ("CLIP",),
+                "video_vae": ("VAE",),
+                "audio_vae": ("VAE",),
+                "sampler": ("SAMPLER",),
+                "sigmas": ("SIGMAS",),
+                "sequence_prompt": (
+                    "STRING",
+                    {
+                        "forceInput": True,
+                        "display_name": "Sequence Prompt",
+                        "tooltip": "Connect one Text (Multiline) for the complete sequence.",
+                    },
+                ),
+                "prompt_mode": (
+                    PROMPT_FORMAT_OPTIONS,
+                    {
+                        "default": PROMPT_FORMAT_OPTIONS[0],
+                        "display_name": "Prompt Format",
+                    },
+                ),
+                "chunks": ("INT", {"default": 3, "min": 1, "max": 16, "step": 1}),
+                "chunk_seconds": (
+                    "FLOAT",
+                    {"default": 5.0, "min": 4.0, "max": 15.0, "step": 0.1},
+                ),
+                "width": ("INT", {"default": 1344, "min": 32, "max": 16384, "step": 32}),
+                "height": ("INT", {"default": 768, "min": 32, "max": 16384, "step": 32}),
+                "continuity": (
+                    V2_CONTINUITY_OPTIONS,
+                    {"default": V2_CONTINUITY_OPTIONS[1]},
+                ),
+                "base_seed": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": 0,
+                        "max": 0xFFFFFFFFFFFFFFFF,
+                        "control_after_generate": True,
+                    },
+                ),
+                "seam_correction": (
+                    SEAM_CORRECTION_OPTIONS,
+                    {"default": SEAM_CORRECTION_AUTO},
+                ),
+            },
+            "optional": {
+                "first_frame": ("IMAGE",),
+                "prompt_overrides": ("H3_CONTINUUM_CLIP_OVERRIDES",),
+                "advanced": ("H3_CONTINUUM_ADVANCED",),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "AUDIO", "H3_CONTINUUM_RESULT")
+    RETURN_NAMES = ("images", "audio", "result")
+    FUNCTION = "run"
+    CATEGORY = CATEGORY
+
+    def run(
+        self,
+        model,
+        clip,
+        video_vae,
+        audio_vae,
+        sampler,
+        sigmas,
+        sequence_prompt,
+        prompt_mode,
+        chunks,
+        chunk_seconds,
+        width,
+        height,
+        continuity,
+        base_seed,
+        seam_correction,
+        first_frame=None,
+        prompt_overrides=None,
+        advanced=None,
+    ):
+        if prompt_overrides is not None and not isinstance(prompt_overrides, dict):
+            raise TypeError("prompt_overrides must be an H3_CONTINUUM_CLIP_OVERRIDES pack")
+        if advanced is not None and not isinstance(advanced, dict):
+            raise TypeError("advanced must be an H3_CONTINUUM_ADVANCED pack")
+
+        advanced_values = {
+            "audio_continuity": True,
+            "exact_total_duration": True,
+            "diagnostics": DIAGNOSTICS_OPTIONS[0],
+            "reroll_from_chunk": 0,
+            "reroll_nonce": 0,
+            "strict_compatibility": True,
+            "debug": False,
+            "show_preview": True,
+            "last_frame": None,
+            "session": None,
+            "initial_state": None,
+            "prompt_plan": None,
+        }
+        if advanced:
+            advanced_values.update(advanced)
+
+        clip_prompt_inputs = {}
+        if prompt_overrides:
+            override_plan = make_prompt_plan(
+                mode=prompt_overrides.get("prompt_mode", PROMPT_FORMAT_OPTIONS[0]),
+                script=prompt_overrides.get("prompt_script", ""),
+                chunks=int(chunks),
+                chunk_seconds=float(chunk_seconds),
+            )
+            for index, prompt in enumerate(override_plan.get("prompts", []), start=1):
+                if isinstance(prompt, str) and prompt.strip():
+                    clip_prompt_inputs[f"clip_{index}_prompt"] = prompt
+
+        images, audio, last_state, session, report = H3ContinuumSamplerV2().run(
+            model=model,
+            clip=clip,
+            video_vae=video_vae,
+            audio_vae=audio_vae,
+            sampler=sampler,
+            sigmas=sigmas,
+            prompt_mode=prompt_mode,
+            prompt_script=sequence_prompt,
+            chunks=chunks,
+            chunk_seconds=chunk_seconds,
+            width=width,
+            height=height,
+            continuity=continuity,
+            base_seed=base_seed,
+            audio_continuity=advanced_values["audio_continuity"],
+            exact_total_duration=advanced_values["exact_total_duration"],
+            diagnostics=advanced_values["diagnostics"],
+            reroll_from_chunk=advanced_values["reroll_from_chunk"],
+            reroll_nonce=advanced_values["reroll_nonce"],
+            strict_compatibility=advanced_values["strict_compatibility"],
+            debug=advanced_values["debug"],
+            seam_correction=seam_correction,
+            first_frame=first_frame,
+            last_frame=advanced_values["last_frame"],
+            session=advanced_values["session"],
+            initial_state=advanced_values["initial_state"],
+            prompt_plan=advanced_values["prompt_plan"],
+            sequence_prompt=sequence_prompt,
+            show_preview=advanced_values["show_preview"],
+            **clip_prompt_inputs,
+        )
+        return (
+            images,
+            audio,
+            {
+                "last_state": last_state,
+                "session": session,
+                "report": report,
+            },
+        )
+
+
+class H3ContinuumResult:
+    """Expand the compact facade result pack only when advanced outputs are needed."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"result": ("H3_CONTINUUM_RESULT",)}}
+
+    RETURN_TYPES = ("H3_CONTINUUM_STATE", "H3_CONTINUUM_SESSION", "STRING")
+    RETURN_NAMES = ("last_state", "session", "report")
+    FUNCTION = "unpack"
+    CATEGORY = CATEGORY
+
+    def unpack(self, result):
+        if not isinstance(result, dict):
+            raise TypeError("result must be an H3_CONTINUUM_RESULT pack")
+        missing = {"last_state", "session", "report"} - set(result)
+        if missing:
+            raise ValueError("H3_CONTINUUM_RESULT is missing: " + ", ".join(sorted(missing)))
+        return result["last_state"], result["session"], str(result["report"])
+
+
 NODE_CLASS_MAPPINGS = {
+    "H3ContinuumSampler": H3ContinuumSampler,
+    "H3ContinuumClipOverrides": H3ContinuumClipOverrides,
+    "H3ContinuumAdvanced": H3ContinuumAdvanced,
+    "H3ContinuumResult": H3ContinuumResult,
     "H3ContinuumSamplerV2": H3ContinuumSamplerV2,
     "H3ContinuumPromptPlanPreview": H3ContinuumPromptPlanPreview,
     "H3ContinuumSaveSession": H3ContinuumSaveSession,
@@ -467,6 +780,10 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "H3ContinuumSampler": "H3 Continuum Sampler",
+    "H3ContinuumClipOverrides": "H3 Continuum Clip Overrides",
+    "H3ContinuumAdvanced": "H3 Continuum Advanced",
+    "H3ContinuumResult": "H3 Continuum Result",
     "H3ContinuumSamplerV2": "H3 Continuum Sampler V2",
     "H3ContinuumPromptPlanPreview": "H3 Continuum Prompt Plan",
     "H3ContinuumSaveSession": "H3 Continuum Save Session",

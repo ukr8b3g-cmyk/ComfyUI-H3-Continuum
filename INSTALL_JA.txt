@@ -1,49 +1,21 @@
-ComfyUI-H3-Continuum 2.1.5 — インストール
+ComfyUI-H3-Continuum 2.1.7 — インストール
 
 1. ComfyUIを終了します。
 2. ZIPを展開します。
-3. フォルダーを次へ配置します。
+3. `ComfyUI-H3-Continuum` フォルダーを ComfyUI/custom_nodes/ に配置します。
+4. 旧 `ComfyUI-H3-Continuum-Join` が残っている場合は退避します。
+5. ComfyUIを再起動します。
+6. 旧V2.1.6 UIが残る場合はブラウザをハードリロードします。
 
-   D:\StabilityMatrix\Data\Packages\ComfyUI_W\custom_nodes\ComfyUI-H3-Continuum\
-
-4. ComfyUIを再起動します。
-5. ノード検索で「H3 Continuum Sampler V2」を確認します。
+StabilityMatrix標準例:
+D:\StabilityMatrix\Data\Packages\ComfyUI_W\custom_nodes\ComfyUI-H3-Continuum\
 
 自動インストール:
+install_windows.bat
 
-   install_windows.bat
-
-または:
-
-   powershell -ExecutionPolicy Bypass -File .\install_windows.ps1
-
-V2標準配線:
-
-H3 UNET → SageAttention → Sol-Attn → LoRA → Spectrum
-                                                ↓
-CLIP / Video VAE / Audio VAE / Sampler / Sigmas
-                                                ↓
-                                H3 Continuum Sampler V2
-                                                ↓
-                                    IMAGE + AUDIO → CreateVideo
-
-標準値:
-- chunks: 3
+標準検証:
+- chunks: 2 または 3
 - chunk_seconds: 5.0
 - continuity: Balanced — 22 frames
-- audio_continuity: true
-- exact_total_duration: true
-- diagnostics: Basic
-- strict_compatibility: true
-- seam_correction: Auto（初期値）/ Off（2.0.2互換）/ Basic（常時V2.1境界補正）
-
-Prompt入力:
-- Sequence PromptへComfyUI標準のText (Multiline)を1本接続します。
-- Prompt FormatはAuto / Fixed / List / Timelineから選択します。
-- Clip N Prompt Overrideは個別上書き用です。内部slot順を維持し、展開時はchunks数まで表示します。
-
-生成中サムネイル:
-- Settings > H3 Continuum > Preview > Show latent preview
-- 初期値はONです。OFFにしても最終生成結果は変更されません。
-
-V1ワークフローも読み込めますが、V1ノードはDeprecated Legacy扱いです。
+- Seam Correction: Off（Native Continuity比較時）/ Auto（通常利用）
+- Sequence Prompt: Text (Multiline)を接続

@@ -1,52 +1,53 @@
-# ComfyUI-H3-Continuum 2.1.4
+# ComfyUI-H3-Continuum 2.1.7
 
-Integrated long-form continuation for ComfyUI's native MiniMax H3 audio/video model.
+Long-form native MiniMax H3 audio/video continuation for ComfyUI.
 
-**H3 Continuum Sampler V2** runs N native H3 chunks through the proven V1 continuation core, keeps text/image preparation outside the H3-only sampling loop, captures AV latent state before decoding, and decodes/assembles the sequence only after all sampling is complete. All V1 node identifiers remain available.
+**H3 Continuum Sampler** generates 1–16 H3 chunks in one compact facade, carries the previous raw video/audio latent directly into the next chunk, stores accepted chunks on CPU, and defers VAE decode until sampling is complete.
 
-## V2 highlights
+## V2.1.7 Stable Facade UI
 
-- One integrated N-chunk sampler node
-- Native video/audio latent continuation with 5, 22, 39-frame and conservative Auto profiles
-- One externally patched MODEL input with an isolated call-local clone per chunk
-- Unique prompt conditioning cached before sampling
-- One stable `Sequence Prompt` socket with Auto, Fixed, List, and Timeline parsing
-- Optional `Clip N Prompt` overrides follow `chunks` from 1–16 and are collapsed by default
-- Local latent-preview toggle under `Settings > H3 Continuum > Preview`
-- Optional V2.1 Basic seam correction after deferred decode; Off keeps the V2.0.2 path
-- CPU-only adaptive cut, bounded color/luma guard, short motion-aware blend, and boundary-local audio crossfade
-- No Video/Audio VAE decode between H3 chunks
-- Full chunk latents stored on CPU; VRAM does not grow with accepted chunks
-- Session resume, branch-safe reroll, atomic safetensors + JSON persistence
-- Cumulative 24fps audio boundaries, preventing per-chunk rounding drift
-- Single-allocation final image assembly and preflight RAM safety check
-- External SageAttention, Sol-Attn, and Spectrum composition
-- No global ComfyUI H3 monkey patch and no accelerator private-API dependency
-- No additional pip dependencies
+V2.1.7 replaces the dynamic V2.1.6 display controller with a small static facade. It uses standard ComfyUI rendering and delegates generation to the fully compatible `H3ContinuumSamplerV2` execution core.
 
-See [README_JA.md](README_JA.md) for the complete guide.
+- `H3 Continuum Sampler` contains only the normal sequence controls and three optional pack inputs.
+- `H3 Continuum Clip Overrides` supplies per-clip prompts through one static pack socket.
+- `H3 Continuum Advanced` contains resume/session inputs and infrequent settings.
+- `H3 Continuum Result` expands `last_state`, `session`, and `report` only when needed.
+- The old `H3ContinuumSamplerV2` identifier remains registered as a Legacy/Core compatibility node.
+- No dynamic sockets, proxy widgets, DOM hiding, MutationObserver, widget-size overrides, or `widgets_values` reconstruction.
+- State, Session, Prompt Plan, Sampling, Native Continuity, and Spectrum Interop contracts are unchanged.
+
+## Core features
+
+- Native raw H3 video/audio latent continuation; no decode/re-encode between chunks.
+- 5 / 22 / 39-frame context profiles plus conservative Auto.
+- Native H3 17k+5 temporal grid and signed 40/24 audio-grid alignment.
+- Call-local MODEL clone per chunk; Spectrum runtime/history does not leak across chunks.
+- Spectrum Interop API v1 requests Actual Prefix 2 only when valid continuation context exists.
+- `Sequence Prompt` with Auto / Fixed / List / Timeline parsing and per-clip overrides.
+- Seam Correction: `Auto / Off / Basic`.
+- Session resume and branch-safe reroll.
+- Exact cumulative audio boundaries and exact total-duration correction.
+- No additional pip dependencies beyond the normal ComfyUI environment.
 
 ## Recommended graph
 
 ```text
-H3 UNET → SageAttention → Sol-Attn → LoRA → Spectrum
-                                              ↓
-CLIP / Video VAE / Audio VAE / Sampler / Sigmas
-                                              ↓
-                              H3 Continuum Sampler V2
-                                              ↓
-                                  IMAGE + AUDIO → CreateVideo
+H3 UNET -> SageAttention -> Sol-Attn -> LoRA -> Spectrum
+                                                  |
+CLIP / Video VAE / Audio VAE / Sampler / Sigmas  |
+                                                  v
+                                    H3 Continuum Sampler
+                                      |         |
+                                    IMAGE      AUDIO
 ```
 
-## V2 nodes
+Recommended first validation: `chunks=2`, `chunk_seconds=5`, `Balanced — 22 frames`, `Seam Correction=Off` for native-continuity A/B, then test Auto separately.
 
-- H3 Continuum Sampler V2
-- H3 Continuum Prompt Plan
-- H3 Continuum Save Session
-- H3 Continuum Load Session
-- H3 Continuum Session Info
+## Install
 
-V1 compatibility nodes remain registered: Join, Finish, Assemble, Save State, and Load State.
+Copy the extracted `ComfyUI-H3-Continuum` folder into `ComfyUI/custom_nodes/` and restart ComfyUI, or run `install_windows.bat`.
+
+If replacing the older `ComfyUI-H3-Continuum-Join` folder, remove or rename the old folder so both packages are not loaded at once. The included installer backs up both old and new destination names.
 
 ## Development checks
 
@@ -57,21 +58,4 @@ pytest -q
 
 ## License
 
-GPL-3.0-or-later. This package was independently implemented against public ComfyUI H3 runtime contracts. Optional accelerator source code is not bundled.
-## V2.1.4 Feature Summary
-
-- One integrated `H3 Continuum Sampler V2` node generates 1 to 16 sequential chunks.
-- `Sequence Prompt` accepts one external Text (Multiline) input.
-- Prompt formats: `Auto`, `Fixed`, `List`, and `Timeline`.
-- Optional per-clip prompt overrides remain collapsed until needed.
-- Native video and audio latents pass directly between chunks without VAE decode/re-encode.
-- Continuity presets: `Fast - 5 frames`, `Balanced - 22 frames` (default), and `Strong - 39 frames`.
-- Seam Correction provides `Off` and `Basic`; `Basic` is the default safe post-decode correction path.
-- Exact total duration and audio continuity are enabled by default.
-- SageAttention, Sol-Attn, LoRA, and Spectrum remain external and composable.
-- Spectrum Interop API v1 requests a two-step Actual prefix only when continuation context exists.
-- Advanced continuation, State, Session, Prompt Plan, reroll, and diagnostic controls are collapsed by default.
-- Existing advanced connections automatically reopen the Advanced section.
-- V1 and auxiliary nodes remain load-compatible but are marked deprecated and moved to the Legacy category.
-- Existing State and Session schemas, output ordering, and saved workflow node identifiers are preserved.
-- Repository: https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum
+GPL-3.0-or-later. External accelerator source code is not bundled.

@@ -1,62 +1,22 @@
 # Changelog
 
-## 2.1.5
+## 2.1.7
 
-- Restore compact Individual Clip Overrides and Advanced accordions without removing or reordering backend slots.
-- Add `Seam Correction: Auto / Off / Basic` and make guarded Auto the new-node default.
-- Consolidate the Sampler V2 frontend behavior into one extension wrapper.
-- Preserve backend widget type, serialization behavior, and relative widget order.
-- Keep all backend input and output slots registered instead of removing and re-adding them.
-- Collapse advanced widgets only through computeSize and DOM display state.
-- Add static widget-order and workflow-value mapping regressions for UI serialization stability.
+- Added the compact static `H3 Continuum Sampler` facade over the unchanged V2 execution core.
+- Added Clip Overrides, Advanced, and Result pack helper nodes.
+- Preserved `H3ContinuumSamplerV2` as a Legacy/Core workflow compatibility node.
+- Removed the frontend display controller and all dynamic socket, proxy-widget, DOM, resize, and serialization workarounds.
+- Kept State, Session, Prompt Plan, Sampling, Native Continuity, and Spectrum Interop contracts unchanged.
 
+## 2.1.6
 
-## 2.1.4
-
-- Rename the public package and repository branding to ComfyUI-H3-Continuum.
-- Synchronize release metadata, validation records, repository URLs, and the SHA256 manifest.
-- Add CPU GitHub Actions checks for Python, pytest, and frontend JavaScript syntax.
-- Make the integrated V2 sampler the only primary Continuum workflow node.
-- Mark V1 building blocks and auxiliary plan/state nodes as deprecated Legacy nodes while preserving saved-workflow identifiers.
-- Collapse continuation, session, prompt-plan, diagnostics, and advanced generation controls by default.
-- Automatically expose Advanced settings when an existing workflow has an advanced connection.
-- Preserve output ordering, State/Session schemas, sampling, and accelerator behavior.
-
-## 2.1.3
-
-- Added one stable external `Sequence Prompt` STRING socket for the complete sequence.
-- Added `Auto / Fixed / List / Timeline` Prompt Format selection without changing socket connections.
-- Added deterministic Auto detection for `---` lists and `[0-5s]` / `[Chunk 1]` timeline sections.
-- Kept individual `Clip N Prompt` inputs as optional overrides, collapsed by default while preserving connected legacy sockets.
-- Preserved connected Prompt Plan and saved prompt widget fallbacks without changing Prompt Plan schema.
-
-## 2.1.2
-
-- Added fail-closed Native Continuity preflight for raw AV tails, native video-cycle phase, signed 40/24 audio-grid placement, finite Context tensors, and packed Context/Target row separation.
-- Added branch-local immutable PackedLayout signatures on native Actual calls while allowing Spectrum Forecast calls to bypass native layout execution.
-- Added per-chunk MODEL copy-on-write isolation so Spectrum runtime history, archives, and disable state cannot leak between chunks.
-- Added read-only Spectrum Interop API v1 hints only when a valid previous Context exists; initial chunks emit no hint.
-- Added Spectrum-compatible Actual Prefix 2 requests with strict metadata types, invalid/unknown fail-open behavior, total-step clamping, and no prefix during offline replay.
-- Preserved State, Session, Prompt Plan, Seam Correction, node identifiers, and the raw-latent-only continuation path.
-
-## 2.1.0
-
-- Added opt-in `Seam Correction: Off / Basic` while preserving the complete V2.0.2 decode path for `Off`.
-- Added normalized CPU-only video seam scoring and conservative adaptive cuts from 0 to 3 frames before the legacy boundary.
-- Added bounded luminance gain, chroma bias, and motion-aware 0–2 frame cosine blending with score-based rollback.
-- Added boundary-local stereo-safe audio correlation alignment, level/DC guards, and 10–60ms equal-power crossfades without shifting the following clip.
-- Added legacy, cut, and corrected seam scores plus video/audio decisions to Basic and Full diagnostics.
-- Added boundary-level fallback without changing Sampling, Context, State, Session, Prompt Plan, V1 nodes, or accelerator composition.
-
-## 2.0.2
-
-- Added external `Clip N Prompt` STRING inputs for 1–16 chunks, intended for ComfyUI's `Text (Multiline)` node.
-- Made the visible prompt inputs follow the `chunks` widget while preserving the internal Fixed/List/Timeline values as a legacy fallback.
-- Added deterministic per-clip prompt overrides with regenerated prompt hashes and unchanged Prompt Plan schema.
-- Added `Settings > H3 Continuum > Preview > Show latent preview`, enabled by default.
-- Kept latent-preview control out of the sampler UI and passed the setting to the existing sampling callback without changing final AV output.
-- Added regression coverage for selective external prompt overrides, hashes, and the 16 connectable prompt inputs.
-- Preserved all V1/V2 node identifiers and State, Session, and Prompt Plan schemas.
+- Rebuilt the Sampler V2 frontend as one Vue-aware display controller.
+- Removed the Individual Clip Overrides accordion; only active Clip Prompt sockets are shown.
+- Kept connected out-of-range Clip Prompt sockets visible when chunks is reduced.
+- Added one Advanced Settings control; connected advanced sockets stay visible while collapsed.
+- Removed fixed node-height handling and all input/output add/remove UI folding.
+- Kept backend socket/widget order, types, serialization, State/Session/Prompt Plan schemas, sampling, and Spectrum Interop unchanged.
+- Exposed show_preview as a per-node basic control and removed the duplicate global preview setting.
 
 ## 2.0.1
 

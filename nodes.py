@@ -363,11 +363,17 @@ from .v2.nodes import (
 NODE_CLASS_MAPPINGS.update(V2_NODE_CLASS_MAPPINGS)
 NODE_DISPLAY_NAME_MAPPINGS.update(V2_NODE_DISPLAY_NAME_MAPPINGS)
 
-# V2's integrated sampler is the only primary workflow node. Keep every older
-# identifier registered so saved workflows still load, while ComfyUI's native
-# deprecated-node filter keeps legacy building blocks out of the normal menu.
+# The stable facade and its pack helpers are the public workflow surface. Keep
+# every older identifier registered so saved workflows still load, while
+# ComfyUI's native deprecated-node filter hides legacy building blocks.
+_primary_node_ids = {
+    "H3ContinuumSampler",
+    "H3ContinuumClipOverrides",
+    "H3ContinuumAdvanced",
+    "H3ContinuumResult",
+}
 for _node_id, _node_class in NODE_CLASS_MAPPINGS.items():
-    if _node_id == "H3ContinuumSamplerV2":
+    if _node_id in _primary_node_ids:
         continue
     _node_class.DEPRECATED = True
     _node_class.CATEGORY = f"{CATEGORY}/Legacy"

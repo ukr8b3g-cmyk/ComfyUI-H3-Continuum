@@ -1,33 +1,21 @@
 名称: ComfyUI-H3-Continuum
-バージョン: 2.1.5
+バージョン: 2.1.7
 対象: ComfyUI native MiniMax H3
-主ノード: H3 Continuum Sampler V2
+主ノード: H3 Continuum Sampler
 ライセンス: GPL-3.0-or-later
-追加pip依存: なし（ComfyUI同梱のPyTorch / safetensorsを使用）
+追加pip依存: なし
 
-通常利用するV2ノード:
-- H3 Continuum Sampler V2
+V2.1.7:
+- 標準ComfyUI描画だけを使用する静的Facade UI
+- Clip Overrides / Advanced / Resultをpack補助ノードへ分離
+- 動的socket、DOM非表示、proxy widget、手動serialization処理を廃止
+- 旧H3ContinuumSamplerV2をLegacy/Core互換ノードとして維持
+- State/Session/Prompt Plan schemaとSampling処理は変更なし
 
-Legacy / 高度補助ノード（Deprecated）:
-- H3 Continuum Prompt Plan
-- H3 Continuum Save Session
-- H3 Continuum Load Session
-- H3 Continuum Session Info
-- H3 Continuum Join
-- H3 Continuum Finish
-- H3 Continuum Assemble
-- H3 Continuum Save State
-- H3 Continuum Load State
-
-設計:
-- V1のnative video/audio latent continuation coreを再利用
-- Nチャンクを1ノードで統合管理
-- Sequence PromptでAuto / Fixed / List / Timelineを選択
-- 各チャンクでcall-local MODEL cloneを作成
-- Prompt/Identity conditioningをSampling前にキャッシュ
-- H3チャンク間のVAE Decodeなし
-- CPU Session、再開、指定チャンク以降のリロール
-- 累積フレーム基準の音声sample境界
-- SageAttention / Sol-Attn / Spectrumは外部ノードとして併用
-- Spectrumのprivate APIには依存しない
-- グローバルH3 Monkey Patchなし
+Core:
+- native H3 raw video/audio latent continuation
+- 5/22/39f + Auto context
+- Spectrum Interop API v1 Actual Prefix 2 request
+- SageAttention / Sol-Attn / Spectrum外部併用
+- Session resume / reroll
+- Seam Correction Auto / Off / Basic

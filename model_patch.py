@@ -21,7 +21,6 @@ from .layout_adapter import (
 )
 
 
-
 def _wrapper_factory(*, strict: bool, debug: bool) -> Callable[..., Any]:
     branch_baselines: dict[tuple[Any, ...], tuple[Any, ...]] = {}
 
@@ -32,16 +31,12 @@ def _wrapper_factory(*, strict: bool, debug: bool) -> Callable[..., Any]:
         try:
             ensure_native_h3_base_model(executor.class_obj)
             patched_payload = dict(payload)
-            # Patch coordinates before any accelerator sees the layout, then
-            # cache only the small Continuum state tensors on the active device.
             patch_layout_in_place(patched_payload, strict=True, debug=debug)
             transformer_options = kwargs.get("transformer_options")
             validate_native_continuity_layout(
                 patched_payload,
                 transformer_options=(
-                    transformer_options
-                    if isinstance(transformer_options, dict)
-                    else {}
+                    transformer_options if isinstance(transformer_options, dict) else {}
                 ),
                 branch_baselines=branch_baselines,
             )
@@ -50,11 +45,9 @@ def _wrapper_factory(*, strict: bool, debug: bool) -> Callable[..., Any]:
             normalize_condition_latents(patched_payload)
             kwargs["minimax_payload"] = patched_payload
         except (CompatibilityError, LayoutCompatibilityError, KeyError, TypeError, ValueError) as exc:
-            # A stock-time reference would render a plausible but incorrect join.
-            # Never silently bypass a marked Continuum payload, even when the
-            # proactive compatibility toggle is disabled.
             raise RuntimeError(f"H3 Continuum Join compatibility failure: {exc}") from exc
         return executor(*args, **kwargs)
+
     return apply_model_wrapper
 
 
@@ -67,8 +60,7 @@ def patch_model(model: Any, *, strict: bool, debug: bool):
     missing_api = [name for name in required_api if not hasattr(model, name)]
     if missing_api:
         raise RuntimeError(
-            "MODEL lacks the wrapper API required by H3 Continuum Join: "
-            + ", ".join(missing_api)
+            "MODEL lacks the wrapper API required by H3 Continuum Join: " + ", ".join(missing_api)
         )
     base_model = getattr(model, "model", None)
     if base_model is None:
@@ -89,11 +81,7 @@ def patch_model(model: Any, *, strict: bool, debug: bool):
     return patched
 
 
-def continuum_interop_request(
-    *,
-    chunk_index: int,
-    context_frames: int,
-) -> dict[str, Any]:
+def continuum_interop_request(*, chunk_index: int, context_frames: int) -> dict[str, Any]:
     return {
         "api": CONTINUUM_INTEROP_API,
         "active": True,
@@ -112,7 +100,6 @@ def clone_model_for_chunk(
     context_frames: int | None,
 ):
     """Create a call-local MODEL and attach an optional read-only Spectrum hint."""
-
     chunk_model = patch_model(model, strict=bool(strict), debug=bool(debug))
     model_options = dict(getattr(chunk_model, "model_options", None) or {})
     transformer_options = dict(model_options.get("transformer_options") or {})
@@ -120,8 +107,7 @@ def clone_model_for_chunk(
         transformer_options.pop(CONTINUUM_INTEROP_KEY, None)
     else:
         transformer_options[CONTINUUM_INTEROP_KEY] = continuum_interop_request(
-            chunk_index=int(chunk_index),
-            context_frames=int(context_frames),
+            chunk_index=int(chunk_index), context_frames=int(context_frames)
         )
     model_options["transformer_options"] = transformer_options
     chunk_model.model_options = model_options

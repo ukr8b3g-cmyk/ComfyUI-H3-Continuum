@@ -27,7 +27,6 @@ FIRST_FRAME_POLICIES = (POLICY_REPLACE, POLICY_ERROR, POLICY_KEEP)
 
 def clone_conditioning(conditioning):
     """Clone the outer conditioning list and metadata dictionaries."""
-
     output = []
     for index, item in enumerate(conditioning):
         if not isinstance(item, (tuple, list)) or len(item) != 2:
@@ -42,7 +41,6 @@ def clone_conditioning(conditioning):
 
 def conditioning_diagnostics(conditioning) -> dict[str, int]:
     """Return non-authoritative cues used in the Join report."""
-
     first_keyframes = 0
     visual_tokens = 0
     for item in conditioning:
@@ -69,13 +67,7 @@ def prepare_conditioning(
     first_frame_policy: str,
     preserve_last_frame: bool,
 ):
-    """Add one native H3 video/video-audio reference as timeline context.
-
-    A single multi-slot reference keeps the previous motion latent intact and
-    avoids relying on ComfyUI's first/last-only keyframe constructor. The
-    per-model wrapper moves the reference's MM-RoPE rows onto target time zero.
-    """
-
+    """Add one native H3 video/video-audio reference as timeline context."""
     if first_frame_policy not in FIRST_FRAME_POLICIES:
         raise ValueError(f"unknown first-frame policy: {first_frame_policy!r}")
     if not torch.is_tensor(video_context) or video_context.ndim != 5:
@@ -111,7 +103,6 @@ def prepare_conditioning(
                 "audio_latent": audio_context.contiguous(),
                 MARK_AUDIO_CONTEXT: True,
                 MARK_AUDIO_END_FRAME: float(context_frames),
-                # Schema-v1 name retained; value is a signed grid offset.
                 MARK_AUDIO_OVERHANG: float(audio_grid_offset),
             }
         )
@@ -131,10 +122,7 @@ def prepare_conditioning(
                     )
                 if first_frame_policy == POLICY_KEEP:
                     kept.append(keyframe)
-                # POLICY_REPLACE drops the spatial keyframe. Qwen visual tokens,
-                # if present, remain in conditioning as a global identity cue.
                 continue
-
             is_last = old_frame_count is not None and frame_index == int(old_frame_count) - 1
             if is_last and preserve_last_frame:
                 keyframe["resolved_frame_index"] = int(new_frame_count) - 1
@@ -145,13 +133,11 @@ def prepare_conditioning(
                 raise ValueError(
                     f"unsupported existing H3 keyframe index {frame_index}; only first/last are safe"
                 )
-
         if kept:
             metadata["minimax_keyframes"] = kept
         else:
             metadata.pop("minimax_keyframes", None)
         metadata["minimax_frame_count"] = int(new_frame_count)
-
         refs = [
             dict(item)
             for item in (metadata.get("minimax_refs") or [])
@@ -164,11 +150,10 @@ def prepare_conditioning(
 
 def new_h3_latent(template: dict[str, Any], *, video_t: int, audio_t: int):
     """Create an empty native H3 AV latent matching the template geometry/dtype."""
-
     try:
         import comfy.model_management
         import comfy.nested_tensor
-    except Exception as exc:  # pragma: no cover - requires ComfyUI runtime
+    except Exception as exc:  # pragma: no cover
         raise RuntimeError(f"ComfyUI H3 latent helpers unavailable: {exc}") from exc
     video, audio = extract_av_streams(template)
     device = comfy.model_management.intermediate_device()
@@ -177,7 +162,5 @@ def new_h3_latent(template: dict[str, Any], *, video_t: int, audio_t: int):
         device=device,
         dtype=video.dtype,
     )
-    new_audio = torch.zeros(
-        (1, 32, 2, int(audio_t)), device=device, dtype=audio.dtype
-    )
+    new_audio = torch.zeros((1, 32, 2, int(audio_t)), device=device, dtype=audio.dtype)
     return {"samples": comfy.nested_tensor.NestedTensor((new_video, new_audio))}

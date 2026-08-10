@@ -1,51 +1,17 @@
-ComfyUI-H3-Continuum 2.1.5 — Package Validation
+ComfyUI-H3-Continuum 2.1.7 — Package Validation
 Date: 2026-08-10
 
-Release scope:
-- Integrated H3 Continuum Sampler V2 for 1–16 native MiniMax H3 chunks.
-- V1 Join / Finish / Assemble / State nodes preserved with unchanged node IDs.
-- External SageAttention, Sol-Attn, LoRA, and Spectrum composition retained.
+Build basis:
+- GitHub repository: ukr8b3g-cmyk/ComfyUI-H3-Continuum
+- Repository source starts from V2.1.5 HEAD 28b5b751a665fe47a026eb1c8222ab83ce859360
+- V2.1.7 adds a static Facade over the unchanged V2 execution core.
 
-Completed checks:
-- Python bytecode syntax compilation: PASS
-- Python grammar compilation: PASS
-- Unit and orchestration tests: PASS (71 tests)
-- Package import and node registration: PASS (10 nodes)
-- V1 node-ID compatibility: PASS
-- V1 State schema compatibility: PASS
-- Native H3 17k+5 temporal-grid tests: PASS
-- 5 / 22 / 39-frame latent-context mapping: PASS
-- Signed 40 Hz audio-grid offset tests: PASS
-- PackedLayout in-place MM-RoPE patch tests: PASS
-- Sol-Attn position_ids identity preservation: PASS
-- Sol-Attn-style *args/**kwargs PackedLayout wrapper compatibility: PASS
-- Genuine native-H3 API removal still fails closed: PASS
-- Spectrum/public-wrapper marker detection: PASS
-- V2 Fixed / List / Timeline prompt parsing: PASS
-- V2 Sequence Prompt Auto detection and override priority: PASS
-- Native Continuity call-local MODEL isolation and Spectrum Interop hint emission: PASS
-- Basic Seam Correction and complete Off bypass: PASS
-- V2.1.5 frontend serialization stability and Legacy-node registration checks: PASS
-- Deterministic per-chunk seed and reroll derivation: PASS
-- Conservative Auto-context selection: PASS
-- Session validation, branch-safe reuse, and V1 State extraction: PASS
-- Atomic safetensors + JSON State/Session round-trip: PASS
-- Cumulative 24 fps / PCM sample-boundary alignment: PASS
-- Exact-duration AV correction and final-anchor preservation tests: PASS
-- Decode-after-all-sampling orchestration test: PASS
-- Shared MODEL / shared conditioning-cache orchestration test: PASS
-- V2 2.0.0 malformed widget-serialization migration regression: PASS
-- Example V2 3x5s workflow structural validation: PASS (17 nodes, 20 links)
-- Repository manifest regenerated after all V2.1.5 files: PASS
+Automated validation for this V2.1.7 change:
+- Not executed yet.
+- Required commands: python -m compileall -q .; python -m pytest -q
 
-Runtime verifier included:
-- tools/verify_runtime.py checks the installed ComfyUI native H3 API.
-- It constructs and patches a real native PackedLayout without loading the H3 checkpoint.
-- It verifies all registered node IDs and the V2 prompt-plan core.
-
-Not performed in this build container:
-- Full MiniMax H3 checkpoint generation on an RTX GPU.
-- Perceptual A/B validation of Sage, Sol-Attn, and Spectrum combinations.
-- Timing comparison against the equivalent V1 3x5-second workflow on the user's RTX 5060 Ti.
-
-The first-machine GPU validation matrix is documented in docs/VALIDATION_JA.md.
+Still requires the user's ComfyUI browser/GPU runtime validation:
+- New Facade and three pack helper nodes appear without Import Error
+- Legacy H3ContinuumSamplerV2 workflows still load
+- Workflow save/reload retains Facade and pack values/connections
+- Full MiniMax H3 generation and Spectrum Prefix 2 log verification
