@@ -1,4 +1,4 @@
-# H3 Continuum Join 2.1
+# ComfyUI-H3-Continuum 2.1.4
 
 Integrated long-form continuation for ComfyUI's native MiniMax H3 audio/video model.
 

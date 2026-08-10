@@ -1,4 +1,4 @@
-H3 Continuum Join 2.1.0 — Package Validation
+ComfyUI-H3-Continuum 2.1.4 — Package Validation
 Date: 2026-08-10
 
 Release scope:
@@ -8,8 +8,8 @@ Release scope:
 
 Completed checks:
 - Python bytecode syntax compilation: PASS
-- Python 3.10 grammar parse: PASS (42 Python files)
-- Unit and orchestration tests: PASS (44 tests)
+- Python grammar compilation: PASS
+- Unit and orchestration tests: PASS (70 tests)
 - Package import and node registration: PASS (10 nodes)
 - V1 node-ID compatibility: PASS
 - V1 State schema compatibility: PASS
@@ -22,6 +22,10 @@ Completed checks:
 - Genuine native-H3 API removal still fails closed: PASS
 - Spectrum/public-wrapper marker detection: PASS
 - V2 Fixed / List / Timeline prompt parsing: PASS
+- V2 Sequence Prompt Auto detection and override priority: PASS
+- Native Continuity call-local MODEL isolation and Spectrum Interop hint emission: PASS
+- Basic Seam Correction and complete Off bypass: PASS
+- V2.1.4 Advanced UI and Legacy-node registration checks: PASS
 - Deterministic per-chunk seed and reroll derivation: PASS
 - Conservative Auto-context selection: PASS
 - Session validation, branch-safe reuse, and V1 State extraction: PASS
@@ -32,13 +36,12 @@ Completed checks:
 - Shared MODEL / shared conditioning-cache orchestration test: PASS
 - V2 2.0.0 malformed widget-serialization migration regression: PASS
 - Example V2 3x5s workflow structural validation: PASS (17 nodes, 20 links)
-- Release ZIP manifest verification: performed after archive creation
-- Release ZIP extraction and test rerun: performed after archive creation
+- Repository manifest regenerated after all V2.1.4 files: PASS
 
 Runtime verifier included:
 - tools/verify_runtime.py checks the installed ComfyUI native H3 API.
 - It constructs and patches a real native PackedLayout without loading the H3 checkpoint.
-- It verifies all 10 registered node IDs and the V2 prompt-plan core.
+- It verifies all registered node IDs and the V2 prompt-plan core.
 
 Not performed in this build container:
 - Full MiniMax H3 checkpoint generation on an RTX GPU.

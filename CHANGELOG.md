@@ -2,6 +2,9 @@
 
 ## 2.1.4
 
+- Rename the public package and repository branding to ComfyUI-H3-Continuum.
+- Synchronize release metadata, validation records, repository URLs, and the SHA256 manifest.
+- Add CPU GitHub Actions checks for Python, pytest, and frontend JavaScript syntax.
 - Make the integrated V2 sampler the only primary Continuum workflow node.
 - Mark V1 building blocks and auxiliary plan/state nodes as deprecated Legacy nodes while preserving saved-workflow identifiers.
 - Collapse continuation, session, prompt-plan, diagnostics, and advanced generation controls by default.

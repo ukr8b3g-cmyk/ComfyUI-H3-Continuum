@@ -1,5 +1,5 @@
 [project]
-name = "comfyui-h3-continuum-join"
+name = "comfyui-h3-continuum"
 version = "2.1.4"
 description = "Integrated N-chunk continuation for ComfyUI native MiniMax H3 video and audio"
 readme = "README.md"
@@ -10,7 +10,7 @@ dependencies = []
 keywords = ["comfyui", "minimax-h3", "video", "audio", "continuation"]
 
 [project.urls]
-Repository = "https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum-Join"
+Repository = "https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum"
 
 [tool.comfy]
 PublisherId = "ukr8b3g-cmyk"

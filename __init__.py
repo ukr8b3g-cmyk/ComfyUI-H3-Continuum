@@ -1,4 +1,4 @@
-"""H3 Continuum Join — native MiniMax H3 chunk continuation."""
+"""H3 Continuum — native MiniMax H3 chunk continuation."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ if __package__:
     except Exception as exc:
         raise RuntimeError(f"H3 Continuum Join self-test failed: {exc}") from exc
     logging.getLogger("h3_continuum_join").info(
-        "H3 Continuum Join %s loaded (V2 integrated sampler + hidden legacy workflow compatibility)",
+        "H3 Continuum %s loaded (V2 integrated sampler + hidden legacy workflow compatibility)",
         PACKAGE_VERSION,
     )
 else:  # pragma: no cover
