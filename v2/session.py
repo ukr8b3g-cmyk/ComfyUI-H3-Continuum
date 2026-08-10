@@ -33,7 +33,9 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def model_fingerprint(model: Any) -> str:
+def model_fingerprint(
+    model: Any, *, extra_wrapper_keys: tuple[str, ...] = ()
+) -> str:
     base = getattr(model, "model", None)
     inner = getattr(base, "diffusion_model", None)
     options = getattr(model, "model_options", {}) or {}
@@ -44,6 +46,8 @@ def model_fingerprint(model: Any) -> str:
         for group in wrappers.values():
             if isinstance(group, dict):
                 wrapper_keys.extend(str(key) for key in group)
+    if extra_wrapper_keys:
+        wrapper_keys = sorted(set(wrapper_keys).union(map(str, extra_wrapper_keys)))
     descriptor = {
         "base": f"{type(base).__module__}.{type(base).__name__}" if base is not None else "missing",
         "inner": f"{type(inner).__module__}.{type(inner).__name__}" if inner is not None else "missing",

@@ -60,6 +60,24 @@ def _parse_timeline_sections(script):
     finish()
     if not sections: raise PromptPlanError("timeline contains no sections")
     return sections
+def parse_sparse_prompt_overrides(script):
+    sections=_parse_timeline_sections(script); overrides={}
+    for item in sections:
+        if item["kind"]!="chunk": raise PromptPlanError("Sparse Clip Overrides only accepts [Clip N] or [Chunk N] sections")
+        index=int(item["index"])
+        if index in overrides: raise PromptPlanError(f"Sparse Clip Overrides defines Clip {index} more than once")
+        overrides[index]=item["prompt"]
+    return overrides
+def validate_sparse_prompt_overrides(overrides,*,chunks):
+    chunks=int(chunks)
+    if not isinstance(overrides,dict): raise PromptPlanError("Sparse Clip Overrides must be a dictionary")
+    validated={}
+    for index,prompt in overrides.items():
+        if type(index) is not int: raise PromptPlanError("Sparse Clip Override numbers must be integers")
+        if not 1<=index<=chunks: raise PromptPlanError(f"Sparse Clip Override {index} is outside the configured 1-{chunks} chunks")
+        validated[index]=_normalize_prompt(prompt,label=f"Clip {index} Override")
+    if not validated: raise PromptPlanError("Sparse Clip Overrides contains no overrides")
+    return validated
 def _parse_timeline(script,chunks,chunk_seconds):
     sections=_parse_timeline_sections(script); prompts=[]; notes=[]
     for chunk_index in range(1,chunks+1):

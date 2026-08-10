@@ -77,3 +77,36 @@ def test_session_roundtrip_and_last_state(tmp_path, monkeypatch):
     loaded = session_io.load_session(prefix="test", slot=1)
     assert torch.equal(loaded["chunks"][0]["video"], session["chunks"][0]["video"])
     assert loaded["session_id"] == session["session_id"]
+
+def test_model_fingerprint_can_add_continuum_wrapper_without_mutating_model():
+    from types import SimpleNamespace
+
+    from ComfyUI_H3_Continuum_Join.v2.session import model_fingerprint
+
+    base = SimpleNamespace(diffusion_model=object())
+    model = SimpleNamespace(
+        model=base,
+        model_options={"transformer_options": {}},
+        wrappers={},
+        model_dtype=lambda: "float32",
+        model_size=lambda: 1,
+    )
+    wrapped = SimpleNamespace(
+        model=base,
+        model_options={"transformer_options": {}},
+        wrappers={
+            "apply_model": {
+                "h3_continuum_join.apply_model.v1": [object()],
+            }
+        },
+        model_dtype=model.model_dtype,
+        model_size=model.model_size,
+    )
+
+    logical = model_fingerprint(
+        model,
+        extra_wrapper_keys=("h3_continuum_join.apply_model.v1",),
+    )
+
+    assert logical == model_fingerprint(wrapped)
+    assert model.wrappers == {}

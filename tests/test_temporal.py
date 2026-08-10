@@ -1,3 +1,5 @@
+import pytest
+
 from ComfyUI_H3_Continuum_Join.temporal import (
     align_frame_count_nearest,
     audio_grid_offset,
@@ -5,6 +7,7 @@ from ComfyUI_H3_Continuum_Join.temporal import (
     context_slots,
     latent_slot_offsets,
     largest_context_capacity,
+    make_av_context_window,
     make_extension_shape,
     pixel_frames_for_latent_t,
     video_latent_t,
@@ -45,6 +48,23 @@ def test_audio_grid_offset_is_signed_and_bounded_on_valid_h3_lengths():
     assert all(-0.500001 <= value <= 0.500001 for value in offsets)
     assert any(value < 0 for value in offsets)
     assert any(value > 0 for value in offsets)
+
+
+def test_native_context_window_uses_source_av_grid_and_cycle_phase():
+    balanced = make_av_context_window(141, audio_latent_t(141), 22)
+    assert (balanced.video_start_slot, balanced.video_stop_slot) == (35, 42)
+    assert (balanced.audio_start_tick, balanced.audio_stop_tick) == (198, 235)
+    assert balanced.audio_steps == 37
+
+    shifted = make_av_context_window(158, audio_latent_t(158), 22)
+    assert (shifted.video_start_slot, shifted.video_stop_slot) == (40, 47)
+    assert (shifted.audio_start_tick, shifted.audio_stop_tick) == (226, 263)
+    assert shifted.audio_grid_offset < 0
+
+
+def test_native_context_window_rejects_unknown_audio_grid_phase():
+    with pytest.raises(ValueError, match="audio-grid offset"):
+        make_av_context_window(141, audio_latent_t(141) + 2, 22)
 
 
 def test_dynamic_state_capacity_for_short_extensions():

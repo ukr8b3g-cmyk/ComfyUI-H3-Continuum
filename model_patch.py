@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+
+import logging
 from typing import Any, Callable
 
 from .compatibility import CompatibilityError, ensure_native_h3_base_model
@@ -51,12 +53,12 @@ def _wrapper_factory(*, strict: bool, debug: bool) -> Callable[..., Any]:
     return apply_model_wrapper
 
 
-def patch_model(model: Any, *, strict: bool, debug: bool):
+def configure_continuum_model(model: Any, *, strict: bool, debug: bool):
     try:
         from comfy.patcher_extension import WrappersMP
     except Exception as exc:  # pragma: no cover
         raise RuntimeError(f"ComfyUI model-wrapper API unavailable: {exc}") from exc
-    required_api = ("clone", "add_wrapper_with_key", "remove_wrappers_with_key")
+    required_api = ("add_wrapper_with_key", "remove_wrappers_with_key")
     missing_api = [name for name in required_api if not hasattr(model, name)]
     if missing_api:
         raise RuntimeError(
@@ -66,7 +68,7 @@ def patch_model(model: Any, *, strict: bool, debug: bool):
     if base_model is None:
         raise RuntimeError("MODEL does not expose the ComfyUI BaseModel")
     ensure_native_h3_base_model(base_model)
-    patched = model.clone()
+    patched = model
     patched.remove_wrappers_with_key(WrappersMP.APPLY_MODEL, MODEL_WRAPPER_KEY)
     patched.add_wrapper_with_key(
         WrappersMP.APPLY_MODEL,
@@ -80,6 +82,13 @@ def patch_model(model: Any, *, strict: bool, debug: bool):
     patched.model_options = model_options
     return patched
 
+def patch_model(model: Any, *, strict: bool, debug: bool):
+    """Clone once, then install the Continuum wrapper on that clone."""
+    if not hasattr(model, "clone"):
+        raise RuntimeError(
+            "MODEL lacks the wrapper API required by H3 Continuum Join: clone"
+        )
+    return configure_continuum_model(model.clone(), strict=strict, debug=debug)
 
 def continuum_interop_request(*, chunk_index: int, context_frames: int) -> dict[str, Any]:
     return {
@@ -100,7 +109,23 @@ def clone_model_for_chunk(
     context_frames: int | None,
 ):
     """Create a call-local MODEL and attach an optional read-only Spectrum hint."""
-    chunk_model = patch_model(model, strict=bool(strict), debug=bool(debug))
+    if not hasattr(model, "clone"):
+        raise RuntimeError(
+            "MODEL lacks the wrapper API required by H3 Continuum Join: clone"
+        )
+    chunk_model = model.clone()
+    configure_continuum_model(
+        chunk_model, strict=bool(strict), debug=bool(debug)
+    )
+    if debug:
+        parent = getattr(chunk_model, "parent", None)
+        logging.getLogger(__name__).info(
+            "Continuum model lifetime: input=%s chunk=%s parent=%s base=%s",
+            id(model),
+            id(chunk_model),
+            id(parent) if parent is not None else None,
+            id(getattr(chunk_model, "model", None)),
+        )
     model_options = dict(getattr(chunk_model, "model_options", None) or {})
     transformer_options = dict(model_options.get("transformer_options") or {})
     if context_frames is None:

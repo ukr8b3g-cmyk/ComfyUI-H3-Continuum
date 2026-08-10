@@ -22,7 +22,6 @@ def test_v2_samples_every_chunk_before_any_decode(monkeypatch):
     fake_model=SimpleNamespace(model=SimpleNamespace(diffusion_model=SimpleNamespace()),model_options={},wrappers={},model_dtype=lambda:torch.bfloat16,model_size=lambda:0)
     assets=IdentityAssets(None,None,None,None,"none")
     monkeypatch.setattr(sequence,"check_comfy_h3_runtime",lambda:[])
-    monkeypatch.setattr(sequence,"patch_model",lambda model,strict,debug:model)
     def clone_model_for_chunk(model,*,strict,debug,chunk_index,context_frames):
         options=dict(model.model_options); transformer_options=dict(options.get("transformer_options") or {})
         if context_frames is not None: transformer_options[CONTINUUM_INTEROP_KEY]={"api":1,"active":True,"min_actual_prefix_steps":2}

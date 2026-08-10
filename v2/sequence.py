@@ -16,7 +16,7 @@ from ..constants import (
     SEAM_CORRECTION_OPTIONS, V2_CONTINUITY_AUTO, normalize_diagnostics_mode,
 )
 from ..continuation import POLICY_REPLACE, prepare_conditioning
-from ..model_patch import clone_model_for_chunk, patch_model
+from ..model_patch import clone_model_for_chunk
 from ..state import assert_context_unchanged, context_fingerprint, make_plan, select_context, validate_state
 from ..temporal import align_frame_count_up, largest_context_capacity, make_extension_shape
 from ..version import PACKAGE_VERSION
@@ -87,7 +87,9 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
     issues=check_comfy_h3_runtime()
     if issues and strict_compatibility: raise SequenceRuntimeError("H3 runtime is incompatible: "+"; ".join(issues))
     assets=prepare_identity_assets(video_vae,width=width,height=height,first_frame=first_frame,last_frame=last_frame,encode_latents=False)
-    patched_model=patch_model(model,strict=bool(strict_compatibility),debug=bool(debug)); current_model_fingerprint=model_fingerprint(patched_model)
+    current_model_fingerprint=model_fingerprint(model,extra_wrapper_keys=("h3_continuum_join.apply_model.v1",))
+    accelerators=accelerator_summary(model)
+    if "Continuum APPLY_MODEL wrapper installed" not in accelerators: accelerators+="; Continuum APPLY_MODEL wrapper installed"
     preserved,reuse_notes=_preserved_prefix(session=session,prompt_hashes=prompt_hashes,chunks=chunks,reroll_from_chunk=int(reroll_from_chunk),width=width,height=height,chunk_seconds=chunk_seconds,identity_hash=assets.identity_hash)
     if session is not None:
         old_fingerprint=str(session.get("model_fingerprint",""))
@@ -112,7 +114,7 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
             video_context,audio_context,grid_offset=select_context(previous_state,context_frames,include_audio=bool(audio_continuity)); context_before=context_fingerprint(video_context,audio_context)
             conditioning=prepare_conditioning(base_conditioning,video_context=video_context,audio_context=audio_context,audio_grid_offset=grid_offset,context_frames=context_frames,new_frame_count=shape.total_frames,first_frame_policy=POLICY_REPLACE,preserve_last_frame=True)
             clip_index=int(previous_state["clip_index"])+1; chunk_plan=make_plan(continuation=True,clip_index=clip_index,total_frames=shape.total_frames,trim_frames=context_frames,width=width,height=height,context_frames=context_frames,state_capacity_frames=largest_context_capacity(shape.net_new_frames),requested_extend_seconds=chunk_seconds,debug=debug)
-        chunk_model=clone_model_for_chunk(patched_model,strict=bool(strict_compatibility),debug=bool(debug),chunk_index=clip_index,context_frames=context_frames if previous_state is not None else None)
+        chunk_model=clone_model_for_chunk(model,strict=bool(strict_compatibility),debug=bool(debug),chunk_index=clip_index,context_frames=context_frames if previous_state is not None else None)
         sampled=sample_chunk(model=chunk_model,conditioning=conditioning,latent=latent,sampler=sampler,sigmas=sigmas,seed=seed,enable_preview=bool(enable_preview))
         if context_before is not None and video_context is not None: assert_context_unchanged(video_context,audio_context,context_before)
         entry=make_chunk_entry(latent=sampled,plan=chunk_plan,prompt=prompt,prompt_hash=prompt_hash_value,seed=seed,context_frames=context_frames,motion_score=motion_score,reused=False); previous_state=entry_to_state(entry); entries.append(entry); retained_frames+=int(chunk_plan["net_frames"])
@@ -128,7 +130,7 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
     settings={"continuity":continuity,"audio_continuity":bool(audio_continuity),"exact_total_duration":bool(exact_total_duration),"prompt_mode":plan["mode"],"base_seed":int(base_seed),"reroll_nonce":int(reroll_nonce),"diagnostics_mode":diagnostics_mode,"initial_state_source":initial_state is not None}
     new_session=make_session(chunks=entries,width=width,height=height,chunk_seconds=chunk_seconds,identity_hash=assets.identity_hash,model_fingerprint_value=current_model_fingerprint,parent_session_id=parent_id,reroll_from_chunk=int(reroll_from_chunk),settings=settings)
     decoded_gib=float(images.shape[0])*float(width)*float(height)*3.0*4.0/(1024.0**3)
-    report_lines=[f"H3 Continuum V2 {PACKAGE_VERSION}",prompt_plan_report(plan),f"Seam correction: {seam_correction}.",accelerator_summary(patched_model),"Execution: conditioning precomputed; call-local MODEL clone per chunk; decode deferred until sampling completed.",*reuse_notes]
+    report_lines=[f"H3 Continuum V2 {PACKAGE_VERSION}",prompt_plan_report(plan),f"Seam correction: {seam_correction}.",accelerators,"Execution: conditioning precomputed; single call-local MODEL clone per chunk; decode deferred until sampling completed.",*reuse_notes]
     if diagnostics_mode!=DIAGNOSTICS_OFF: report_lines.extend([f"Decode RAM estimate: {decode_estimate_gib:.2f} GiB including transient headroom"+(f"; available at start {available_ram_gib:.2f} GiB." if available_ram_gib is not None else "."),*sampling_reports,*decode_reports])
     if duration_report: report_lines.append(duration_report)
     report_lines.extend([session_summary(new_session),f"Output: {images.shape[0]} frames ({images.shape[0]/FPS:.3f}s), audio samples={audio['waveform'].shape[-1]}, decoded tensor≈{decoded_gib:.2f} GiB."])

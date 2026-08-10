@@ -19,7 +19,9 @@ from .prompts import (
     apply_prompt_overrides,
     build_sampler_prompt_plan,
     make_prompt_plan,
+    parse_sparse_prompt_overrides,
     prompt_plan_report,
+    validate_sparse_prompt_overrides,
 )
 from .sequence import run_sequence
 from .session import entry_to_state, session_summary, validate_session
@@ -32,6 +34,7 @@ from .session_io import (
 
 CATEGORY = "MiniMax H3/Continuum"
 LOG = logging.getLogger("h3_continuum_join")
+SPARSE_OVERRIDE_SCHEMA_VERSION = 1
 
 
 def _repair_v200_example_widget_shift(
@@ -493,6 +496,10 @@ class H3ContinuumClipOverrides:
                     {
                         "default": PROMPT_FORMAT_OPTIONS[0],
                         "display_name": "Prompt Format",
+                        "tooltip": (
+                            "Retained for V2.1.7 workflow compatibility. Sparse overrides "
+                            "use explicit [Clip N] sections."
+                        ),
                     },
                 ),
                 "override_script": (
@@ -501,8 +508,8 @@ class H3ContinuumClipOverrides:
                         "forceInput": True,
                         "display_name": "Override Script",
                         "tooltip": (
-                            "Connect one Text (Multiline). Use ---, [Chunk N], or "
-                            "timeline sections according to Prompt Format."
+                            "Connect one Text (Multiline). Define only the clips to replace "
+                            "with [Clip N] or [Chunk N] sections."
                         ),
                     },
                 ),
@@ -517,8 +524,8 @@ class H3ContinuumClipOverrides:
     def build(self, prompt_mode, override_script):
         return (
             {
-                "prompt_mode": str(prompt_mode),
-                "prompt_script": str(override_script),
+                "schema_version": SPARSE_OVERRIDE_SCHEMA_VERSION,
+                "overrides": parse_sparse_prompt_overrides(override_script),
             },
         )
 
@@ -724,15 +731,16 @@ class H3ContinuumSampler:
 
         clip_prompt_inputs = {}
         if prompt_overrides:
-            override_plan = make_prompt_plan(
-                mode=prompt_overrides.get("prompt_mode", PROMPT_FORMAT_OPTIONS[0]),
-                script=prompt_overrides.get("prompt_script", ""),
-                chunks=int(chunks),
-                chunk_seconds=float(chunk_seconds),
+            if (
+                type(prompt_overrides.get("schema_version")) is not int
+                or prompt_overrides.get("schema_version") != SPARSE_OVERRIDE_SCHEMA_VERSION
+            ):
+                raise ValueError("unsupported H3_CONTINUUM_CLIP_OVERRIDES schema")
+            sparse_overrides = validate_sparse_prompt_overrides(
+                prompt_overrides.get("overrides"), chunks=int(chunks)
             )
-            for index, prompt in enumerate(override_plan.get("prompts", []), start=1):
-                if isinstance(prompt, str) and prompt.strip():
-                    clip_prompt_inputs[f"clip_{index}_prompt"] = prompt
+            for index, prompt in sparse_overrides.items():
+                clip_prompt_inputs[f"clip_{index}_prompt"] = prompt
 
         images, audio, last_state, session, report = H3ContinuumSamplerV2().run(
             model=model,

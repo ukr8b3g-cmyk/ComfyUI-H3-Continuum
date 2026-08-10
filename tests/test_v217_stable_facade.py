@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from ComfyUI_H3_Continuum_Join.constants import PROMPT_FORMAT_OPTIONS
 from ComfyUI_H3_Continuum_Join.v2.nodes import (
     H3ContinuumAdvanced,
@@ -9,6 +11,7 @@ from ComfyUI_H3_Continuum_Join.v2.nodes import (
     H3ContinuumSamplerV2,
     NODE_CLASS_MAPPINGS,
 )
+from ComfyUI_H3_Continuum_Join.v2.prompts import PromptPlanError
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,6 +89,45 @@ def test_v217_facade_delegates_to_legacy_core(monkeypatch):
     assert captured["sequence_prompt"] == "base prompt"
     assert captured["audio_continuity"] is True
     assert captured["show_preview"] is True
+
+
+def test_v217_facade_passes_only_sparse_override_clips(monkeypatch):
+    captured = {}
+
+    def fake_run(_self, **kwargs):
+        captured.update(kwargs)
+        return "images", "audio", "state", "session", "report"
+
+    monkeypatch.setattr(H3ContinuumSamplerV2, "run", fake_run)
+    pack = H3ContinuumClipOverrides().build(
+        PROMPT_FORMAT_OPTIONS[0],
+        "[Clip 2]\nclose-up\n\n[Clip 5]\nfinish naturally",
+    )[0]
+    H3ContinuumSampler().run(
+        model="model", clip="clip", video_vae="video_vae", audio_vae="audio_vae",
+        sampler="sampler", sigmas="sigmas", sequence_prompt="base",
+        prompt_mode=PROMPT_FORMAT_OPTIONS[0], chunks=5, chunk_seconds=5.0,
+        width=1344, height=768, continuity="Balanced - 22 frames", base_seed=123,
+        seam_correction="Auto", prompt_overrides=pack,
+    )
+    assert captured["clip_2_prompt"] == "close-up"
+    assert captured["clip_5_prompt"] == "finish naturally"
+    assert not any(f"clip_{index}_prompt" in captured for index in (1, 3, 4))
+
+
+def test_v217_facade_rejects_sparse_override_outside_chunks(monkeypatch):
+    monkeypatch.setattr(H3ContinuumSamplerV2, "run", lambda _self, **kwargs: None)
+    pack = H3ContinuumClipOverrides().build(
+        PROMPT_FORMAT_OPTIONS[0], "[Clip 6]\noutside"
+    )[0]
+    with pytest.raises(PromptPlanError, match="outside"):
+        H3ContinuumSampler().run(
+            model="model", clip="clip", video_vae="video_vae", audio_vae="audio_vae",
+            sampler="sampler", sigmas="sigmas", sequence_prompt="base",
+            prompt_mode=PROMPT_FORMAT_OPTIONS[0], chunks=5, chunk_seconds=5.0,
+            width=1344, height=768, continuity="Balanced - 22 frames", base_seed=123,
+            seam_correction="Auto", prompt_overrides=pack,
+        )
 
 
 def test_v217_result_pack_expands_legacy_outputs():
