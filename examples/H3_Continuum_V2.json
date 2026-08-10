@@ -1,0 +1,1273 @@
+{
+  "id": "8686e43d-1cc3-4503-bb9f-2a7a180bda3e",
+  "revision": 0,
+  "last_node_id": 216,
+  "last_link_id": 84,
+  "nodes": [
+    {
+      "id": 149,
+      "type": "PathchSageAttentionKJ",
+      "pos": [
+        -840,
+        810
+      ],
+      "size": [
+        370,
+        90
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 6
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            84
+          ]
+        }
+      ],
+      "title": "SageAttention",
+      "properties": {
+        "cnr_id": "comfyui-kjnodes",
+        "ver": "1.5.0",
+        "Node name for S&R": "PathchSageAttentionKJ"
+      },
+      "widgets_values": [
+        "sageattn_qk_int8_pv_fp8_cuda++",
+        false
+      ]
+    },
+    {
+      "id": 147,
+      "type": "UNETLoader",
+      "pos": [
+        -1430,
+        810
+      ],
+      "size": [
+        530,
+        90
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            6
+          ]
+        }
+      ],
+      "title": "H3 Model",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "UNETLoader",
+        "models": [
+          {
+            "name": "minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+            "directory": "diffusion_models"
+          }
+        ]
+      },
+      "widgets_values": [
+        "minimax\\minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "default"
+      ]
+    },
+    {
+      "id": 142,
+      "type": "CLIPLoader",
+      "pos": [
+        -1430,
+        950
+      ],
+      "size": [
+        530,
+        110
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            68
+          ]
+        }
+      ],
+      "title": "MiniMax H3 Text Encoder",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "CLIPLoader",
+        "models": [
+          {
+            "name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+            "directory": "text_encoders"
+          }
+        ]
+      },
+      "widgets_values": [
+        "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "minimax",
+        "default"
+      ]
+    },
+    {
+      "id": 114,
+      "type": "LoadImage",
+      "pos": [
+        -2240,
+        750
+      ],
+      "size": [
+        740,
+        790
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            1
+          ]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": [
+        "H3_Continuum_V2_reference.webp",
+        "image"
+      ]
+    },
+    {
+      "id": 136,
+      "type": "VAELoader",
+      "pos": [
+        -1430,
+        1220
+      ],
+      "size": [
+        530,
+        60
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            70
+          ]
+        }
+      ],
+      "title": "Audio VAE",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "VAELoader",
+        "models": [
+          {
+            "name": "minimax_h3_audio_vae_fp32.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors",
+            "directory": "vae"
+          }
+        ]
+      },
+      "widgets_values": [
+        "minimax_h3_audio_vae_fp32.safetensors"
+      ]
+    },
+    {
+      "id": 135,
+      "type": "VAELoader",
+      "pos": [
+        -1430,
+        1110
+      ],
+      "size": [
+        530,
+        60
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "VAE",
+          "type": "VAE",
+          "links": [
+            69
+          ]
+        }
+      ],
+      "title": "Video VAE",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "VAELoader",
+        "models": [
+          {
+            "name": "minimax_h3_video_vae_fp16.safetensors",
+            "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors",
+            "directory": "vae"
+          }
+        ]
+      },
+      "widgets_values": [
+        "minimax_h3_video_vae_fp16.safetensors"
+      ]
+    },
+    {
+      "id": 148,
+      "type": "CreateVideo",
+      "pos": [
+        1220,
+        810
+      ],
+      "size": [
+        210,
+        110
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 18,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 75
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": 76
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            24
+          ]
+        }
+      ],
+      "title": "Create 3x5s Video",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "CreateVideo"
+      },
+      "widgets_values": [
+        24,
+        8
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 183,
+      "type": "easy cleanGpuUsed",
+      "pos": [
+        1230,
+        860
+      ],
+      "size": [
+        170,
+        30
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 20,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "anything",
+          "type": "*",
+          "link": 24
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "*",
+          "links": [
+            31
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-easy-use",
+        "ver": "1.3.6",
+        "Node name for S&R": "easy cleanGpuUsed"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 182,
+      "type": "easy cleanGpuUsed",
+      "pos": [
+        550,
+        820
+      ],
+      "size": [
+        170,
+        30
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "anything",
+          "type": "*",
+          "link": 21
+        }
+      ],
+      "outputs": [
+        {
+          "name": "output",
+          "type": "*",
+          "links": [
+            74
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-easy-use",
+        "ver": "1.3.6",
+        "Node name for S&R": "easy cleanGpuUsed"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 191,
+      "type": "SaveVideo",
+      "pos": [
+        1420,
+        820
+      ],
+      "size": [
+        800,
+        110
+      ],
+      "flags": {},
+      "order": 21,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 31
+        }
+      ],
+      "outputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "links": []
+        }
+      ],
+      "title": "Save 3x5s Video",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "SaveVideo"
+      },
+      "widgets_values": [
+        "video/MiniMax_H3_Continuum_V2_3x5s",
+        "auto",
+        "auto"
+      ]
+    },
+    {
+      "id": 154,
+      "type": "Power Lora Loader (rgthree)",
+      "pos": [
+        -1430,
+        1340
+      ],
+      "size": [
+        530,
+        190
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "dir": 3,
+          "name": "model",
+          "type": "MODEL",
+          "link": 84
+        },
+        {
+          "dir": 3,
+          "name": "clip",
+          "type": "CLIP",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "dir": 4,
+          "name": "MODEL",
+          "shape": 3,
+          "type": "MODEL",
+          "links": [
+            9
+          ]
+        },
+        {
+          "dir": 4,
+          "name": "CLIP",
+          "shape": 3,
+          "type": "CLIP",
+          "links": []
+        }
+      ],
+      "title": "LoRA (optional)",
+      "properties": {
+        "cnr_id": "rgthree-comfy",
+        "ver": "1.0.2607232129",
+        "Show Strengths": "Single Strength",
+        "Match": ""
+      },
+      "widgets_values": [
+        {},
+        {
+          "type": "PowerLoraLoaderHeaderWidget"
+        },
+        {},
+        ""
+      ]
+    },
+    {
+      "id": 204,
+      "type": "H3ContinuumAdvanced",
+      "pos": [
+        790,
+        1570
+      ],
+      "size": [
+        280,
+        290
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "last_frame",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        },
+        {
+          "name": "session",
+          "shape": 7,
+          "type": "H3_CONTINUUM_SESSION",
+          "link": null
+        },
+        {
+          "name": "initial_state",
+          "shape": 7,
+          "type": "H3_CONTINUUM_STATE",
+          "link": null
+        },
+        {
+          "name": "prompt_plan",
+          "shape": 7,
+          "type": "H3_CONTINUUM_PROMPT_PLAN",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "advanced",
+          "type": "H3_CONTINUUM_ADVANCED",
+          "links": [
+            77
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3ContinuumAdvanced"
+      },
+      "widgets_values": [
+        true,
+        true,
+        "Detailed Report",
+        0,
+        0,
+        true,
+        false,
+        true
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 139,
+      "type": "KSamplerSelect",
+      "pos": [
+        -820,
+        1450
+      ],
+      "size": [
+        310,
+        60
+      ],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "SAMPLER",
+          "type": "SAMPLER",
+          "links": [
+            71
+          ]
+        }
+      ],
+      "title": "Sampler",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "KSamplerSelect"
+      },
+      "widgets_values": [
+        "res_multistep"
+      ]
+    },
+    {
+      "id": 120,
+      "type": "GetImageSize",
+      "pos": [
+        380,
+        810
+      ],
+      "size": [
+        310,
+        140
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "width",
+          "type": "INT",
+          "links": [
+            78
+          ]
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "links": [
+            79
+          ]
+        },
+        {
+          "name": "batch_size",
+          "type": "INT",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "GetImageSize"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 153,
+      "type": "BasicScheduler",
+      "pos": [
+        -390,
+        810
+      ],
+      "size": [
+        320,
+        110
+      ],
+      "flags": {},
+      "order": 16,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 15
+        }
+      ],
+      "outputs": [
+        {
+          "name": "SIGMAS",
+          "type": "SIGMAS",
+          "links": [
+            72
+          ]
+        }
+      ],
+      "title": "Scheduler",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "BasicScheduler"
+      },
+      "widgets_values": [
+        "simple",
+        20,
+        1
+      ]
+    },
+    {
+      "id": 206,
+      "type": "H3ContinuumResult",
+      "pos": [
+        840,
+        1910
+      ],
+      "size": [
+        180,
+        70
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 19,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "result",
+          "type": "H3_CONTINUUM_RESULT",
+          "link": 80
+        }
+      ],
+      "outputs": [
+        {
+          "name": "last_state",
+          "type": "H3_CONTINUUM_STATE",
+          "links": null
+        },
+        {
+          "name": "session",
+          "type": "H3_CONTINUUM_SESSION",
+          "links": null
+        },
+        {
+          "name": "report",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3ContinuumResult"
+      },
+      "widgets_values": [],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 213,
+      "type": "MarkdownNote",
+      "pos": [
+        -2710,
+        760
+      ],
+      "size": [
+        440,
+        680
+      ],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Note: Model Links",
+      "properties": {},
+      "widgets_values": [
+        "## Model Links\n\n**vae**\n\n- [minimax_h3_video_vae_fp16.safetensors](https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors)\n- [minimax_h3_audio_vae_fp32.safetensors](https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors)\n\n**diffusion_models**\n\n- [minimax_h3_fl2va_pruned_int8_convrot.safetensors](https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors)\n\n**text_encoders**\n\n- [qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors](https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors)\n\n\n## Model Storage Location\n\n```\n📂 ComfyUI/\n├── 📂 models/\n│   ├── 📂 vae/\n│   │   ├── minimax_h3_video_vae_fp16.safetensors\n│   │   └── minimax_h3_audio_vae_fp32.safetensors\n│   ├── 📂 diffusion_models/\n│   │   └── minimax_h3_fl2va_pruned_int8_convrot.safetensors\n│   └── 📂 text_encoders/\n│       └── qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors\n```\n\n## Report Issue\n\nNote: Please update ComfyUI first ([guide](https://docs.comfy.org/installation/update_comfyui)) and prepare required models. Desktop/Cloud updates follow stable releases, so some nightly-supported models may not be available yet.\n\n- Cannot run / runtime errors: [ComfyUI/issues](https://github.com/comfyanonymous/ComfyUI/issues)\n- UI / frontend issues: [ComfyUI_frontend/issues](https://github.com/Comfy-Org/ComfyUI_frontend/issues)\n- Workflow issues: [workflow_templates/issues](https://github.com/Comfy-Org/workflow_templates/issues)\n"
+      ],
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 214,
+      "type": "MarkdownNote",
+      "pos": [
+        -2710,
+        1490
+      ],
+      "size": [
+        450,
+        630
+      ],
+      "flags": {
+        "collapsed": true
+      },
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Note: MiniMax H3",
+      "properties": {},
+      "widgets_values": [
+        "## MiniMax H3\n\n[MiniMax H3](https://www.minimax.io/blog/minimax-h3) is MiniMax's general-purpose, omni-modal generation model. It jointly understands text, image, video, and audio, and generates video with **native stereo audio**: voice, sound effects, and music are modeled jointly in a single forward pass, not layered on afterward. Output is up to 2K resolution, 24fps, and up to about 15 seconds.\n\n## About this workflow\n\nThis template runs the **Image to Video** task (`MiniMaxH3ImageToVideo` node), which covers both:\n\n- **t2va** (text-to-video), when no images are connected\n- **fl2va** (first/last-frame image-to-video), when `first_frame` and/or `last_frame` are connected\n\n**Key inputs**\n\n- **first_frame / last_frame**: optional keyframes; the model generates the motion between them\n- **prompt**: describe the shots, motion, and the accompanying audio (dialogue, SFX, music) in one block\n- **width / height**: set via Resolution Selector. H3's native canvas is a 768px short edge, capped at 768x1344 pixels, rounded to a multiple of 32\n- **duration (seconds)**: converted to a valid frame `length` by the Math Expression node, snapping up to the model's 17-frame-per-block (17k+5) grid at 24fps"
+      ],
+      "color": "#222",
+      "bgcolor": "#000"
+    },
+    {
+      "id": 150,
+      "type": "SpectrumApplyMiniMaxH3",
+      "pos": [
+        -830,
+        970
+      ],
+      "size": [
+        330,
+        420
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 9
+        }
+      ],
+      "outputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "links": [
+            15,
+            67
+          ]
+        }
+      ],
+      "title": "Spectrum",
+      "properties": {
+        "cnr_id": "comfyui-spectrum-minimax-h3",
+        "ver": "9395bf98fc60a04c5f588de7b2bb33516a0b622f",
+        "Node name for S&R": "SpectrumApplyMiniMaxH3"
+      },
+      "widgets_values": [
+        true,
+        0.5,
+        1,
+        0.1,
+        2,
+        0.75,
+        1,
+        1,
+        8,
+        false,
+        "system_ram",
+        true,
+        false,
+        false,
+        true,
+        0
+      ]
+    },
+    {
+      "id": 119,
+      "type": "ImageScaleToTotalPixels",
+      "pos": [
+        -1780,
+        590
+      ],
+      "size": [
+        280,
+        110
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "showAdvanced": true,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            2,
+            21
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.30.0",
+        "Node name for S&R": "ImageScaleToTotalPixels"
+      },
+      "widgets_values": [
+        "area",
+        0.6,
+        32
+      ]
+    },
+    {
+      "id": 188,
+      "type": "PrimitiveStringMultiline",
+      "pos": [
+        120,
+        860
+      ],
+      "size": [
+        620,
+        970
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [
+            73
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.31.0",
+        "Node name for S&R": "PrimitiveStringMultiline"
+      },
+      "widgets_values": [
+        "[0-5s]\nFor the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\nintegrated_multimodal_description: [Shot 1] Live-action, cinematic, a close portrait preserves the exact adult woman, face, platinum-blonde hairstyle, side braid, white sleeveless top, softly blurred indoor background, natural daylight, and centered composition shown in <Picture 1>. The camera begins a continuous push-in with small amplitude at slow speed. After a quiet breath, the woman (S1) begins singing with a clear, gentle female voice, precisely synchronized with her lips: <d>[Japanese] 夜の風に、願いを乗せて</d> Her expression remains calm and natural, with subtle breathing, blinking, and minimal head movement. The melody and camera motion continue through the end of the section without pausing, fading, or resolving. No cut, no pose reset, and no scene change.\n\noverall_soundscape: Soft indoor room ambience remains stable beneath her voice. Quiet breathing and subtle clothing movement are audible without overpowering the singing.\n\nnon_diegetic_music: A gentle piano accompaniment begins at a slow, steady tempo. The phrase remains unresolved and continues at full continuity through the end of the section.\n\n[5-10s]\nFor the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\nintegrated_multimodal_description: [Shot 1] This is a seamless continuation of the immediately preceding performance, not a new opening. Preserve the exact woman, identity, face, platinum-blonde hairstyle, side braid, white sleeveless top, background, lighting, camera angle, body position, motion direction, mouth motion, and vocal timbre from the preceding section. Begin from the exact ongoing breath, facial expression, sustained vocal phrase, piano phrase, and camera movement at the previous boundary. The same woman (S1) continues singing in the same key and tempo, precisely synchronized with her lips: <d>[Japanese] 明日の空へ、歌い続ける</d> The camera continues the same slow, small-amplitude push-in without changing speed or direction. Her expression becomes only slightly warmer while her posture and gaze remain continuous. The melody remains unresolved at the end. No cut, no reset, no repeated opening action, and no pose jump.\n\noverall_soundscape: The same soft room ambience continues without interruption. Her breathing and subtle clothing movement remain continuous across the boundary.\n\nnon_diegetic_music: The same piano accompaniment continues from the exact unfinished phrase of the preceding section, preserving tempo, key, rhythm, tone, and volume. It does not resolve or fade at the end.\n\n[10-15s]\nFor the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.\n\nintegrated_multimodal_description: [Shot 1] This is the seamless third and final continuation of the same performance. Preserve the exact woman, identity, face, platinum-blonde hairstyle, side braid, white sleeveless top, background, lighting, camera angle, body position, motion direction, mouth motion, and vocal timbre from the preceding section. Begin from the exact ongoing breath, facial expression, sustained vocal phrase, piano phrase, and camera movement at the previous boundary, with no cut, reset, repeated opening action, or pose jump. The same woman (S1) continues singing in the same key and tempo, precisely synchronized with her lips: <d>[Japanese] 光の中へ、歩いてゆこう</d> The camera continues the same slow, small-amplitude push-in. During the final second, she completes the melody naturally, holds the final note briefly, then gently closes her mouth and releases a soft breath. No scene change and no identity drift.\n\noverall_soundscape: The same soft room ambience continues without interruption. Her breathing and subtle clothing movement remain continuous across the boundary and settle naturally at the end.\n\nnon_diegetic_music: The same piano accompaniment continues from the exact unfinished phrase of the preceding section, preserving tempo, key, rhythm, tone, and volume. It resolves gently with the final vocal note during the last second."
+      ]
+    },
+    {
+      "id": 205,
+      "type": "H3ContinuumSampler",
+      "pos": [
+        790,
+        860
+      ],
+      "size": [
+        280,
+        650
+      ],
+      "flags": {},
+      "order": 17,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "model",
+          "type": "MODEL",
+          "link": 67
+        },
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 68
+        },
+        {
+          "name": "video_vae",
+          "type": "VAE",
+          "link": 69
+        },
+        {
+          "name": "audio_vae",
+          "type": "VAE",
+          "link": 70
+        },
+        {
+          "name": "sampler",
+          "type": "SAMPLER",
+          "link": 71
+        },
+        {
+          "name": "sigmas",
+          "type": "SIGMAS",
+          "link": 72
+        },
+        {
+          "label": "Sequence Prompt",
+          "name": "sequence_prompt",
+          "type": "STRING",
+          "link": 73
+        },
+        {
+          "name": "first_frame",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 74
+        },
+        {
+          "name": "prompt_overrides",
+          "shape": 7,
+          "type": "H3_CONTINUUM_CLIP_OVERRIDES",
+          "link": null
+        },
+        {
+          "name": "advanced",
+          "shape": 7,
+          "type": "H3_CONTINUUM_ADVANCED",
+          "link": 77
+        },
+        {
+          "name": "width",
+          "type": "INT",
+          "widget": {
+            "name": "width"
+          },
+          "link": 78
+        },
+        {
+          "name": "height",
+          "type": "INT",
+          "widget": {
+            "name": "height"
+          },
+          "link": 79
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            75
+          ]
+        },
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            76
+          ]
+        },
+        {
+          "name": "result",
+          "type": "H3_CONTINUUM_RESULT",
+          "links": [
+            80
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "H3ContinuumSampler"
+      },
+      "widgets_values": [
+        "Auto",
+        3,
+        5,
+        1344,
+        768,
+        "Balanced — 22 frames",
+        196384033697407,
+        "randomize",
+        "Auto"
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    }
+  ],
+  "links": [
+    [
+      1,
+      114,
+      0,
+      119,
+      0,
+      "IMAGE"
+    ],
+    [
+      2,
+      119,
+      0,
+      120,
+      0,
+      "IMAGE"
+    ],
+    [
+      6,
+      147,
+      0,
+      149,
+      0,
+      "MODEL"
+    ],
+    [
+      9,
+      154,
+      0,
+      150,
+      0,
+      "MODEL"
+    ],
+    [
+      15,
+      150,
+      0,
+      153,
+      0,
+      "MODEL"
+    ],
+    [
+      21,
+      119,
+      0,
+      182,
+      0,
+      "IMAGE"
+    ],
+    [
+      24,
+      148,
+      0,
+      183,
+      0,
+      "VIDEO"
+    ],
+    [
+      31,
+      183,
+      0,
+      191,
+      0,
+      "VIDEO"
+    ],
+    [
+      67,
+      150,
+      0,
+      205,
+      0,
+      "MODEL"
+    ],
+    [
+      68,
+      142,
+      0,
+      205,
+      1,
+      "CLIP"
+    ],
+    [
+      69,
+      135,
+      0,
+      205,
+      2,
+      "VAE"
+    ],
+    [
+      70,
+      136,
+      0,
+      205,
+      3,
+      "VAE"
+    ],
+    [
+      71,
+      139,
+      0,
+      205,
+      4,
+      "SAMPLER"
+    ],
+    [
+      72,
+      153,
+      0,
+      205,
+      5,
+      "SIGMAS"
+    ],
+    [
+      73,
+      188,
+      0,
+      205,
+      6,
+      "STRING"
+    ],
+    [
+      74,
+      182,
+      0,
+      205,
+      7,
+      "IMAGE"
+    ],
+    [
+      75,
+      205,
+      0,
+      148,
+      0,
+      "IMAGE"
+    ],
+    [
+      76,
+      205,
+      1,
+      148,
+      1,
+      "AUDIO"
+    ],
+    [
+      77,
+      204,
+      0,
+      205,
+      9,
+      "H3_CONTINUUM_ADVANCED"
+    ],
+    [
+      78,
+      120,
+      0,
+      205,
+      10,
+      "INT"
+    ],
+    [
+      79,
+      120,
+      1,
+      205,
+      11,
+      "INT"
+    ],
+    [
+      80,
+      205,
+      2,
+      206,
+      0,
+      "H3_CONTINUUM_RESULT"
+    ],
+    [
+      84,
+      149,
+      0,
+      154,
+      0,
+      "MODEL"
+    ]
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "title": "Shared H3 Models and Accelerators",
+      "bounding": [
+        -1470,
+        730,
+        1480,
+        820
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    },
+    {
+      "id": 2,
+      "title": "Integrated V2 Sequence",
+      "bounding": [
+        60,
+        730,
+        1110,
+        1210
+      ],
+      "color": "#6b5b95",
+      "flags": {}
+    },
+    {
+      "id": 3,
+      "title": "Final Video",
+      "bounding": [
+        1200,
+        740,
+        1050,
+        1200
+      ],
+      "color": "#3f789e",
+      "flags": {}
+    }
+  ],
+  "config": {},
+  "extra": {
+    "frontendVersion": "1.48.7",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "ds": {
+      "scale": 0.5745603243243441,
+      "offset": [
+        2310.364833293102,
+        -320.3179717553252
+      ]
+    },
+    "VHS_MetadataImage": false,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}
