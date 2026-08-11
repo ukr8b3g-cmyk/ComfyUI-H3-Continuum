@@ -303,6 +303,7 @@ class H3ContinuumSamplerV2:
         prompt_plan=None,
         sequence_prompt=None,
         show_preview=True,
+        latent_only=False,
         **clip_prompt_inputs,
     ):
         (
@@ -367,6 +368,7 @@ class H3ContinuumSamplerV2:
             enable_preview=bool(show_preview),
             session=session,
             initial_state=initial_state,
+            latent_only=bool(latent_only),
         )
 
 

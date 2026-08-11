@@ -363,13 +363,24 @@ from .v2.nodes import (
 NODE_CLASS_MAPPINGS.update(V2_NODE_CLASS_MAPPINGS)
 NODE_DISPLAY_NAME_MAPPINGS.update(V2_NODE_DISPLAY_NAME_MAPPINGS)
 
+# V3 keeps the V1/V2 sampling and state contracts but exposes raw AV chunks so
+# ComfyUI Core owns video/audio VAE decoding.
+from .v3.nodes import (
+    NODE_CLASS_MAPPINGS as V3_NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as V3_NODE_DISPLAY_NAME_MAPPINGS,
+)
+
+NODE_CLASS_MAPPINGS.update(V3_NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(V3_NODE_DISPLAY_NAME_MAPPINGS)
+
 # The stable facade and its pack helpers are the public workflow surface. Keep
 # every older identifier registered so saved workflows still load, while
 # ComfyUI's native deprecated-node filter hides legacy building blocks.
 _primary_node_ids = {
-    "H3ContinuumSampler",
+    "H3ContinuumSamplerV3",
+    "H3ContinuumAssembleV3",
+    "H3ContinuumAdvancedV3",
     "H3ContinuumClipOverrides",
-    "H3ContinuumAdvanced",
     "H3ContinuumResult",
 }
 for _node_id, _node_class in NODE_CLASS_MAPPINGS.items():
