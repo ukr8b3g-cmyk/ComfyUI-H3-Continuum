@@ -144,3 +144,11 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
     if duration_report: report_lines.append(duration_report)
     report_lines.extend([session_summary(new_session),f"Output: {images.shape[0]} frames ({images.shape[0]/FPS:.3f}s), audio samples={audio['waveform'].shape[-1]}, decoded tensor≈{decoded_gib:.2f} GiB."])
     return images,audio,last_state,new_session,"\n".join(report_lines)
+# V3.0.1 hardening integration: Detailed Report only; generation semantics unchanged.
+from ..hardening import run_sequence_with_hardening as _run_sequence_with_hardening
+
+_run_sequence_v300 = run_sequence
+
+
+def run_sequence(*args, **kwargs):
+    return _run_sequence_with_hardening(_run_sequence_v300, args, kwargs)

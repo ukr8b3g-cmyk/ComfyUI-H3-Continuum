@@ -55,7 +55,7 @@ def make_assembly_plan(
                 "net_frames": int(plan["net_frames"]),
                 "context_frames": int(plan["context_frames"]),
                 "expected_video_latent_t": int(video.shape[2]),
-                "expected_audio_latent_t": int(audio.shape[2]),
+                "expected_audio_latent_t": int(audio.shape[-1]),
             }
         )
 
@@ -119,4 +119,25 @@ def validate_assembly_plan(plan: Any) -> dict[str, Any]:
             raise AssemblyPlanError(
                 f"assembly chunk {expected_index} audio latent length is invalid"
             )
+    return plan
+# V3.0.1 hardening integration: redundant metadata plus fail-closed validation.
+from ..hardening import (
+    enrich_assembly_plan as _enrich_assembly_plan,
+    validate_assembly_plan_contract as _validate_assembly_plan_contract,
+)
+
+_make_assembly_plan_v300 = make_assembly_plan
+_validate_assembly_plan_v300 = validate_assembly_plan
+
+
+def validate_assembly_plan(plan):
+    result = _validate_assembly_plan_v300(plan)
+    _validate_assembly_plan_contract(plan)
+    return result
+
+
+def make_assembly_plan(*args, **kwargs):
+    plan = _make_assembly_plan_v300(*args, **kwargs)
+    _enrich_assembly_plan(plan)
+    validate_assembly_plan(plan)
     return plan

@@ -267,3 +267,11 @@ class H3ContinuumAssembleV3:
             audio_seam=str(_singleton(audio_seam, "audio_seam")),
             diagnostics=str(_singleton(diagnostics, "diagnostics")),
         )
+# V3.0.1 hardening integration: preflight before allocation; Detailed Report only.
+from ..hardening import assemble_with_hardening as _assemble_with_hardening
+
+_assemble_decoded_chunks_v300 = assemble_decoded_chunks
+
+
+def assemble_decoded_chunks(*args, **kwargs):
+    return _assemble_with_hardening(_assemble_decoded_chunks_v300, args, kwargs)

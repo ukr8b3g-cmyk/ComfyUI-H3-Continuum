@@ -1,8 +1,8 @@
 from ComfyUI_H3_Continuum_Join import public_api
 
 
-def test_public_api_is_v2_ready_and_complete():
-    assert public_api.PUBLIC_API_VERSION == 2
+def test_public_api_is_v3_ready_and_complete():
+    assert public_api.PUBLIC_API_VERSION == 3
     for name in (
         "make_extension_shape",
         "prepare_conditioning",
