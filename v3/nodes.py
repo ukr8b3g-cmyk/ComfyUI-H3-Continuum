@@ -16,6 +16,33 @@ from .assembly import H3ContinuumAssembleV3
 from .plan import make_assembly_plan
 
 
+REGENERATE_AUTO = "Auto"
+REGENERATE_OPTIONS = (REGENERATE_AUTO,) + tuple(
+    f"Chunk {index}" for index in range(1, 17)
+)
+
+
+def _regenerate_from_value(value, *, chunks: int) -> int:
+    if isinstance(value, str):
+        text = value.strip()
+        if text == REGENERATE_AUTO:
+            resolved = 0
+        elif text.startswith("Chunk ") and text[6:].isdigit():
+            resolved = int(text[6:])
+        elif text.isdigit():
+            resolved = int(text)
+        else:
+            raise ValueError(f"unknown Regenerate From value: {value!r}")
+    else:
+        resolved = int(value)
+    if resolved < 0 or resolved > int(chunks):
+        raise ValueError(
+            f"Regenerate From Chunk {resolved} is outside the configured "
+            f"1-{int(chunks)} chunk range"
+        )
+    return resolved
+
+
 class H3ContinuumAdvancedV3:
     DESCRIPTION = (
         "Optional continuation, session, reroll, and diagnostics settings for V3."
@@ -116,8 +143,8 @@ class H3ContinuumSamplerV3:
                     "VAE",
                     {
                         "tooltip": (
-                            "Used only to encode first/last-frame conditioning; "
-                            "V3 never decodes with it."
+                            "Used only to encode image conditioning. T2VA does "
+                            "not use it; V3 never decodes with it."
                         ),
                     },
                 ),
@@ -168,7 +195,10 @@ class H3ContinuumSamplerV3:
                 ),
             },
             "optional": {
-                "first_frame": ("IMAGE",),
+                "first_frame": (
+                    "IMAGE",
+                    {"tooltip": "Optional. Leave image inputs disconnected for T2VA."},
+                ),
                 "prompt_overrides": ("H3_CONTINUUM_CLIP_OVERRIDES",),
                 "advanced": ("H3_CONTINUUM_ADVANCED_V3",),
             },
@@ -208,6 +238,7 @@ class H3ContinuumSamplerV3:
         first_frame=None,
         prompt_overrides=None,
         advanced=None,
+        reference_assets=None,
     ):
         if prompt_overrides is not None and not isinstance(prompt_overrides, dict):
             raise TypeError(
@@ -277,6 +308,7 @@ class H3ContinuumSamplerV3:
             sequence_prompt=sequence_prompt,
             show_preview=advanced_values["show_preview"],
             latent_only=True,
+            reference_assets=reference_assets,
             **clip_prompt_inputs,
         )
 
@@ -295,13 +327,313 @@ class H3ContinuumSamplerV3:
         return video_latents, audio_latents, assembly_plan, result
 
 
+class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
+    """Stable single-entry sampler UI for V3.2 and later releases."""
+
+    DEPRECATED = False
+    CATEGORY = CATEGORY
+    DESCRIPTION = (
+        "Production H3 Continuum sampler with first/last-frame or image-reference conditioning and "
+        "ComfyUI-native advanced widgets. Video/audio VAE decoding remains in "
+        "ComfyUI Core."
+    )
+    SEARCH_ALIASES = [
+        "H3 Continuum Sampler V3.2",
+        "H3 Continuum Production",
+        "MiniMax H3 long video",
+    ]
+    RETURN_TYPES = (
+        "LATENT",
+        "LATENT",
+        "H3_CONTINUUM_ASSEMBLY_PLAN",
+        "STRING",
+    )
+    RETURN_NAMES = (
+        "video_latents",
+        "audio_latents",
+        "assembly_plan",
+        "status",
+    )
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        advanced = {"advanced": True}
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "clip": ("CLIP",),
+                "video_vae": (
+                    "VAE",
+                    {
+                        "tooltip": (
+                            "Used only to encode image conditioning. T2VA does "
+                            "not use it; Continuum never decodes with it."
+                        ),
+                    },
+                ),
+                "sampler": ("SAMPLER",),
+                "sigmas": ("SIGMAS",),
+                "sequence_prompt": (
+                    "STRING",
+                    {
+                        "forceInput": True,
+                        "display_name": "Sequence Prompt",
+                        "tooltip": (
+                            "Connect one Text (Multiline) for the complete sequence."
+                        ),
+                    },
+                ),
+                "prompt_mode": (
+                    PROMPT_FORMAT_OPTIONS,
+                    {
+                        "default": PROMPT_FORMAT_OPTIONS[0],
+                        "display_name": "Prompt Format",
+                        **advanced,
+                    },
+                ),
+                "chunks": ("INT", {"default": 3, "min": 1, "max": 16, "step": 1}),
+                "chunk_seconds": (
+                    "FLOAT",
+                    {"default": 5.0, "min": 4.0, "max": 15.0, "step": 0.1},
+                ),
+                "width": (
+                    "INT",
+                    {"default": 1344, "min": 32, "max": 16384, "step": 32},
+                ),
+                "height": (
+                    "INT",
+                    {"default": 768, "min": 32, "max": 16384, "step": 32},
+                ),
+                "continuity": (
+                    V2_CONTINUITY_OPTIONS,
+                    {"default": V2_CONTINUITY_OPTIONS[1]},
+                ),
+                "base_seed": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": 0,
+                        "max": 0xFFFFFFFFFFFFFFFF,
+                        "control_after_generate": True,
+                    },
+                ),
+                "audio_continuity": (
+                    "BOOLEAN",
+                    {"default": True, "advanced": True},
+                ),
+                "diagnostics": (
+                    DIAGNOSTICS_OPTIONS,
+                    {
+                        "default": DIAGNOSTICS_OPTIONS[0],
+                        "display_name": "Report Detail",
+                        "advanced": True,
+                    },
+                ),
+                "reroll_from_chunk": (
+                    REGENERATE_OPTIONS,
+                    {
+                        "default": REGENERATE_AUTO,
+                        "display_name": "Regenerate From",
+                        "advanced": True,
+                        "tooltip": (
+                            "Auto resumes the longest compatible saved prefix. "
+                            "Choosing a chunk reuses earlier chunks and regenerates "
+                            "that chunk and everything after it."
+                        ),
+                    },
+                ),
+                "reroll_nonce": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": 0,
+                        "max": 0xFFFFFFFF,
+                        "step": 1,
+                        "advanced": True,
+                    },
+                ),
+                "strict_compatibility": (
+                    "BOOLEAN",
+                    {"default": True, "advanced": True},
+                ),
+                "debug": (
+                    "BOOLEAN",
+                    {"default": False, "advanced": True},
+                ),
+                "show_preview": (
+                    "BOOLEAN",
+                    {"default": True, "advanced": True},
+                ),
+                "run_storage": (
+                    ("Off", "Save + Auto Resume"),
+                    {
+                        "default": "Off",
+                        "display_name": "Run Storage",
+                        "advanced": True,
+                        "tooltip": "Atomically save raw AV chunks and resume a compatible Run Name.",
+                    },
+                ),
+                "run_name": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "display_name": "Run Name (Required for Storage)",
+                        "advanced": True,
+                        "tooltip": "Enter a stable name for this saved run. Compatible chunks are selected automatically.",
+                    },
+                ),
+                "reference_size": (
+                    ("Match Output", "Max Identity"),
+                    {
+                        "default": "Match Output",
+                        "display_name": "Reference Size",
+                        "advanced": True,
+                        "tooltip": "Match Output is the practical default; Max Identity preserves more reference detail.",
+                    },
+                ),
+                "project_id": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "display_name": "Auto Resume ID (Automatic)",
+                        "advanced": True,
+                        "tooltip": "Created automatically and saved with the workflow. It identifies which saved chunks can be resumed.",
+                    },
+                ),
+            },
+            "optional": {
+                "first_frame": (
+                    "IMAGE",
+                    {"tooltip": "Optional. Leave all image inputs disconnected for T2VA."},
+                ),
+                "last_frame": ("IMAGE",),
+                "reference_image_1": ("IMAGE",),
+                "reference_image_2": ("IMAGE",),
+            },
+            "hidden": {
+                "prompt": "PROMPT",
+                "unique_id": "UNIQUE_ID",
+            },
+        }
+
+    def run(
+        self,
+        model,
+        clip,
+        video_vae,
+        sampler,
+        sigmas,
+        sequence_prompt,
+        prompt_mode,
+        chunks,
+        chunk_seconds,
+        width,
+        height,
+        continuity,
+        base_seed,
+        audio_continuity,
+        diagnostics,
+        reroll_from_chunk,
+        reroll_nonce,
+        strict_compatibility,
+        debug,
+        show_preview,
+        run_storage="Off",
+        run_name="",
+        reference_size="Match Output",
+        project_id="",
+        first_frame=None,
+        last_frame=None,
+        reference_image_1=None,
+        reference_image_2=None,
+        prompt_overrides=None,
+        prompt=None,
+        unique_id=None,
+    ):
+        from ..reference import prepare_reference_assets
+        regenerate_from = _regenerate_from_value(
+            reroll_from_chunk,
+            chunks=int(chunks),
+        )
+        reference_assets = prepare_reference_assets(
+            reference_image_1=reference_image_1,
+            reference_image_2=reference_image_2,
+            output_width=int(width),
+            output_height=int(height),
+            size_mode=reference_size,
+        )
+        if reference_assets is not None and (first_frame is not None or last_frame is not None):
+            raise ValueError(
+                "V3.2 Reference Images cannot be combined with First Frame or Last Frame"
+            )
+
+        def execute():
+            return super(H3ContinuumSamplerProduction, self).run(
+                model=model,
+                clip=clip,
+                video_vae=video_vae,
+                sampler=sampler,
+                sigmas=sigmas,
+                sequence_prompt=sequence_prompt,
+                prompt_mode=prompt_mode,
+                chunks=chunks,
+                chunk_seconds=chunk_seconds,
+                width=width,
+                height=height,
+                continuity=continuity,
+                base_seed=base_seed,
+                first_frame=first_frame,
+                prompt_overrides=prompt_overrides,
+                reference_assets=reference_assets,
+                advanced={
+                    "audio_continuity": bool(audio_continuity),
+                    "diagnostics": diagnostics,
+                    "reroll_from_chunk": regenerate_from,
+                    "reroll_nonce": int(reroll_nonce),
+                    "strict_compatibility": bool(strict_compatibility),
+                    "debug": bool(debug),
+                    "show_preview": bool(show_preview),
+                    "last_frame": last_frame,
+                },
+            )
+
+        if run_storage == "Off":
+            video_latents, audio_latents, assembly_plan, result = execute()
+            return (
+                video_latents,
+                audio_latents,
+                assembly_plan,
+                str(result["report"]),
+            )
+        if run_storage != "Save + Auto Resume":
+            raise ValueError(f"unknown Run Storage mode: {run_storage!r}")
+        from ..run_storage import resolve_run_storage_name, run_storage_scope
+        storage_name = resolve_run_storage_name(
+            project_id=project_id,
+            legacy_run_name=run_name,
+        )
+        with run_storage_scope(
+            storage_name, prompt=prompt, unique_id=unique_id
+        ) as storage:
+            video_latents, audio_latents, assembly_plan, result = execute()
+            result = dict(result)
+            report = str(result["report"]) + "\n" + storage.summary(
+                detailed=diagnostics == DIAGNOSTICS_OPTIONS[-1]
+            )
+            result["report"] = report
+            storage.finalize(session=result["session"], report=report)
+            return video_latents, audio_latents, assembly_plan, report
+
+
 NODE_CLASS_MAPPINGS = {
+    "H3ContinuumSamplerProduction": H3ContinuumSamplerProduction,
     "H3ContinuumSamplerV3": H3ContinuumSamplerV3,
     "H3ContinuumAdvancedV3": H3ContinuumAdvancedV3,
     "H3ContinuumAssembleV3": H3ContinuumAssembleV3,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
+    "H3ContinuumSamplerProduction": "H3 Continuum Sampler V3.2",
     "H3ContinuumSamplerV3": "H3 Continuum Sampler V3",
     "H3ContinuumAdvancedV3": "H3 Continuum Advanced V3",
     "H3ContinuumAssembleV3": "H3 Continuum Assemble V3",

@@ -67,15 +67,22 @@ def _preserved_prefix(*,session,prompt_hashes,chunks,reroll_from_chunk,width,hei
     elif reroll_from_chunk>0: notes.append(f"preserved chunks 1-{len(preserved)}; regenerated from chunk {reroll_from_chunk}")
     return preserved,notes
 
-def _conditioning_cache(*,clip,prompts,assets,final_has_last_frame):
+def _conditioning_cache(*,clip,prompts,assets,final_has_last_frame,reference_assets=None):
     cache={}; final_index=len(prompts)-1
     for index,prompt in enumerate(prompts):
         include_last=bool(final_has_last_frame and index==final_index); key=(prompt,include_last)
         if key in cache: continue
-        cache[key]=encode_prompt_conditioning(clip,prompt,first_image=assets.first_image,last_image=assets.last_image if include_last else None)
+        if reference_assets is not None:
+            from ..reference import encode_reference_prompt
+            cache[key]=encode_reference_prompt(clip,prompt,reference_assets)
+        else:
+            cache[key]=encode_prompt_conditioning(clip,prompt,first_image=assets.first_image,last_image=assets.last_image if include_last else None)
     return cache
 
-def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,sigmas:torch.Tensor,first_frame:torch.Tensor|None,last_frame:torch.Tensor|None,prompt_plan:dict[str,Any],width:int,height:int,continuity:str,base_seed:int,audio_continuity:bool,exact_total_duration:bool,diagnostics_mode:str,reroll_from_chunk:int,reroll_nonce:int,strict_compatibility:bool,debug:bool,seam_correction:str=SEAM_CORRECTION_OFF,enable_preview:bool=True,session:dict[str,Any]|None=None,initial_state:dict[str,Any]|None=None,latent_only:bool=False):
+def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,sigmas:torch.Tensor,first_frame:torch.Tensor|None,last_frame:torch.Tensor|None,prompt_plan:dict[str,Any],width:int,height:int,continuity:str,base_seed:int,audio_continuity:bool,exact_total_duration:bool,diagnostics_mode:str,reroll_from_chunk:int,reroll_nonce:int,strict_compatibility:bool,debug:bool,seam_correction:str=SEAM_CORRECTION_OFF,enable_preview:bool=True,session:dict[str,Any]|None=None,initial_state:dict[str,Any]|None=None,latent_only:bool=False,reference_assets=None):
+    from ..conditioning import detect_conditioning_mode, conditioning_mode_label
+    from ..run_storage import get_active_run_storage
+    storage_controller=get_active_run_storage()
     diagnostics_mode=normalize_diagnostics_mode(diagnostics_mode); plan=validate_prompt_plan(prompt_plan); chunks=int(plan["chunks"]); chunk_seconds=float(plan["chunk_seconds"]); prompts=list(plan["prompts"]); prompt_hashes=list(plan["hashes"]); width,height=int(width),int(height)
     if width<=0 or height<=0 or width%32 or height%32: raise SequenceRuntimeError("width and height must be positive multiples of 32")
     if session is not None and initial_state is not None: raise SequenceRuntimeError("connect either a session or an initial_state, not both")
@@ -83,21 +90,41 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
     if seam_correction not in SEAM_CORRECTION_OPTIONS: raise SequenceRuntimeError(f"unknown seam correction mode: {seam_correction!r}")
     if not 0<=int(reroll_from_chunk)<=chunks: raise SequenceRuntimeError("reroll_from_chunk must be 0 or a valid one-based chunk index")
     if initial_state is not None and int(reroll_from_chunk) not in (0,1): raise SequenceRuntimeError("with initial_state, reroll_from_chunk can only be 0 or 1")
+    try: conditioning_mode=detect_conditioning_mode(first_frame=first_frame,last_frame=last_frame,reference_assets=reference_assets)
+    except ValueError as exc: raise SequenceRuntimeError(str(exc)) from exc
+    reference_warning=""
+    if reference_assets is not None:
+        from ..reference import validate_reference_prompts
+        if first_frame is not None or last_frame is not None: raise SequenceRuntimeError("Reference images cannot be combined with First Frame or Last Frame in V3.2")
+        reference_warning=validate_reference_prompts(prompts,reference_assets.count)
     decode_estimate_gib=0.0; available_ram_gib=None
     if not latent_only: decode_estimate_gib,available_ram_gib=_check_decode_memory_budget(width=width,height=height,chunks=chunks,chunk_seconds=chunk_seconds)
     issues=check_comfy_h3_runtime()
     if issues and strict_compatibility: raise SequenceRuntimeError("H3 runtime is incompatible: "+"; ".join(issues))
     assets=prepare_identity_assets(video_vae,width=width,height=height,first_frame=first_frame,last_frame=last_frame,encode_latents=False)
+    sequence_identity_hash=reference_assets.combined_hash if reference_assets is not None else assets.identity_hash
     current_model_fingerprint=model_fingerprint(model,extra_wrapper_keys=("h3_continuum_join.apply_model.v1",))
+    if storage_controller is not None:
+        stored_session=storage_controller.prepare(model=model,model_fingerprint_value=current_model_fingerprint,clip=clip,video_vae=video_vae,sampler=sampler,sigmas=sigmas,prompt_plan=plan,width=width,height=height,chunk_seconds=chunk_seconds,continuity=continuity,audio_continuity=audio_continuity,base_seed=base_seed,reroll_from_chunk=reroll_from_chunk,reroll_nonce=reroll_nonce,first_frame_hash=assets.first_frame_hash,last_frame_hash=assets.last_frame_hash,identity_hash=sequence_identity_hash,strict_compatibility=strict_compatibility,existing_session=session,reference_contract=reference_assets.contract if reference_assets is not None else None,conditioning_mode=conditioning_mode)
+        reroll_nonce=storage_controller.effective_reroll_nonce
+        if stored_session is not None: session=stored_session
     accelerators=accelerator_summary(model)
     if "Continuum APPLY_MODEL wrapper installed" not in accelerators: accelerators+="; Continuum APPLY_MODEL wrapper installed"
-    preserved,reuse_notes=_preserved_prefix(session=session,prompt_hashes=prompt_hashes,chunks=chunks,reroll_from_chunk=int(reroll_from_chunk),width=width,height=height,chunk_seconds=chunk_seconds,identity_hash=assets.identity_hash)
+    effective_reroll_from_chunk=0 if storage_controller is not None and session is not None and bool((session.get("settings") or {}).get("run_storage_validated_prefix")) else int(reroll_from_chunk)
+    preserved,reuse_notes=_preserved_prefix(session=session,prompt_hashes=prompt_hashes,chunks=chunks,reroll_from_chunk=effective_reroll_from_chunk,width=width,height=height,chunk_seconds=chunk_seconds,identity_hash=sequence_identity_hash)
+    if reference_assets is not None:
+        reuse_notes.insert(0,f"Reference conditioning: {reference_assets.count} image(s), size={reference_assets.size_mode}; persistent across all chunks.")
+        if reference_warning: reuse_notes.append("Warning: "+reference_warning)
     if session is not None:
         old_fingerprint=str(session.get("model_fingerprint",""))
         if old_fingerprint and old_fingerprint!=current_model_fingerprint: reuse_notes.append("model/accelerator fingerprint differs from the saved session; accepted chunks were kept")
     cache={}
     if len(preserved)<chunks:
-        assets=encode_identity_latents(video_vae,assets); cache=_conditioning_cache(clip=clip,prompts=prompts,assets=assets,final_has_last_frame=last_frame is not None)
+        assets=encode_identity_latents(video_vae,assets)
+        if reference_assets is not None:
+            from ..reference import encode_reference_latents
+            reference_assets=encode_reference_latents(video_vae,reference_assets)
+        cache=_conditioning_cache(clip=clip,prompts=prompts,assets=assets,final_has_last_frame=last_frame is not None,reference_assets=reference_assets)
     entries=preserved[:]; previous_state=None
     if entries: previous_state=entry_to_state(entries[-1])
     elif initial_state is not None:
@@ -105,7 +132,7 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
         if int(previous_state["width"])!=width or int(previous_state["height"])!=height: raise SequenceRuntimeError(f"initial_state is {previous_state['width']}x{previous_state['height']} but V2 is configured for {width}x{height}")
     initial_frame_count=align_frame_count_up(int(round(chunk_seconds*FPS))); retained_frames=sum(int(entry["plan"]["net_frames"]) for entry in entries); sampling_reports=[]
     for sequence_index in range(len(entries),chunks):
-        prompt=prompts[sequence_index]; prompt_hash_value=prompt_hashes[sequence_index]; is_final=sequence_index==chunks-1; seed=derive_chunk_seed(base_seed,sequence_index,reroll_nonce); motion_score=0.0; video_context=None; audio_context=None; context_before=None
+        prompt=prompts[sequence_index]; prompt_hash_value=prompt_hashes[sequence_index]; is_final=sequence_index==chunks-1; effective_reroll_nonce=int(reroll_nonce) if int(reroll_from_chunk)>0 and sequence_index+1>=int(reroll_from_chunk) else 0; seed=derive_chunk_seed(base_seed,sequence_index,effective_reroll_nonce); motion_score=0.0; video_context=None; audio_context=None; context_before=None
         if previous_state is None:
             total_frames=initial_frame_count; latent=empty_h3_latent(width,height,total_frames); conditioning=attach_keyframes(cache[(prompt,bool(last_frame is not None and is_final))],frame_count=total_frames,first_latent=assets.first_latent,last_latent=assets.last_latent if is_final else None); clip_index=1; context_frames=0
             chunk_plan=make_plan(continuation=False,clip_index=clip_index,total_frames=total_frames,trim_frames=0,width=width,height=height,context_frames=5,state_capacity_frames=largest_context_capacity(total_frames),requested_extend_seconds=chunk_seconds,debug=debug); reason="initial clip"
@@ -118,15 +145,17 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
         chunk_model=clone_model_for_chunk(model,strict=bool(strict_compatibility),debug=bool(debug),chunk_index=clip_index,context_frames=context_frames if previous_state is not None else None)
         sampled=sample_chunk(model=chunk_model,conditioning=conditioning,latent=latent,sampler=sampler,sigmas=sigmas,seed=seed,enable_preview=bool(enable_preview))
         if context_before is not None and video_context is not None: assert_context_unchanged(video_context,audio_context,context_before)
-        entry=make_chunk_entry(latent=sampled,plan=chunk_plan,prompt=prompt,prompt_hash=prompt_hash_value,seed=seed,context_frames=context_frames,motion_score=motion_score,reused=False); previous_state=entry_to_state(entry); entries.append(entry); retained_frames+=int(chunk_plan["net_frames"])
+        entry=make_chunk_entry(latent=sampled,plan=chunk_plan,prompt=prompt,prompt_hash=prompt_hash_value,seed=seed,context_frames=context_frames,motion_score=motion_score,reused=False); previous_state=entry_to_state(entry); entries.append(entry)
+        if storage_controller is not None: storage_controller.commit_chunk(entry, position=sequence_index)
+        retained_frames+=int(chunk_plan["net_frames"])
         sampling_reports.append(f"chunk {sequence_index+1}/{chunks}: seed={seed}, frames={chunk_plan['total_frames']}, trim={chunk_plan['trim_frames']}, retained_total={retained_frames}, context={context_frames} ({reason}), motion={motion_score:.6f}, "+(f"interop=emitted actual_prefix={CONTINUUM_ACTUAL_PREFIX_STEPS} consumer=not_observable" if context_before is not None else "interop=not_emitted"))
         del sampled,latent,conditioning,chunk_model
     if len(entries)!=chunks: raise SequenceRuntimeError(f"internal sequence length mismatch: expected {chunks}, got {len(entries)}")
     if latent_only:
         last_state=entry_to_state(entries[-1]); parent_id=session.get("session_id") if session is not None else None
-        settings={"continuity":continuity,"audio_continuity":bool(audio_continuity),"exact_total_duration":False,"prompt_mode":plan["mode"],"base_seed":int(base_seed),"reroll_nonce":int(reroll_nonce),"diagnostics_mode":diagnostics_mode,"initial_state_source":initial_state is not None,"latent_first":True}
-        new_session=make_session(chunks=entries,width=width,height=height,chunk_seconds=chunk_seconds,identity_hash=assets.identity_hash,model_fingerprint_value=current_model_fingerprint,parent_session_id=parent_id,reroll_from_chunk=int(reroll_from_chunk),settings=settings)
-        report_lines=[f"H3 Continuum V3 {PACKAGE_VERSION}",prompt_plan_report(plan),"Decode: external ComfyUI Core VAE nodes; full raw AV chunks retained.",accelerators,"Execution: conditioning precomputed; single call-local MODEL clone per chunk; no internal VAE decode.",*reuse_notes]
+        settings={"continuity":continuity,"audio_continuity":bool(audio_continuity),"exact_total_duration":False,"prompt_mode":plan["mode"],"conditioning_mode":conditioning_mode,"base_seed":int(base_seed),"reroll_nonce":int(reroll_nonce),"diagnostics_mode":diagnostics_mode,"initial_state_source":initial_state is not None,"latent_first":True,"first_frame_hash":assets.first_frame_hash,"last_frame_hash":assets.last_frame_hash,"reference_contract":reference_assets.contract if reference_assets is not None else None}
+        new_session=make_session(chunks=entries,width=width,height=height,chunk_seconds=chunk_seconds,identity_hash=sequence_identity_hash,model_fingerprint_value=current_model_fingerprint,parent_session_id=parent_id,reroll_from_chunk=int(reroll_from_chunk),settings=settings)
+        report_lines=[f"H3 Continuum V3 {PACKAGE_VERSION}",f"Conditioning mode: {conditioning_mode_label(conditioning_mode)}.",prompt_plan_report(plan),"Decode: external ComfyUI Core VAE nodes; full raw AV chunks retained.",accelerators,"Execution: conditioning precomputed; single call-local MODEL clone per chunk; no internal VAE decode.",*reuse_notes]
         if diagnostics_mode!=DIAGNOSTICS_OFF: report_lines.extend(sampling_reports)
         report_lines.extend([session_summary(new_session),f"Output: {len(entries)} raw AV latent chunk(s); connect Core VAE Decode nodes, then H3 Continuum Assemble V3."])
         return entries,last_state,new_session,"\n".join(report_lines)
@@ -136,8 +165,8 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
     if exact_total_duration:
         target_frames=int(round(chunks*chunk_seconds*FPS)); images,audio,duration_report=enforce_total_frames(images,audio,target_frames=target_frames,preserve_final_frame=last_frame is not None)
     last_state=entry_to_state(entries[-1]); parent_id=session.get("session_id") if session is not None else None
-    settings={"continuity":continuity,"audio_continuity":bool(audio_continuity),"exact_total_duration":bool(exact_total_duration),"prompt_mode":plan["mode"],"base_seed":int(base_seed),"reroll_nonce":int(reroll_nonce),"diagnostics_mode":diagnostics_mode,"initial_state_source":initial_state is not None}
-    new_session=make_session(chunks=entries,width=width,height=height,chunk_seconds=chunk_seconds,identity_hash=assets.identity_hash,model_fingerprint_value=current_model_fingerprint,parent_session_id=parent_id,reroll_from_chunk=int(reroll_from_chunk),settings=settings)
+    settings={"continuity":continuity,"audio_continuity":bool(audio_continuity),"exact_total_duration":bool(exact_total_duration),"prompt_mode":plan["mode"],"base_seed":int(base_seed),"reroll_nonce":int(reroll_nonce),"diagnostics_mode":diagnostics_mode,"initial_state_source":initial_state is not None,"first_frame_hash":assets.first_frame_hash,"last_frame_hash":assets.last_frame_hash,"reference_contract":reference_assets.contract if reference_assets is not None else None}
+    new_session=make_session(chunks=entries,width=width,height=height,chunk_seconds=chunk_seconds,identity_hash=sequence_identity_hash,model_fingerprint_value=current_model_fingerprint,parent_session_id=parent_id,reroll_from_chunk=int(reroll_from_chunk),settings=settings)
     decoded_gib=float(images.shape[0])*float(width)*float(height)*3.0*4.0/(1024.0**3)
     report_lines=[f"H3 Continuum V2 {PACKAGE_VERSION}",prompt_plan_report(plan),f"Seam correction: {seam_correction}.",accelerators,"Execution: conditioning precomputed; single call-local MODEL clone per chunk; decode deferred until sampling completed.",*reuse_notes]
     if diagnostics_mode!=DIAGNOSTICS_OFF: report_lines.extend([f"Decode RAM estimate: {decode_estimate_gib:.2f} GiB including transient headroom"+(f"; available at start {available_ram_gib:.2f} GiB." if available_ram_gib is not None else "."),*sampling_reports,*decode_reports])

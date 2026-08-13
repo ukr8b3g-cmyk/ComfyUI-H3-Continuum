@@ -304,6 +304,7 @@ class H3ContinuumSamplerV2:
         sequence_prompt=None,
         show_preview=True,
         latent_only=False,
+        reference_assets=None,
         **clip_prompt_inputs,
     ):
         (
@@ -369,6 +370,7 @@ class H3ContinuumSamplerV2:
             session=session,
             initial_state=initial_state,
             latent_only=bool(latent_only),
+            reference_assets=reference_assets,
         )
 
 
@@ -487,6 +489,7 @@ class H3ContinuumSessionInfo:
 
 
 class H3ContinuumClipOverrides:
+    DEPRECATED = True
     """Build a static prompt-override pack without per-clip sockets."""
 
     @classmethod
@@ -789,6 +792,8 @@ class H3ContinuumSampler:
 
 class H3ContinuumResult:
     """Expand the compact facade result pack only when advanced outputs are needed."""
+
+    DEPRECATED = True
 
     @classmethod
     def INPUT_TYPES(cls):

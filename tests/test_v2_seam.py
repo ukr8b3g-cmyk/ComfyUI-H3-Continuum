@@ -57,7 +57,7 @@ def test_auto_keeps_a_clean_legacy_video_boundary():
     assert torch.equal(corrected, current[2:])
     assert decision.cut_rewind_frames == 0
     assert decision.corrected_score == decision.legacy_score
-    assert decision.fallback_reason.startswith("Auto kept the legacy video seam")
+    assert decision.fallback_reason.startswith("Auto kept native video")
     assert patch is None
 
 

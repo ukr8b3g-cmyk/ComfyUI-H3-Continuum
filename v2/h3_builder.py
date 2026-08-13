@@ -24,6 +24,16 @@ class IdentityAssets:
     last_latent: torch.Tensor | None
     identity_hash: str
 
+    @property
+    def first_frame_hash(self) -> str:
+        """Version-neutral alias retained alongside the legacy identity hash."""
+        return self.identity_hash
+
+    @property
+    def last_frame_hash(self) -> str:
+        """Fingerprint the resized final keyframe independently from identity."""
+        return _tensor_fingerprint(self.last_image)
+
 
 def _tensor_fingerprint(tensor: torch.Tensor | None) -> str:
     if tensor is None:
