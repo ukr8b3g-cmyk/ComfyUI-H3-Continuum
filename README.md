@@ -4,6 +4,64 @@ Native long-form MiniMax H3 video and audio continuation for ComfyUI.
 
 **H3 Continuum Sampler** generates 1 to 16 H3 chunks as one sequence. It carries the previous raw video and audio latent into the next chunk, keeps accepted chunk latents on CPU, and defers VAE decoding until sampling is complete.
 
+## Spectrum-aware continuation
+
+**A key difference in H3 Continuum is its explicit interoperability contract with compatible builds of [ComfyUI Spectrum MiniMax H3](https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3).**
+
+For continuation chunks, Continuum requests **Actual Prefix 2** through H3 Continuum Interop API v1. Spectrum can then keep the first two solver steps after inherited Context on Actual Transformer evaluation before continuing with its normal forecast schedule.
+
+```text
+Chunk 1
+  -> normal sampling
+
+Chunk 2+
+  -> previous raw AV latent Context
+  -> Actual Transformer prefix (minimum 2 steps)
+  -> normal Spectrum acceleration
+  -> next chunk
+```
+
+This is more than simply placing Spectrum before the sampler: Continuum explicitly tells a compatible Spectrum receiver that the current branch is a continuation chunk and requests the protected Actual prefix for the new Context.
+
+Among the public MiniMax H3 continuation implementations reviewed, Continuum is the only one found with an explicit Spectrum interoperability contract that requests Actual Prefix 2 for continuation chunks. This is deliberately a scoped comparison, not a claim about every H3 implementation.
+
+Older or unsupported Spectrum builds ignore the hint and continue normally. The `Spectrum H3: accepted H3 Continuum API v1, actual prefix=2` log confirms that a compatible receiver accepted it.
+
+### Important: Turbo LoRA + Spectrum
+
+**When using a Turbo LoRA, disabling Spectrum is strongly recommended.** Local testing found that Turbo + Spectrum was more prone to visible artifacts.
+
+Recommended starting profiles:
+
+```text
+Quality
+  Standard ~20-step sampling
+  + Spectrum ON
+  + Continuum Actual Prefix 2
+
+Fast
+  Turbo / 8-step profile
+  + Spectrum OFF   <- strongly recommended
+
+Experimental
+  Turbo
+  + Spectrum ON
+  -> may produce artifacts
+```
+
+Spectrum remains optional. Continuum does not require Spectrum for continuation.
+
+## Key features
+
+- **Raw AV latent continuation** — carries native MiniMax H3 video and audio latent Context directly into the next chunk without decode/re-encode between chunks.
+- **Spectrum-aware continuation** — emits H3 Continuum Interop API v1 and requests Actual Prefix 2 for continuation chunks.
+- **1 to 16 chunks in one sequence** — one sampler coordinates prompts, seeds, Context, sampling, and final assembly.
+- **CPU-backed accepted chunks** — completed full chunk latents leave the active VRAM sampling path.
+- **Deferred VAE decoding** — video/audio VAE decoding is postponed until sampling is complete.
+- **Fixed, List, and Timeline prompts** — one Sequence Prompt can control the complete multi-chunk sequence.
+- **State, Session, and reroll support** — advanced workflows can save continuation state, resume compatible sessions, and regenerate from a selected chunk.
+- **Composable accelerator chain** — SageAttention, Sol-Attn, LoRA, and Spectrum stay external to Continuum and can be connected through the normal ComfyUI MODEL chain.
+
 <!-- h3-standard-workflow -->
 ## Standard workflow
 
@@ -38,7 +96,7 @@ Continuum was created to make SVI-style long-form continuation practical with na
 
 The main benefit is not only continuity. A native monolithic 15-second H3 generation can put substantial pressure on VRAM. Continuum samples shorter chunks separately, carries only the required raw AV latent context, stores completed chunk data outside the active sampling path, and defers decoding until sampling is complete. This can make a 3 x 5-second sequence less likely to run out of VRAM on a 16GB GPU, although resolution, model precision, accelerators, offload settings, and available system RAM still determine the actual limit.
 
-The standard workflow uses the INT8 ConvRot H3 checkpoint, SageAttention CUDA++, and optional Spectrum acceleration as the validated reference profile. On different GPUs or software stacks, start with SageAttention `Auto` or bypass optional accelerators and confirm compatibility locally. Spectrum is not required for continuity and should be disabled for native-trajectory quality comparisons.
+The standard workflow uses the INT8 ConvRot H3 checkpoint, SageAttention CUDA++, and optional Spectrum acceleration as the validated reference profile. On different GPUs or software stacks, start with SageAttention `Auto` or bypass optional accelerators and confirm compatibility locally. Spectrum is not required for continuity and should be disabled for native-trajectory quality comparisons. When using a Turbo LoRA, disabling Spectrum is strongly recommended because local testing showed a higher risk of visible artifacts with the combined Turbo + Spectrum path.
 
 Continuum was developed independently around its integrated multi-chunk workflow, AV timeline validation, and compatibility requirements. Other H3 continuation approaches are discussed only where their workflow and implementation differences are relevant.
 
@@ -50,9 +108,9 @@ Continuum targets a useful reduction in long-form generation time while retainin
 | --- | --- | --- |
 | MiniMax H3 model | `minimax_h3_fl2va_pruned_int8_convrot.safetensors` | Use a compatible official H3 model; the INT8 ConvRot build is the tested 16GB profile. |
 | SageAttention | `sageattn_qk_int8_pv_fp8_cuda++`, compile off | Use `Auto` when the installed SageAttention build and GPU-specific backend are unknown. |
-| Spectrum | Enabled with the settings below | Optional; disable it for a native-trajectory quality reference. |
+| Spectrum | Enabled with the settings below | Recommended for the standard non-Turbo profile. Disable it for a native-trajectory reference and strongly prefer OFF when using a Turbo LoRA. |
 | Sol-Attn | Disabled | Currently not recommended in the standard continuity profile. Local A/B runs showed more visible boundary artifacts in some outputs; this is not a universal incompatibility claim. |
-| Turbo LoRA | Disabled | Not tested with this Continuum profile. No quality or compatibility claim is made yet. |
+| Turbo LoRA | Disabled in the quality profile | For a fast Turbo/8-step profile, use Spectrum OFF. Turbo + Spectrum is experimental because local testing showed a higher risk of visible artifacts. |
 | Seam Correction | `Auto` | Safe general starting point. In the current local A/B sample, `Off` produced the least noticeable visual boundary. Compare `Auto` and `Off` first. |
 
 Recommended Spectrum values used by this profile:
