@@ -133,16 +133,27 @@ def prepare_reference_assets(
     output_width: int,
     output_height: int,
     size_mode: str,
+    reference_image_3: torch.Tensor | None = None,
 ) -> ReferenceAssets | None:
     if reference_image_1 is None:
         if reference_image_2 is not None:
             raise ReferenceConditioningError(
                 "Reference Image 2 requires Reference Image 1"
             )
+        if reference_image_3 is not None:
+            raise ReferenceConditioningError(
+                "Reference Image 3 requires Reference Images 1 and 2"
+            )
         return None
+    if reference_image_3 is not None and reference_image_2 is None:
+        raise ReferenceConditioningError(
+            "Reference Image 3 requires Reference Image 2"
+        )
     inputs = [reference_image_1]
     if reference_image_2 is not None:
         inputs.append(reference_image_2)
+    if reference_image_3 is not None:
+        inputs.append(reference_image_3)
     images = tuple(
         _resize_reference(
             _validate_image(f"Reference Image {index}", image),

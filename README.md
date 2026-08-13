@@ -2,7 +2,7 @@
 
 Native long-form MiniMax H3 video and audio continuation for ComfyUI.
 
-**Stable release:** V3.2.1. The production path has passed local syntax and pytest checks, GitHub Actions, Windows generation, Ref2VA Reference + Continuation, Spectrum Actual Prefix 2, and complete Run Storage resume.
+**Current package:** V3.2.2. It extends the validated V3.2.1 baseline with a third ordered Reference Image and diagnostic-only Ref2VA/FL2VA checkpoint classification.
 
 https://github.com/user-attachments/assets/bfa8c683-fc9d-48f1-9cdb-477ca110cdf2
 
@@ -80,7 +80,7 @@ The sampler selects the mode from connected image inputs.
 
 Reference images and First/Last Frame are mutually exclusive. `Reference 2` cannot be used without `Reference 1`.
 
-For the formally supported Reference path, connect a MiniMax H3 **Ref2VA** MODEL upstream. With **Strict Compatibility** enabled (the default), Reference generation stops unless the upstream base checkpoint can be verified as Ref2VA. FL2VA MODEL + Reference conditioning has also worked in local testing, but requires Strict Compatibility to be disabled and remains experimental.
+Reference Image 1, 1+2, or 1+2+3 may be connected. Gaps are rejected. **Ref2VA** is the reference-specialized checkpoint and may provide stronger reference fidelity, while **FL2VA + Reference** is also allowed. Checkpoint classification is diagnostic only; the sampler never switches MODELs automatically. **Strict Compatibility** remains reserved for H3 contracts that are actually unsafe or unsupported.
 
 Reference prompts should identify the images explicitly:
 

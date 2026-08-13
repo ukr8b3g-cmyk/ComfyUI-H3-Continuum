@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.2.2
+
+- Added a third ordered Reference Image input to the production sampler.
+- Required Reference Images to be connected contiguously from Image 1.
+- Allowed Ref2VA, FL2VA, and unverified checkpoints with Reference conditioning.
+- Kept checkpoint classification as diagnostics without automatic MODEL switching.
+- Kept Strict Compatibility for genuinely unsafe or unsupported H3 contracts.
+
 ## 3.2.1
 
 - Declared V3.2.1 stable after GitHub Actions, Windows Ref2VA generation, Spectrum Actual Prefix 2, chunk integrity and complete Auto Resume passed.

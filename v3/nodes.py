@@ -53,24 +53,12 @@ def _validate_regenerate_storage(run_storage: str, regenerate_from: int) -> None
 def _validate_reference_checkpoint(
     prompt, unique_id, *, strict_compatibility: bool
 ) -> str:
-    from ..graph_contract import (
-        CHECKPOINT_FL2VA,
-        CHECKPOINT_REF2VA,
-        classify_h3_checkpoint,
-    )
+    from ..graph_contract import classify_h3_checkpoint
 
-    classification = classify_h3_checkpoint(prompt, unique_id)
-    if strict_compatibility and classification != CHECKPOINT_REF2VA:
-        if classification == CHECKPOINT_FL2VA:
-            detail = "an FL2VA checkpoint is connected"
-        else:
-            detail = "the base checkpoint cannot be verified as Ref2VA"
-        raise ValueError(
-            "Reference Images require a verified MiniMax H3 Ref2VA MODEL when "
-            f"Strict Compatibility is enabled; {detail}. Disable Strict "
-            "Compatibility only for experimental FL2VA/unknown combinations."
-        )
-    return classification
+    # Checkpoint choice is diagnostic only. Strict Compatibility remains
+    # reserved for H3 contracts that are actually unsafe or unsupported.
+    _ = strict_compatibility
+    return classify_h3_checkpoint(prompt, unique_id)
 
 
 class H3ContinuumAdvancedV3:
@@ -539,6 +527,7 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                 "last_frame": ("IMAGE",),
                 "reference_image_1": ("IMAGE",),
                 "reference_image_2": ("IMAGE",),
+                "reference_image_3": ("IMAGE",),
             },
             "hidden": {
                 "prompt": "PROMPT",
@@ -579,6 +568,7 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
         prompt_overrides=None,
         prompt=None,
         unique_id=None,
+        reference_image_3=None,
     ):
         from ..reference import prepare_reference_assets
         regenerate_from = _regenerate_from_value(
@@ -591,6 +581,7 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
             output_width=int(width),
             output_height=int(height),
             size_mode=reference_size,
+            reference_image_3=reference_image_3,
         )
         if reference_assets is not None and (first_frame is not None or last_frame is not None):
             raise ValueError(
@@ -609,11 +600,10 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                 return str(report)
             if reference_checkpoint == "ref2va":
                 status = "Ref2VA verified."
+            elif reference_checkpoint == "fl2va":
+                status = "FL2VA; allowed, but reference fidelity may differ from Ref2VA."
             else:
-                status = (
-                    f"{reference_checkpoint}; Experimental because Strict "
-                    "Compatibility is disabled."
-                )
+                status = "unverified; execution allowed, Core contract errors remain fatal."
             return str(report) + "\nReference MODEL: " + status
 
         def execute():

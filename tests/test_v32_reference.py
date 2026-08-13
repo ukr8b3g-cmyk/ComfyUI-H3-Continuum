@@ -66,6 +66,32 @@ def test_reference_socket_rejects_image_batches():
         )
 
 
+def test_three_reference_images_are_ordered_and_contiguous():
+    assets = prepare_reference_assets(
+        reference_image_1=torch.zeros((1, 32, 32, 3)),
+        reference_image_2=torch.ones((1, 32, 32, 3)),
+        reference_image_3=torch.full((1, 32, 32, 3), 0.5),
+        output_width=32,
+        output_height=32,
+        size_mode=REFERENCE_SIZE_MATCH_OUTPUT,
+    )
+    assert assets is not None
+    assert assets.count == 3
+    assert validate_reference_prompts(["Use <Picture 1>, <Picture 2>, and <Picture 3>."], 3) == ""
+
+
+def test_reference_image_3_rejects_gaps():
+    with pytest.raises(ReferenceConditioningError, match="requires Reference Image 2"):
+        prepare_reference_assets(
+            reference_image_1=torch.zeros((1, 32, 32, 3)),
+            reference_image_2=None,
+            reference_image_3=torch.zeros((1, 32, 32, 3)),
+            output_width=32,
+            output_height=32,
+            size_mode=REFERENCE_SIZE_MATCH_OUTPUT,
+        )
+
+
 def _reference_prompt(checkpoint_name: str) -> dict:
     return {
         "1": {
@@ -79,20 +105,19 @@ def _reference_prompt(checkpoint_name: str) -> dict:
     }
 
 
-def test_strict_reference_requires_ref2va_checkpoint():
+def test_reference_checkpoint_classification_is_diagnostic_only():
     assert _validate_reference_checkpoint(
         _reference_prompt("minimax_h3_ref2va_pruned_int8.safetensors"),
         "2",
         strict_compatibility=True,
     ) == "ref2va"
-    with pytest.raises(ValueError, match="FL2VA checkpoint"):
-        _validate_reference_checkpoint(
-            _reference_prompt("minimax_h3_fl2va_pruned_int8.safetensors"),
-            "2",
-            strict_compatibility=True,
-        )
     assert _validate_reference_checkpoint(
         _reference_prompt("minimax_h3_fl2va_pruned_int8.safetensors"),
         "2",
-        strict_compatibility=False,
+        strict_compatibility=True,
     ) == "fl2va"
+    assert _validate_reference_checkpoint(
+        _reference_prompt("minimax_h3_unknown.safetensors"),
+        "2",
+        strict_compatibility=True,
+    ) == "unknown"
