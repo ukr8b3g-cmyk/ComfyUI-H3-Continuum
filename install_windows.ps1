@@ -46,5 +46,5 @@ if (Test-Path $python) {
     Write-Warning "venv Python was not found; installation was copied but runtime verification was skipped."
 }
 
-Write-Host "Installed H3 Continuum 2.1.6 to: $destination"
+Write-Host "Installed H3 Continuum to: $destination"
 Write-Host "Restart ComfyUI. If the browser cached the old frontend, use a hard reload."

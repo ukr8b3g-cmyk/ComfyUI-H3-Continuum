@@ -7,7 +7,7 @@ import json
 from typing import Any
 
 
-GRAPH_CONTRACT_VERSION = 1
+GRAPH_CONTRACT_VERSION = 2
 
 # Keep this deliberately explicit. New loader/patch nodes must be audited before
 # their saved chunks can be resumed automatically.
@@ -21,6 +21,8 @@ _KNOWN_MODEL_NODES = {
     "SpectrumApplyMiniMaxH3",
     "MiniMaxH3MemoryEfficientSageAttention",
     "MiniMaxH3MemoryEfficientSageAttentionPatch",
+    "MiniMaxH3SigmaShift",
+    "ModelSamplingMiniMaxH3",
 }
 _KNOWN_CLIP_NODES = {"CLIPLoader", "DualCLIPLoader", "TripleCLIPLoader"}
 _KNOWN_VAE_NODES = {"VAELoader"}
@@ -28,6 +30,10 @@ _KNOWN_SHARED_NODES = {
     "Reroute",
     "Any Switch (rgthree)",
 }
+
+CHECKPOINT_REF2VA = "ref2va"
+CHECKPOINT_FL2VA = "fl2va"
+CHECKPOINT_UNKNOWN = "unknown"
 
 
 def _canonical(value: Any) -> str:
@@ -149,3 +155,60 @@ def build_upstream_graph_contract(
     }
     descriptor["sha256"] = _sha256(descriptor)
     return descriptor, safe, list(dict.fromkeys(reasons))
+
+
+def classify_h3_checkpoint(prompt: Any, unique_id: Any) -> str:
+    """Classify the base H3 UNET connected to the sampler, without guessing."""
+    if not isinstance(prompt, dict):
+        return CHECKPOINT_UNKNOWN
+    sampler_node = prompt.get(str(unique_id))
+    if not isinstance(sampler_node, dict):
+        return CHECKPOINT_UNKNOWN
+    model_link = (sampler_node.get("inputs") or {}).get("model")
+    if not (
+        isinstance(model_link, (list, tuple))
+        and len(model_link) == 2
+        and isinstance(model_link[0], (str, int))
+    ):
+        return CHECKPOINT_UNKNOWN
+
+    stack = [str(model_link[0])]
+    visited: set[str] = set()
+    classifications: set[str] = set()
+    while stack:
+        node_id = stack.pop()
+        if node_id in visited:
+            continue
+        visited.add(node_id)
+        node = prompt.get(node_id)
+        if not isinstance(node, dict):
+            return CHECKPOINT_UNKNOWN
+        inputs = node.get("inputs") or {}
+        if str(node.get("class_type", "")) == "UNETLoader":
+            loader_text = " ".join(
+                str(value).lower()
+                for value in inputs.values()
+                if isinstance(value, str)
+            )
+            if "ref2va" in loader_text or "ref2v" in loader_text:
+                classifications.add(CHECKPOINT_REF2VA)
+            elif "fl2va" in loader_text or "fl2v" in loader_text:
+                classifications.add(CHECKPOINT_FL2VA)
+            else:
+                classifications.add(CHECKPOINT_UNKNOWN)
+            continue
+        linked = False
+        for value in inputs.values():
+            if (
+                isinstance(value, (list, tuple))
+                and len(value) == 2
+                and isinstance(value[0], (str, int))
+                and str(value[0]) in prompt
+            ):
+                stack.append(str(value[0]))
+                linked = True
+    if classifications == {CHECKPOINT_REF2VA}:
+        return CHECKPOINT_REF2VA
+    if classifications == {CHECKPOINT_FL2VA}:
+        return CHECKPOINT_FL2VA
+    return CHECKPOINT_UNKNOWN

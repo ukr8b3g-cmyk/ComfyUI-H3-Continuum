@@ -78,7 +78,7 @@ The sampler selects the mode from connected image inputs.
 
 Reference images and First/Last Frame are mutually exclusive. `Reference 2` cannot be used without `Reference 1`.
 
-For the formally supported Reference path, connect a MiniMax H3 **Ref2VA** MODEL upstream. FL2VA MODEL + Reference conditioning has also worked in local testing, but should be treated as experimental rather than an official checkpoint pairing.
+For the formally supported Reference path, connect a MiniMax H3 **Ref2VA** MODEL upstream. With **Strict Compatibility** enabled (the default), Reference generation stops unless the upstream base checkpoint can be verified as Ref2VA. FL2VA MODEL + Reference conditioning has also worked in local testing, but requires Strict Compatibility to be disabled and remains experimental.
 
 Reference prompts should identify the images explicitly:
 
@@ -184,7 +184,7 @@ Chunk 2 reused
 Chunk 3 generated
 ```
 
-Run Storage creates deterministic Revisions from the sampling contract. It tracks observable inputs including:
+Run Storage creates deterministic Revisions from the sampling contract. When Run Name and Auto Resume ID are blank, a stable storage ID is derived from the sampler node. It tracks observable inputs including:
 
 - H3 MODEL loader and ordered MODEL patch/wrapper chain.
 - LoRA/Turbo enabled state, filename, and strength.
@@ -194,13 +194,15 @@ Run Storage creates deterministic Revisions from the sampling contract. It track
 
 Changing FL2VA to Ref2VA, changing LoRA strength, or changing another tracked setting creates or selects a different Revision. Returning to an earlier compatible configuration reuses its earlier Revision.
 
-Unknown upstream wrappers fail safe: chunks may still be saved, but automatic reuse is disabled when the graph cannot be identified reliably.
+The upstream graph and runtime MODEL/CLIP/VAE weight probes are both retained. Unknown wrappers or incomplete runtime probes fail safe: chunks may still be saved, but automatic reuse is disabled when identity cannot be established reliably.
+
+Saved chunk files are verified by size and SHA-256 before reuse. Storage schema changes preserve old files but do not automatically reuse unverifiable older chunks.
 
 Even when all sampling chunks are reused, Core VAE Decode and final assembly run again. A reused 15-second test can therefore still take roughly one minute.
 
 ### Regenerate from a chunk
 
-Select `Chunk N` in `Regenerate From` to reuse chunks before N and regenerate N onward. Keep `Auto` for normal resume.
+Select `Chunk N` in `Regenerate From` to reuse chunks before N and regenerate N onward. Keep `Auto` for normal resume. Chunk regeneration requires `Run Storage = Save + Auto Resume`.
 
 `reroll_nonce = 0` uses automatic Revision behavior. A positive nonce is retained for compatibility and explicit branch selection.
 
@@ -223,7 +225,7 @@ A compatible receiver logs:
 Spectrum H3: accepted H3 Continuum API v1, actual prefix=2
 ```
 
-Older Spectrum versions ignore the hint and continue normally.
+Actual Prefix 2 is active only when the Spectrum log reports that the Continuum API request was accepted. Older or incompatible Spectrum versions continue without that receiver behavior.
 
 ### Standard and Turbo profiles
 
@@ -312,11 +314,7 @@ python -m compileall -q .
 python -m pytest -q
 ```
 
-Current V3.2.1 runtime validation:
-
-```text
-112 passed
-```
+The GitHub Actions workflow runs compileall and the full pytest suite with its explicit test dependencies.
 
 ## License
 

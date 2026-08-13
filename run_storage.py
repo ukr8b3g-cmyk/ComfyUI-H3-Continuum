@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextvars
 import hashlib
 import json
+import marshal
 import os
 import re
 import shutil
@@ -22,7 +23,7 @@ from .constants import CONTINUUM_ACTUAL_PREFIX_STEPS
 from .v2.session import make_session, validate_chunk_entry
 
 
-RUN_STORAGE_SCHEMA_VERSION = 1
+RUN_STORAGE_SCHEMA_VERSION = 2
 from .conditioning import (
     CONDITIONING_MODES,
     conditioning_mode_from_presence,
@@ -30,7 +31,7 @@ from .conditioning import (
 )
 
 
-SAMPLING_CONTRACT_VERSION = 4
+SAMPLING_CONTRACT_VERSION = 5
 RUN_STORAGE_OFF = "Off"
 RUN_STORAGE_AUTO = "Save + Auto Resume"
 RUN_STORAGE_OPTIONS = (RUN_STORAGE_OFF, RUN_STORAGE_AUTO)
@@ -75,12 +76,24 @@ def sanitize_run_name(value: str) -> str:
     return name
 
 
-def resolve_run_storage_name(*, project_id: str, legacy_run_name: str = "") -> str:
+def resolve_run_storage_name(
+    *, project_id: str, legacy_run_name: str = "", automatic_key: str = ""
+) -> str:
     """Resolve a stable storage folder while preserving old Run Name workflows."""
     legacy = str(legacy_run_name)
     if legacy:
         return sanitize_run_name(legacy)
     raw_project_id = str(project_id).strip()
+    if not raw_project_id:
+        key = str(automatic_key).strip()
+        if not key:
+            raise RunStorageError(
+                "Automatic Resume ID is unavailable; enter a Run Name for this workflow"
+            )
+        digest = hashlib.sha256(
+            f"H3ContinuumSamplerProduction:{key}".encode("utf-8")
+        ).hexdigest()[:24]
+        return f"run_auto_{digest}"
     try:
         parsed = uuid.UUID(raw_project_id)
     except (ValueError, AttributeError, TypeError) as exc:
@@ -90,6 +103,51 @@ def resolve_run_storage_name(*, project_id: str, legacy_run_name: str = "") -> s
     if parsed.int == 0:
         raise RunStorageError("Automatic Project ID must not be the nil UUID")
     return f"run_{parsed.hex}"
+
+
+def automatic_project_key(prompt: Any, unique_id: Any) -> str:
+    """Build a stable key from sampler identity and graph topology only."""
+    node_id = str(unique_id).strip()
+    if not node_id:
+        raise RunStorageError("Automatic Resume ID requires the sampler node ID")
+    if not isinstance(prompt, dict):
+        raise RunStorageError(
+            "Automatic Resume ID requires the ComfyUI prompt graph; enter a Run Name"
+        )
+    def visit(current_id: str, stack: set[str]) -> dict[str, Any]:
+        if current_id in stack:
+            return {"node_id": current_id, "cycle": True}
+        raw = prompt.get(current_id)
+        if not isinstance(raw, dict):
+            return {"node_id": current_id, "missing": True}
+        links = []
+        inputs = raw.get("inputs") or {}
+        next_stack = set(stack)
+        next_stack.add(current_id)
+        if isinstance(inputs, dict):
+            for name in sorted(inputs):
+                value = inputs[name]
+                if (
+                    isinstance(value, (list, tuple))
+                    and len(value) == 2
+                    and isinstance(value[0], (str, int))
+                    and isinstance(value[1], int)
+                    and str(value[0]) in prompt
+                ):
+                    child_id = str(value[0])
+                    links.append(
+                        {
+                            "input": str(name),
+                            "output": int(value[1]),
+                            "node": visit(child_id, next_stack),
+                        }
+                    )
+        return {
+            "node_id": current_id,
+            "class_type": str(raw.get("class_type", "")),
+            "links": links,
+        }
+    return _hash({"sampler_node_id": node_id, "topology": visit(node_id, set())})
 
 
 def _output_root() -> Path:
@@ -139,6 +197,14 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise RunStorageError(f"{path.name} must contain a JSON object")
     return value
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _qualified(value: Any) -> str:
@@ -209,7 +275,9 @@ def _observe(value: Any, *, depth: int = 0) -> tuple[Any, bool]:
         descriptor: dict[str, Any] = {"callable": _qualified(value)}
         safe = True
         if code is not None:
-            descriptor["code_sha256"] = hashlib.sha256(code.co_code).hexdigest()
+            descriptor["code_sha256"] = hashlib.sha256(
+                marshal.dumps(code)
+            ).hexdigest()
             defaults, defaults_safe = _observe(getattr(value, "__defaults__", None), depth=depth + 1)
             kwdefaults, kw_safe = _observe(getattr(value, "__kwdefaults__", None), depth=depth + 1)
             closure_values = tuple(cell.cell_contents for cell in (getattr(value, "__closure__", None) or ()))
@@ -262,8 +330,13 @@ def _model_signature(model: Any, legacy_fingerprint: str) -> tuple[dict[str, Any
         "transformer_options": observed_transformer,
         "patches": patches,
         "weight_probe": weights,
+        "runtime_observation": {
+            "wrappers_complete": bool(wrappers_safe),
+            "patches_complete": bool(patches_safe),
+            "transformer_options_complete": bool(transformer_safe),
+        },
     }
-    return descriptor, wrappers_safe and patches_safe and transformer_safe and weights_safe
+    return descriptor, weights_safe and bool(weights)
 
 
 def _sampler_signature(sampler: Any) -> tuple[dict[str, Any], bool]:
@@ -356,13 +429,18 @@ def _clip_signature(clip: Any) -> tuple[dict[str, Any], bool]:
         if value is None or isinstance(value, (bool, int, float, str)):
             tokenizer_config[name] = value
     tokenizer_safe = tokenizer is not None and tokenizer_wrapper is not None and tokenizer_core is not None
-    return {
+    descriptor = {
         "wrapper_type": _qualified(clip),
         "conditioner": module_value,
         "patcher": patcher_value,
         "tokenizer": tokenizer_config,
         "options": options,
-    }, module_safe and patcher_safe and options_safe and tokenizer_safe
+        "runtime_observation": {
+            "patcher_complete": bool(patcher_safe),
+            "options_complete": bool(options_safe),
+        },
+    }
+    return descriptor, module_safe and tokenizer_safe
 
 
 def _video_vae_signature(video_vae: Any, *, required: bool) -> tuple[dict[str, Any], bool]:
@@ -383,7 +461,11 @@ def _video_vae_signature(video_vae: Any, *, required: bool) -> tuple[dict[str, A
         "chunked_io": bool(getattr(first_stage, "comfy_has_chunked_io", False)),
     }
     observed, config_safe = _observe(config)
-    return observed, module_safe and patcher_safe and config_safe
+    observed["runtime_observation"] = {
+        "patcher_complete": bool(patcher_safe),
+        "config_complete": bool(config_safe),
+    }
+    return observed, module_safe
 
 
 def _apply_nonce_contract(
@@ -471,11 +553,20 @@ def build_sampling_contract(
     boundary = int(reroll_from_chunk)
     graph_authoritative = upstream_graph_contract is not None
     if graph_authoritative:
-        model_value = {"source": "comfy_prompt_graph", "route": upstream_graph_contract.get("routes", {}).get("model")}
-        clip_value = {"source": "comfy_prompt_graph", "route": upstream_graph_contract.get("routes", {}).get("clip")}
+        routes = upstream_graph_contract.get("routes", {})
+        model_value = {
+            "runtime": model_value,
+            "graph_route": routes.get("model"),
+        }
+        clip_value = {
+            "runtime": clip_value,
+            "graph_route": routes.get("clip"),
+        }
         if uses_video_vae:
-            video_vae_value = {"source": "comfy_prompt_graph", "route": upstream_graph_contract.get("routes", {}).get("video_vae")}
-        model_safe = clip_safe = video_vae_safe = bool(upstream_graph_safe)
+            video_vae_value = {
+                "runtime": video_vae_value,
+                "graph_route": routes.get("video_vae"),
+            }
     global_contract = {
         "sampling_contract_version": SAMPLING_CONTRACT_VERSION,
         "conditioning_mode": conditioning_mode,
@@ -526,13 +617,13 @@ def build_sampling_contract(
         effective_nonce=int(reroll_nonce) if boundary > 0 else 0,
     )
     reasons = list(upstream_graph_reasons or []) if graph_authoritative else []
-    if not graph_authoritative and not model_safe:
+    if not model_safe:
         reasons.append("MODEL wrapper/patch contract is not completely observable")
     if not sampler_safe:
         reasons.append("SAMPLER function/options are not completely observable")
-    if not graph_authoritative and not clip_safe:
+    if not clip_safe:
         reasons.append("CLIP/Qwen encoder contract is not completely observable")
-    if not graph_authoritative and not video_vae_safe:
+    if not video_vae_safe:
         reasons.append("Video VAE contract is not completely observable")
     graph_safe = bool(upstream_graph_safe) if graph_authoritative else True
     return contract, model_safe and clip_safe and video_vae_safe and sampler_safe and graph_safe, reasons
@@ -543,11 +634,41 @@ def revision_identity(contract: dict[str, Any]) -> tuple[str, str]:
     return full[:16], full
 
 
+def _pid_exists_windows(pid: int) -> bool:
+    """Probe a Windows PID without sending a console event or terminating it."""
+    import ctypes
+    from ctypes import wintypes
+
+    process_query_limited_information = 0x1000
+    error_access_denied = 5
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = (
+        wintypes.DWORD,
+        wintypes.BOOL,
+        wintypes.DWORD,
+    )
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    ctypes.set_last_error(0)
+    handle = kernel32.OpenProcess(
+        process_query_limited_information,
+        False,
+        int(pid),
+    )
+    if handle:
+        kernel32.CloseHandle(handle)
+        return True
+    return ctypes.get_last_error() == error_access_denied
+
+
 def _pid_exists(pid: int) -> bool:
     if pid <= 0:
         return False
     if pid == os.getpid():
         return True
+    if os.name == "nt":
+        return _pid_exists_windows(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -700,6 +821,11 @@ class RunStorageController:
         path = self.revisions_root / source / "chunks" / filename
         if path.stat().st_size != int(record["file_size"]):
             raise RunStorageError(f"stored chunk size mismatch: {filename}")
+        expected_sha256 = str(record.get("file_sha256", ""))
+        if not expected_sha256:
+            raise RunStorageError(f"stored chunk SHA-256 is missing: {filename}")
+        if _file_sha256(path) != expected_sha256:
+            raise RunStorageError(f"stored chunk SHA-256 mismatch: {filename}")
         with safe_open(str(path), framework="pt", device="cpu") as handle:
             if set(handle.keys()) != {"audio", "video"}:
                 raise RunStorageError(f"stored chunk tensors are invalid: {filename}")
@@ -926,6 +1052,7 @@ class RunStorageController:
             "storage_revision_id": self.revision_id,
             "filename": filename,
             "file_size": target.stat().st_size,
+            "file_sha256": _file_sha256(target),
             "entry": _entry_metadata(storage_entry),
         }
         records = existing_records[:position]

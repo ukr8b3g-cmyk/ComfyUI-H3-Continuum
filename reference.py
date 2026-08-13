@@ -80,9 +80,13 @@ def _validate_image(name: str, image: torch.Tensor) -> torch.Tensor:
         raise ReferenceConditioningError(f"{name} must be a ComfyUI IMAGE tensor")
     if int(image.shape[0]) < 1 or int(image.shape[1]) < 1 or int(image.shape[2]) < 1:
         raise ReferenceConditioningError(f"{name} is empty")
+    if int(image.shape[0]) != 1:
+        raise ReferenceConditioningError(
+            f"{name} must contain exactly one image (batch size B=1)"
+        )
     if int(image.shape[-1]) < 3:
         raise ReferenceConditioningError(f"{name} must have RGB channels")
-    return image[:1, :, :, :3]
+    return image[:, :, :, :3]
 
 
 def _resize_reference(

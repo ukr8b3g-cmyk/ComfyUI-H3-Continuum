@@ -38,13 +38,12 @@ class IdentityAssets:
 def _tensor_fingerprint(tensor: torch.Tensor | None) -> str:
     if tensor is None:
         return "none"
-    sample = tensor.detach().to("cpu", dtype=torch.float32).contiguous()
-    # Hash a deterministic downsampled view rather than several gigabytes of bytes.
-    if sample.ndim == 4:
-        sample = sample[:1].movedim(-1, 1)
-        sample = torch.nn.functional.interpolate(sample, size=(64, 64), mode="area")
-    raw = sample.numpy().tobytes(order="C")
-    return hashlib.sha256(raw).hexdigest()
+    sample = tensor.detach().to("cpu").contiguous()
+    digest = hashlib.sha256()
+    digest.update(str(tuple(int(value) for value in sample.shape)).encode("ascii"))
+    digest.update(str(sample.dtype).encode("ascii"))
+    digest.update(sample.view(torch.uint8).numpy().tobytes(order="C"))
+    return digest.hexdigest()
 
 
 def resize_h3_image(image: torch.Tensor, width: int, height: int, crop: str) -> torch.Tensor:

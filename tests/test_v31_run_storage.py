@@ -5,17 +5,28 @@ import json
 from types import SimpleNamespace
 
 import torch
+import pytest
+import ctypes
 
 from ComfyUI_H3_Continuum_Join.run_storage import (
     RunStorageController,
     _apply_nonce_contract,
     _fsync_file,
+    _pid_exists_windows,
+    automatic_project_key,
     build_sampling_contract,
+    resolve_run_storage_name,
     revision_identity,
 )
-from ComfyUI_H3_Continuum_Join.graph_contract import build_upstream_graph_contract
+from ComfyUI_H3_Continuum_Join.graph_contract import (
+    CHECKPOINT_FL2VA,
+    CHECKPOINT_REF2VA,
+    build_upstream_graph_contract,
+    classify_h3_checkpoint,
+)
 from ComfyUI_H3_Continuum_Join.state import make_plan
 from ComfyUI_H3_Continuum_Join.v2.session import make_chunk_entry
+from ComfyUI_H3_Continuum_Join.v3.nodes import _validate_regenerate_storage
 
 
 class _Nested:
@@ -97,6 +108,7 @@ def test_three_chunks_are_committed_to_distinct_files(tmp_path):
     records = controller.manifest["chunks"]
     assert [record["sequence_index"] for record in records] == [0, 1, 2]
     assert [record["entry"]["sequence_index"] for record in records] == [0, 1, 2]
+    assert all(len(record["file_sha256"]) == 64 for record in records)
     assert [entry["sequence_index"] for entry in source_entries] == [0, 0, 0]
 
     persisted = json.loads(controller._manifest_path().read_text(encoding="utf-8"))
@@ -135,6 +147,65 @@ def test_fsync_file_accepts_a_completed_file_on_windows(tmp_path):
     target = tmp_path / "chunk.tmp"
     target.write_bytes(b"complete")
     _fsync_file(target)
+
+
+def test_chunk_sha256_rejects_same_size_corruption(tmp_path):
+    controller, _ = _controller(tmp_path)
+    controller.commit_chunk(_entry(0), position=0)
+    record = controller.manifest["chunks"][0]
+    target = controller.revision_root / "chunks" / record["filename"]
+    payload = bytearray(target.read_bytes())
+    payload[-1] ^= 1
+    target.write_bytes(payload)
+    with pytest.raises(Exception, match="SHA-256 mismatch"):
+        controller._load_entry(record, "same fixed prompt")
+
+
+def test_automatic_storage_name_is_stable_for_sampler_node():
+    first = resolve_run_storage_name(
+        project_id="", legacy_run_name="", automatic_key="242"
+    )
+    second = resolve_run_storage_name(
+        project_id="", legacy_run_name="", automatic_key="242"
+    )
+    assert first == second
+    assert first.startswith("run_auto_")
+
+
+def test_windows_pid_probe_uses_open_process(monkeypatch):
+    class Function:
+        def __init__(self, result):
+            self.result = result
+            self.argtypes = None
+            self.restype = None
+
+        def __call__(self, *args):
+            return self.result
+
+    class Kernel32:
+        OpenProcess = Function(123)
+        CloseHandle = Function(True)
+
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *args, **kwargs: Kernel32(), raising=False)
+    monkeypatch.setattr(ctypes, "set_last_error", lambda value: None)
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: 0)
+    assert _pid_exists_windows(12345)
+
+
+def test_automatic_project_key_ignores_settings_but_tracks_topology():
+    prompt = _prompt_graph()
+    first = automatic_project_key(prompt, "42")
+    prompt["10"]["inputs"]["unet_name"] = "different-model.safetensors"
+    assert automatic_project_key(prompt, "42") == first
+    prompt["42"]["inputs"]["model"] = ["10", 0]
+    assert automatic_project_key(prompt, "42") != first
+
+
+def test_regenerate_from_requires_run_storage():
+    _validate_regenerate_storage("Off", 0)
+    _validate_regenerate_storage("Save + Auto Resume", 2)
+    with pytest.raises(ValueError, match="requires Run Storage"):
+        _validate_regenerate_storage("Off", 2)
 
 
 def _sample_function(*args, **kwargs):
@@ -206,6 +277,8 @@ def _sampling_contract(
     *, model=None, clip=None, video_vae=None, sampler=None, reroll_nonce=0,
     conditioning_mode="i2va", first_frame_hash="a" * 64,
     last_frame_hash="", reference_contract=None,
+    upstream_graph_contract=None, upstream_graph_safe=None,
+    upstream_graph_reasons=None,
 ):
     return build_sampling_contract(
         model=model or _Model(),
@@ -232,6 +305,9 @@ def _sampling_contract(
         strict_compatibility=True,
         reference_contract=reference_contract,
         conditioning_mode=conditioning_mode,
+        upstream_graph_contract=upstream_graph_contract,
+        upstream_graph_safe=upstream_graph_safe,
+        upstream_graph_reasons=upstream_graph_reasons,
     )
 
 
@@ -420,6 +496,46 @@ def test_upstream_graph_fingerprint_tracks_loader_and_patch_order():
     assert model_route["inputs"]["model"]["node"]["class_type"] == "PathchSageAttentionKJ"
 
 
+def test_sampling_contract_combines_graph_and_runtime_weight_probe():
+    graph, graph_safe, graph_reasons = build_upstream_graph_contract(
+        _prompt_graph(), "42", require_video_vae=True
+    )
+    model = _Model()
+    first, safe, reasons = _sampling_contract(
+        model=model,
+        upstream_graph_contract=graph,
+        upstream_graph_safe=graph_safe,
+        upstream_graph_reasons=graph_reasons,
+    )
+    assert safe, reasons
+    assert "runtime" in first["global"]["model"]
+    assert "graph_route" in first["global"]["model"]
+    with torch.no_grad():
+        model.model.diffusion_model.weight.add_(1)
+    changed, safe, reasons = _sampling_contract(
+        model=model,
+        upstream_graph_contract=graph,
+        upstream_graph_safe=graph_safe,
+        upstream_graph_reasons=graph_reasons,
+    )
+    assert safe, reasons
+    assert revision_identity(first) != revision_identity(changed)
+
+
+def test_official_h3_sigma_shift_is_accepted_in_model_route():
+    prompt = _prompt_graph()
+    prompt["13"] = {
+        "class_type": "MiniMaxH3SigmaShift",
+        "inputs": {"model": ["12", 0], "shift": 3.0},
+    }
+    prompt["42"]["inputs"]["model"] = ["13", 0]
+    graph, safe, reasons = build_upstream_graph_contract(
+        prompt, "42", require_video_vae=True
+    )
+    assert safe, reasons
+    assert graph["routes"]["model"]["node"]["class_type"] == "MiniMaxH3SigmaShift"
+
+
 def test_upstream_graph_fingerprint_accepts_runtime_turbo_and_sage_nodes():
     prompt = _prompt_graph()
     prompt["11"] = {
@@ -442,6 +558,14 @@ def test_upstream_graph_fingerprint_accepts_runtime_turbo_and_sage_nodes():
         prompt, "42", require_video_vae=True
     )
     assert safe, reasons
+
+
+def test_checkpoint_classifier_uses_base_unet_filename():
+    prompt = _prompt_graph()
+    prompt["10"]["inputs"]["unet_name"] = "minimax_h3_ref2va_pruned_int8.safetensors"
+    assert classify_h3_checkpoint(prompt, "42") == CHECKPOINT_REF2VA
+    prompt["10"]["inputs"]["unet_name"] = "minimax_h3_fl2va_pruned_int8.safetensors"
+    assert classify_h3_checkpoint(prompt, "42") == CHECKPOINT_FL2VA
     changed_prompt = copy.deepcopy(prompt)
     changed_prompt["12"]["inputs"]["lora_1"]["strength"] = 0.8
     changed, changed_safe, changed_reasons = build_upstream_graph_contract(

@@ -7,8 +7,10 @@ from ComfyUI_H3_Continuum_Join.reference import (
     REFERENCE_SIZE_MATCH_OUTPUT,
     ReferenceAssets,
     ReferenceConditioningError,
+    prepare_reference_assets,
     validate_reference_prompts,
 )
+from ComfyUI_H3_Continuum_Join.v3.nodes import _validate_reference_checkpoint
 
 
 def test_reference_size_is_appended_after_v31_widgets():
@@ -51,3 +53,46 @@ def test_picture_tags_must_match_connected_references():
 def test_missing_picture_tag_is_a_warning_not_an_error():
     warning = validate_reference_prompts(["The same person walks forward."], 1)
     assert "no <Picture N> tag" in warning
+
+
+def test_reference_socket_rejects_image_batches():
+    with pytest.raises(ReferenceConditioningError, match="batch size B=1"):
+        prepare_reference_assets(
+            reference_image_1=torch.zeros((2, 32, 32, 3)),
+            reference_image_2=None,
+            output_width=32,
+            output_height=32,
+            size_mode=REFERENCE_SIZE_MATCH_OUTPUT,
+        )
+
+
+def _reference_prompt(checkpoint_name: str) -> dict:
+    return {
+        "1": {
+            "class_type": "UNETLoader",
+            "inputs": {"unet_name": checkpoint_name},
+        },
+        "2": {
+            "class_type": "H3ContinuumSamplerProduction",
+            "inputs": {"model": ["1", 0]},
+        },
+    }
+
+
+def test_strict_reference_requires_ref2va_checkpoint():
+    assert _validate_reference_checkpoint(
+        _reference_prompt("minimax_h3_ref2va_pruned_int8.safetensors"),
+        "2",
+        strict_compatibility=True,
+    ) == "ref2va"
+    with pytest.raises(ValueError, match="FL2VA checkpoint"):
+        _validate_reference_checkpoint(
+            _reference_prompt("minimax_h3_fl2va_pruned_int8.safetensors"),
+            "2",
+            strict_compatibility=True,
+        )
+    assert _validate_reference_checkpoint(
+        _reference_prompt("minimax_h3_fl2va_pruned_int8.safetensors"),
+        "2",
+        strict_compatibility=False,
+    ) == "fl2va"

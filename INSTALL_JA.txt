@@ -1,11 +1,11 @@
-ComfyUI-H3-Continuum 2.1.7 — インストール
+ComfyUI-H3-Continuum 3.2.1 — インストール
 
 1. ComfyUIを終了します。
 2. ZIPを展開します。
 3. `ComfyUI-H3-Continuum` フォルダーを ComfyUI/custom_nodes/ に配置します。
 4. 旧 `ComfyUI-H3-Continuum-Join` が残っている場合は退避します。
 5. ComfyUIを再起動します。
-6. 旧V2.1.6 UIが残る場合はブラウザをハードリロードします。
+6. 旧UIが残る場合はブラウザをハードリロードします。
 
 StabilityMatrix標準例:
 D:\StabilityMatrix\Data\Packages\ComfyUI_W\custom_nodes\ComfyUI-H3-Continuum\
@@ -17,5 +17,6 @@ install_windows.bat
 - chunks: 2 または 3
 - chunk_seconds: 5.0
 - continuity: Balanced — 22 frames
-- Seam Correction: Off（Native Continuity比較時）/ Auto（通常利用）
+- Audio Seam: Off（標準）/ Auto（音声境界補正を試す場合）
 - Sequence Prompt: Text (Multiline)を接続
+- 最終Video/Audio VAE DecodeはComfyUI Coreノードへ接続

@@ -76,6 +76,14 @@ def main() -> int:
         "H3ContinuumSaveSession",
         "H3ContinuumLoadSession",
         "H3ContinuumSessionInfo",
+        "H3ContinuumSampler",
+        "H3ContinuumClipOverrides",
+        "H3ContinuumAdvanced",
+        "H3ContinuumResult",
+        "H3ContinuumSamplerProduction",
+        "H3ContinuumSamplerV3",
+        "H3ContinuumAdvancedV3",
+        "H3ContinuumAssembleV3",
     }
     actual = set(module.NODE_CLASS_MAPPINGS)
     if actual != expected:
@@ -83,7 +91,7 @@ def main() -> int:
         return 1
     print(f"H3 Continuum Join {PACKAGE_VERSION} runtime verification passed.")
     print(layout_report)
-    print("V2 Fixed 3x5s prompt-plan self-test passed.")
+    print(f"V{PACKAGE_VERSION} Fixed 3x5s prompt-plan self-test passed.")
     print("Registered nodes:")
     for key in sorted(actual):
         print(f"  - {module.NODE_DISPLAY_NAME_MAPPINGS[key]}")

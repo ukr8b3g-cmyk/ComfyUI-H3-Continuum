@@ -1,17 +1,20 @@
-ComfyUI-H3-Continuum 2.1.7 — Package Validation
-Date: 2026-08-10
+ComfyUI-H3-Continuum 3.2.1 - Package Validation
+Date: 2026-08-13
 
-Build basis:
-- GitHub repository: ukr8b3g-cmyk/ComfyUI-H3-Continuum
-- Repository source starts from V2.1.5 HEAD 28b5b751a665fe47a026eb1c8222ab83ce859360
-- V2.1.7 adds a static Facade over the unchanged V2 execution core.
+Release hardening scope:
+- Graph + runtime MODEL/CLIP/VAE sampling contract
+- Chunk file SHA-256 verification
+- Run Storage automatic ID fallback and Storage-only partial regeneration
+- V3.2.1 Windows installer/runtime verifier
+- Explicit CI numpy/safetensors test dependencies
 
-Automated validation for this V2.1.7 change:
-- Not executed yet.
-- Required commands: python -m compileall -q .; python -m pytest -q
+Required automated validation:
+- python -m compileall -q .
+- python -m pytest -q -p no:cacheprovider
 
-Still requires the user's ComfyUI browser/GPU runtime validation:
-- New Facade and three pack helper nodes appear without Import Error
-- Legacy H3ContinuumSamplerV2 workflows still load
-- Workflow save/reload retains Facade and pack values/connections
-- Full MiniMax H3 generation and Spectrum Prefix 2 log verification
+Runtime validation still required before a public Release:
+- Save, interrupt and resume a multi-chunk run
+- FL2VA -> Ref2VA -> FL2VA Revision restoration
+- MODEL/LoRA change creates a separate Revision
+- Corrupted stored Chunk is rejected
+- Spectrum Actual Prefix 2 is claimed only when the receiver accepts it

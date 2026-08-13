@@ -43,6 +43,36 @@ def _regenerate_from_value(value, *, chunks: int) -> int:
     return resolved
 
 
+def _validate_regenerate_storage(run_storage: str, regenerate_from: int) -> None:
+    if str(run_storage) == "Off" and int(regenerate_from) > 0:
+        raise ValueError(
+            "Regenerate From requires Run Storage = Save + Auto Resume"
+        )
+
+
+def _validate_reference_checkpoint(
+    prompt, unique_id, *, strict_compatibility: bool
+) -> str:
+    from ..graph_contract import (
+        CHECKPOINT_FL2VA,
+        CHECKPOINT_REF2VA,
+        classify_h3_checkpoint,
+    )
+
+    classification = classify_h3_checkpoint(prompt, unique_id)
+    if strict_compatibility and classification != CHECKPOINT_REF2VA:
+        if classification == CHECKPOINT_FL2VA:
+            detail = "an FL2VA checkpoint is connected"
+        else:
+            detail = "the base checkpoint cannot be verified as Ref2VA"
+        raise ValueError(
+            "Reference Images require a verified MiniMax H3 Ref2VA MODEL when "
+            f"Strict Compatibility is enabled; {detail}. Disable Strict "
+            "Compatibility only for experimental FL2VA/unknown combinations."
+        )
+    return classification
+
+
 class H3ContinuumAdvancedV3:
     DESCRIPTION = (
         "Optional continuation, session, reroll, and diagnostics settings for V3."
@@ -495,9 +525,9 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                     "STRING",
                     {
                         "default": "",
-                        "display_name": "Auto Resume ID (Automatic)",
+                        "display_name": "Auto Resume ID Override",
                         "advanced": True,
-                        "tooltip": "Created automatically and saved with the workflow. It identifies which saved chunks can be resumed.",
+                        "tooltip": "Optional. Leave blank to derive a stable ID from this sampler node. Run Name remains the explicit override.",
                     },
                 ),
             },
@@ -566,6 +596,25 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
             raise ValueError(
                 "V3.2 Reference Images cannot be combined with First Frame or Last Frame"
             )
+        reference_checkpoint = None
+        if reference_assets is not None:
+            reference_checkpoint = _validate_reference_checkpoint(
+                prompt,
+                unique_id,
+                strict_compatibility=bool(strict_compatibility),
+            )
+
+        def report_with_reference_status(report):
+            if reference_checkpoint is None:
+                return str(report)
+            if reference_checkpoint == "ref2va":
+                status = "Ref2VA verified."
+            else:
+                status = (
+                    f"{reference_checkpoint}; Experimental because Strict "
+                    "Compatibility is disabled."
+                )
+            return str(report) + "\nReference MODEL: " + status
 
         def execute():
             return super(H3ContinuumSamplerProduction, self).run(
@@ -598,26 +647,32 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
             )
 
         if run_storage == "Off":
+            _validate_regenerate_storage(run_storage, regenerate_from)
             video_latents, audio_latents, assembly_plan, result = execute()
             return (
                 video_latents,
                 audio_latents,
                 assembly_plan,
-                str(result["report"]),
+                report_with_reference_status(result["report"]),
             )
         if run_storage != "Save + Auto Resume":
             raise ValueError(f"unknown Run Storage mode: {run_storage!r}")
-        from ..run_storage import resolve_run_storage_name, run_storage_scope
+        from ..run_storage import (
+            automatic_project_key,
+            resolve_run_storage_name,
+            run_storage_scope,
+        )
         storage_name = resolve_run_storage_name(
             project_id=project_id,
             legacy_run_name=run_name,
+            automatic_key=automatic_project_key(prompt, unique_id),
         )
         with run_storage_scope(
             storage_name, prompt=prompt, unique_id=unique_id
         ) as storage:
             video_latents, audio_latents, assembly_plan, result = execute()
             result = dict(result)
-            report = str(result["report"]) + "\n" + storage.summary(
+            report = report_with_reference_status(result["report"]) + "\n" + storage.summary(
                 detailed=diagnostics == DIAGNOSTICS_OPTIONS[-1]
             )
             result["report"] = report

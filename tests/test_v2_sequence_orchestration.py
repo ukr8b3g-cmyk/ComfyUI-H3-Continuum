@@ -1,8 +1,9 @@
 from types import SimpleNamespace
+import hashlib
 import torch
 from ComfyUI_H3_Continuum_Join.constants import CONTINUUM_INTEROP_KEY, DIAGNOSTICS_BASIC, PROMPT_MODE_FIXED, V2_CONTINUITY_OPTIONS
 from ComfyUI_H3_Continuum_Join.temporal import audio_latent_t, video_latent_t
-from ComfyUI_H3_Continuum_Join.v2.h3_builder import IdentityAssets
+from ComfyUI_H3_Continuum_Join.v2.h3_builder import IdentityAssets, _tensor_fingerprint
 from ComfyUI_H3_Continuum_Join.v2.prompts import make_prompt_plan
 from ComfyUI_H3_Continuum_Join.v2 import sequence
 
@@ -16,6 +17,16 @@ class FakeClip:
     def __init__(self,events): self.events=events
     def tokenize(self,prompt,images): self.events.append(("tokenize",prompt,len(images))); return prompt
     def encode_from_tokens_scheduled(self,tokens): self.events.append(("encode",tokens)); return [[torch.zeros(1,1,2),{}]]
+
+
+def test_identity_fingerprint_hashes_full_resized_rgb_tensor():
+    image = torch.zeros((1, 96, 64, 3), dtype=torch.float32)
+    image[0, 95, 63, 2] = 1.0
+    digest = hashlib.sha256()
+    digest.update(str(tuple(image.shape)).encode("ascii"))
+    digest.update(str(image.dtype).encode("ascii"))
+    digest.update(image.contiguous().view(torch.uint8).numpy().tobytes(order="C"))
+    assert _tensor_fingerprint(image) == digest.hexdigest()
 
 def test_v2_samples_every_chunk_before_any_decode(monkeypatch):
     events=[]; width,height=96,64
