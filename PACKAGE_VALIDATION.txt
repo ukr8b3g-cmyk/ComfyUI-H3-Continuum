@@ -1,5 +1,6 @@
-ComfyUI-H3-Continuum 3.2.1 - Package Validation
-Date: 2026-08-13
+ComfyUI-H3-Continuum 3.2.1 - Stable Package Validation
+Date: 2026-08-14
+Status: PASS / Stable
 
 Release hardening scope:
 - Graph + runtime MODEL/CLIP/VAE sampling contract
@@ -8,13 +9,22 @@ Release hardening scope:
 - V3.2.1 Windows installer/runtime verifier
 - Explicit CI numpy/safetensors test dependencies
 
-Required automated validation:
-- python -m compileall -q .
-- python -m pytest -q -p no:cacheprovider
+Completed automated validation:
+- Python syntax / compileall: PASS
+- pytest: 129 passed
+- GitHub Actions: GREEN
+- Local package sync: 100 files matched, 0 hash differences
 
-Runtime validation still required before a public Release:
-- Save, interrupt and resume a multi-chunk run
-- FL2VA -> Ref2VA -> FL2VA Revision restoration
-- MODEL/LoRA change creates a separate Revision
-- Corrupted stored Chunk is rejected
-- Spectrum Actual Prefix 2 is claimed only when the receiver accepts it
+Completed Windows runtime validation:
+- RTX 5060 Ti 16GB / ComfyUI v0.32.0
+- Ref2VA Reference + Continuation with two images: PASS
+- 3 x 5 second generation at 1056x608: 0 reused / 3 generated
+- Stored manifest complete, resume_safe=true, three Chunk SHA-256 values matched
+- Complete Auto Resume: 3 reused / 0 generated
+- Spectrum Continuum API accepted Actual Prefix 2 on continuation chunks
+- FL2VA / Ref2VA, Prompt, resolution and Reference changes created distinct contracts
+- Strict FL2VA + Reference and non-32-multiple resolution rejection: PASS
+
+Release decision:
+- V3.2.1 is the current stable production baseline.
+- A GitHub tag or Release remains a separate publication step.

@@ -2,6 +2,8 @@
 
 Native long-form MiniMax H3 video and audio continuation for ComfyUI.
 
+**Stable release:** V3.2.1. The production path has passed local syntax and pytest checks, GitHub Actions, Windows generation, Ref2VA Reference + Continuation, Spectrum Actual Prefix 2, and complete Run Storage resume.
+
 https://github.com/user-attachments/assets/bfa8c683-fc9d-48f1-9cdb-477ca110cdf2
 
 **H3 Continuum Sampler V3.2** generates 1 to 16 linked H3 chunks, carries raw video/audio latent context between chunks, supports T2VA, I2VA, FL2VA and multi-image Reference conditioning, and can resume completed chunks from disk.
@@ -257,6 +259,26 @@ Full raw chunks are decoded before Continuum trims repeated context. Trimming la
 
 ## Tested results
 
+### V3.2.1 stable acceptance
+
+```text
+Release baseline       Commit 2be54bd / ComfyUI v0.32.0
+GPU                    NVIDIA GeForce RTX 5060 Ti 16GB
+Python checks          PASS
+pytest                 129 passed
+GitHub Actions         GREEN
+Local package sync     100 files matched / 0 hash differences
+Conditioning           Ref2VA Reference + Continuation
+Reference images       2
+Chunks                 3 x 5 seconds
+Continuity             Balanced 22
+Spectrum Interop       Actual Prefix 2 accepted
+```
+
+The initial 1056 x 608 run generated and stored all three chunks (`0 reused / 3 generated`) in 1073.81 seconds. Its manifest completed with `resume_safe = true`, and all three stored chunk SHA-256 values matched. The follow-up run reused all three chunks (`3 reused / 0 generated`) and completed Core decode and assembly in 116.86 seconds.
+
+The sampling contract also distinguished MODEL family, prompt, resolution, Run Storage mode, upscale path, and Reference configuration changes without observed cross-condition chunk reuse.
+
 Local validation environment:
 
 ```text
@@ -318,4 +340,4 @@ The GitHub Actions workflow runs compileall and the full pytest suite with its e
 
 ## License
 
-GPL-3.0-or-later. Model files and third-party custom nodes retain their own licenses. MiniMax H3 weights are not redistributed.
+MIT. Model files and third-party custom nodes retain their own licenses. MiniMax H3 weights are not redistributed.

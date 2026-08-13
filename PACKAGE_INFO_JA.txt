@@ -2,10 +2,11 @@
 バージョン: 3.2.1
 対象: ComfyUI native MiniMax H3
 主ノード: H3 Continuum Sampler
-ライセンス: GPL-3.0-or-later
+ライセンス: MIT
 追加pip依存: なし
 
 V3.2.1:
+- 正式安定版。CI、Windows実機、Ref2VA、Spectrum Actual Prefix 2、Run Storage完全再開を確認
 - T2VA / I2VA / FL2VA / Reference + Continuation
 - 最大2枚のReference Imageを全Chunkで維持
 - Core Video/Audio VAE Decodeへ外出し

@@ -2,12 +2,14 @@
 
 ## 3.2.1
 
+- Declared V3.2.1 stable after GitHub Actions, Windows Ref2VA generation, Spectrum Actual Prefix 2, chunk integrity and complete Auto Resume passed.
 - Added T2VA, First/Last Frame, FL2VA and persistent two-image Reference conditioning to the production sampler.
 - Added crash-safe raw AV Run Storage, automatic resume, deterministic Revisions and partial regeneration.
 - Combined ordered upstream graph fingerprints with runtime MODEL/CLIP/VAE weight probes for fail-closed reuse.
 - Added per-chunk SHA-256 verification and rejected Regenerate From when Run Storage is disabled.
 - Added official MiniMax H3 Sigma Shift graph-contract support.
 - Updated CI dependencies, Windows runtime verification and package metadata for V3.2.1.
+- Standardized project licensing as MIT.
 - Kept sampling, Continuation, Spectrum Interop and external Core VAE decode semantics unchanged.
 
 ## 2.1.7
