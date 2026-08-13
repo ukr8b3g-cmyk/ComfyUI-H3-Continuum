@@ -1,5 +1,10 @@
 # ComfyUI-H3-Continuum 2.1.7
 
+
+https://github.com/user-attachments/assets/bfa8c683-fc9d-48f1-9cdb-477ca110cdf2
+
+
+
 Native long-form MiniMax H3 video and audio continuation for ComfyUI.
 
 **H3 Continuum Sampler** generates 1 to 16 H3 chunks as one sequence. It carries the previous raw video and audio latent into the next chunk, keeps accepted chunk latents on CPU, and defers VAE decoding until sampling is complete.
