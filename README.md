@@ -62,6 +62,44 @@ Spectrum remains optional. Continuum does not require Spectrum for continuation.
 - **State, Session, and reroll support** — advanced workflows can save continuation state, resume compatible sessions, and regenerate from a selected chunk.
 - **Composable accelerator chain** — SageAttention, Sol-Attn, LoRA, and Spectrum stay external to Continuum and can be connected through the normal ComfyUI MODEL chain.
 
+## Chunk auto-resume (V3.1B+)
+
+For long generations, enable Run Storage and let Continuum save each completed chunk in order. For normal automatic resume, use:
+
+- `Run Storage`: `Save + Auto Resume`
+- `Regenerate From`: `Auto`
+- `reroll_nonce`: `0`
+
+![H3 Continuum chunk auto-resume settings](docs/images/v31b-auto-resume.png)
+
+With `Run Storage` set to `Save + Auto Resume` and `Regenerate From` set to `Auto`, Continuum checks the saved Manifest and resumes from the first chunk that is not continuously available and valid.
+
+If generation stops, simply Queue the same workflow again.
+
+```text
+Chunk 1  saved
+Chunk 2  saved
+Chunk 3  saved
+Chunk 4  interrupted while generating
+Chunk 5  not generated
+```
+
+On the next Queue, Continuum resumes from **Chunk 4**. Chunks 1-3 are reused and are not sampled again.
+
+If no saved chunks are available, generation starts from Chunk 1. If the Prompt, Seed, model/patch chain, resolution, Reference images, or other sampling-contract inputs change, incompatible saved chunks are not automatically reused and the affected generation is treated as a new compatible revision.
+
+### Regenerate from a specific chunk
+
+To intentionally try a different result from partway through a sequence, select the starting chunk in `Regenerate From`.
+
+```text
+Regenerate From = Chunk 3
+```
+
+Chunk 1-2 are reused and Chunk 3 onward is regenerated. Changing `reroll_nonce` allows another random result from the same regeneration point; keep it at `0` for normal automatic resume.
+
+**Important:** `Prompt Format` controls how `Sequence Prompt` is parsed (`Fixed`, `List`, or `Timeline`). It does **not** select the resume position. Resume and regeneration position are controlled by `Regenerate From`.
+
 <!-- h3-standard-workflow -->
 ## Standard workflow
 
