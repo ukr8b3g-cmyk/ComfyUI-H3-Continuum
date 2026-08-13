@@ -1,6 +1,6 @@
 ﻿# H3 Continuum A/B実機テスト記録
 
-更新日: 2026-08-11  
+更新日: 2026-08-13  
 状態: 継続中。現時点の結果であり、最終推奨ではない。
 
 ## 1. 目的
@@ -248,3 +248,44 @@ Spectrum ONの品質はSeed依存で変化する。結果確認なしの長尺�
 - 10秒（Chunk 2→3）: 映像フリックは目立たない。
 - 音声: 明確なプチノイズは確認できない。先行する「10秒に音声ノイズあり」という記録は取り消し、未検出として扱う。
 - 00050はAudio Seam不具合の根拠にはせず、音声は専用テストで改めて検証する。
+
+## V3.2.1 Reference + Continuation 実機成績
+
+共通条件:
+
+```text
+Version              H3 Continuum V3.2.1
+Output               1056x608 / 24fps / 15秒 / 360 frames
+Image scale           16:9 / 0.6MP / multiple 32
+Chunks                3 x 5秒
+Continuity            Balanced 22
+Reference images      2
+Reference size        Match Output
+Audio Seam            Off
+Run Storage           Save + Auto Resume
+```
+
+| 動画 | MODEL | Prompt | 生成時間 | Run Storage | 判定 |
+|---|---|---|---:|---|---|
+| 00006 | FL2VA | 縦構図指定が残る旧Prompt | 749.35秒 | 0 reused / 3 generated | MODEL切替前baseline |
+| 00007 | Ref2VA | 縦構図指定が残る旧Prompt | 751.26秒 | 0 reused / 3 generated | Ref2VA切替を新Revisionとして検出 |
+| 00008 | Ref2VA | 16:9横長へ修正したPrompt | 751.64秒 | 0 reused / 3 generated | 技術PASS、実用可能な結果 |
+
+00008の実行結果:
+
+```text
+Conditioning mode     Reference + Continuation
+Prompt plan           List / 3 unique prompts
+Chunk 2 Actual Prefix 2
+Chunk 3 Actual Prefix 2
+Natural frames        362
+Final frames          360
+Revision              2167719e99b1e782
+```
+
+確認事項:
+
+- 2枚のReferenceを全3チャンクで継続使用できた。
+- FL2VAからRef2VAへの変更、およびPrompt変更を別Revisionとして扱い、旧Chunkを誤再利用しなかった。
+- 00006～00008の生成時間は約749～752秒で、モデル切替やPrompt修正による異常な時間増加はない。
+- 00008はユーザー目視を含め、V3.2.1 Reference + Continuationの実用可能な実機成績として保存する。

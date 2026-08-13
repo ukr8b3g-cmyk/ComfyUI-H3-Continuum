@@ -500,14 +500,14 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                         "default": "Off",
                         "display_name": "Run Storage",
                         "advanced": True,
-                        "tooltip": "Atomically save raw AV chunks and resume a compatible Run Name.",
+                        "tooltip": "Atomically save raw AV chunks and resume a compatible saved run.",
                     },
                 ),
                 "run_name": (
                     "STRING",
                     {
                         "default": "",
-                        "display_name": "Run Name (Required for Storage)",
+                        "display_name": "Run Name (Optional Override)",
                         "advanced": True,
                         "tooltip": "Enter a stable name for this saved run. Compatible chunks are selected automatically.",
                     },

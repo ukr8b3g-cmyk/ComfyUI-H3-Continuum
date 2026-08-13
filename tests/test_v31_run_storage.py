@@ -187,8 +187,8 @@ def test_windows_pid_probe_uses_open_process(monkeypatch):
         CloseHandle = Function(True)
 
     monkeypatch.setattr(ctypes, "WinDLL", lambda *args, **kwargs: Kernel32(), raising=False)
-    monkeypatch.setattr(ctypes, "set_last_error", lambda value: None)
-    monkeypatch.setattr(ctypes, "get_last_error", lambda: 0)
+    monkeypatch.setattr(ctypes, "set_last_error", lambda value: None, raising=False)
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: 0, raising=False)
     assert _pid_exists_windows(12345)
 
 
