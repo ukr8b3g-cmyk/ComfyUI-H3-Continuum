@@ -558,14 +558,6 @@ def test_upstream_graph_fingerprint_accepts_runtime_turbo_and_sage_nodes():
         prompt, "42", require_video_vae=True
     )
     assert safe, reasons
-
-
-def test_checkpoint_classifier_uses_base_unet_filename():
-    prompt = _prompt_graph()
-    prompt["10"]["inputs"]["unet_name"] = "minimax_h3_ref2va_pruned_int8.safetensors"
-    assert classify_h3_checkpoint(prompt, "42") == CHECKPOINT_REF2VA
-    prompt["10"]["inputs"]["unet_name"] = "minimax_h3_fl2va_pruned_int8.safetensors"
-    assert classify_h3_checkpoint(prompt, "42") == CHECKPOINT_FL2VA
     changed_prompt = copy.deepcopy(prompt)
     changed_prompt["12"]["inputs"]["lora_1"]["strength"] = 0.8
     changed, changed_safe, changed_reasons = build_upstream_graph_contract(
@@ -579,6 +571,14 @@ def test_checkpoint_classifier_uses_base_unet_filename():
         model_route["inputs"]["model"]["node"]["class_type"]
         == "MiniMaxH3MemoryEfficientSageAttentionPatch"
     )
+
+
+def test_checkpoint_classifier_uses_base_unet_filename():
+    prompt = _prompt_graph()
+    prompt["10"]["inputs"]["unet_name"] = "minimax_h3_ref2va_pruned_int8.safetensors"
+    assert classify_h3_checkpoint(prompt, "42") == CHECKPOINT_REF2VA
+    prompt["10"]["inputs"]["unet_name"] = "minimax_h3_fl2va_pruned_int8.safetensors"
+    assert classify_h3_checkpoint(prompt, "42") == CHECKPOINT_FL2VA
 
 
 def test_unknown_upstream_wrapper_disables_resume():
