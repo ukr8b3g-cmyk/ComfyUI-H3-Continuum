@@ -1,4 +1,6 @@
 # ComfyUI-H3-Continuum 3.2.4
+![Uploading workflow (8).png…]()
+
 
 Native long-form MiniMax H3 video and audio continuation for ComfyUI.
 
