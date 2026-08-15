@@ -295,6 +295,18 @@ Spectrum H3: accepted H3 Continuum API v1, actual prefix=2
 
 Actual Prefix 2 is active only when the Spectrum log reports that the Continuum API request was accepted. Older or incompatible Spectrum versions continue without that receiver behavior.
 
+### Benefits after the Spectrum upstream merge
+
+Once the Continuum receiver is included in an official Spectrum release, users no longer need a Continuum-specific Spectrum fork or local patch. Installing or updating Spectrum through its normal distribution path will preserve the integration.
+
+- **Automatic handshake:** Continuum emits the request only for continuation chunks, and Spectrum applies Actual Prefix 2 when it recognizes Interop API v1.
+- **Safer chunk transitions:** the first two Transformer evaluations after a new raw AV Context are evaluated normally before Spectrum forecasting resumes. This is intended to reduce forecast instability immediately after a chunk boundary; it does not guarantee that every visible seam or flicker will disappear.
+- **No additional solver steps:** Actual Prefix 2 changes which existing evaluations are calculated as Actual steps; it does not increase the configured step count.
+- **Update-friendly operation:** the receiver becomes part of upstream Spectrum, so a normal Spectrum update does not overwrite a separate local interoperability patch.
+- **Optional composition:** Continuum still works without Spectrum. MODEL selection, Turbo/LoRA, SageAttention, and Spectrum remain external workflow choices, and Continuum does not install or switch them automatically.
+
+After updating Spectrum, confirm that Chunk 2 and later print the acceptance log shown above. Its presence is the runtime proof that the upstream receiver is active.
+
 ### Standard and Turbo profiles
 
 ```text
