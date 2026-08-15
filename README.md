@@ -1,5 +1,6 @@
 # ComfyUI-H3-Continuum 3.2.4
-![Uploading workflow (8).png…]()
+<img width="5250" height="2020" alt="workflow (8)" src="https://github.com/user-attachments/assets/58bc27d7-cab4-4f7d-9f58-ed94bdad4a1d" />
+
 
 
 Native long-form MiniMax H3 video and audio continuation for ComfyUI.
