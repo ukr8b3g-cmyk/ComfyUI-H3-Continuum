@@ -35,14 +35,23 @@ def _parse_list(script,chunks):
     if len(values)<chunks: notes.append(f"repeated the last prompt for {chunks-len(values)} chunk(s)"); values.extend([values[-1]]*(chunks-len(values)))
     elif len(values)>chunks: notes.append(f"ignored {len(values)-chunks} extra prompt(s)"); values=values[:chunks]
     return values,notes
-def _parse_timeline_sections(script):
+def _timeline_preamble(script):
+    body=[]
+    for line in str(script).splitlines():
+        if _TIMELINE_HEADER.match(line) or _CHUNK_HEADER.match(line): break
+        body.append(line)
+    return "\n".join(body).strip()
+def _parse_timeline_sections(script,*,allow_preamble=True):
+    preamble=_timeline_preamble(script)
     sections=[]; current=None; body=[]
     def finish():
         nonlocal current,body
         if current is None:
-            if any(line.strip() for line in body): raise PromptPlanError("timeline text before the first [0-5s] or [Chunk 1] header is not allowed")
+            if any(line.strip() for line in body) and not allow_preamble: raise PromptPlanError("timeline text before the first [0-5s] or [Chunk 1] header is not allowed")
             body=[]; return
-        current["prompt"]=_normalize_prompt("\n".join(body),label="timeline section"); sections.append(current); current=None; body=[]
+        prompt=_normalize_prompt("\n".join(body),label="timeline section")
+        current["prompt"]=f"{preamble}\n\n{prompt}" if preamble else prompt
+        sections.append(current); current=None; body=[]
     for line in str(script).splitlines():
         time_match=_TIMELINE_HEADER.match(line); chunk_match=_CHUNK_HEADER.match(line)
         if time_match or chunk_match:
@@ -61,7 +70,7 @@ def _parse_timeline_sections(script):
     if not sections: raise PromptPlanError("timeline contains no sections")
     return sections
 def parse_sparse_prompt_overrides(script):
-    sections=_parse_timeline_sections(script); overrides={}
+    sections=_parse_timeline_sections(script,allow_preamble=False); overrides={}
     for item in sections:
         if item["kind"]!="chunk": raise PromptPlanError("Sparse Clip Overrides only accepts [Clip N] or [Chunk N] sections")
         index=int(item["index"])
@@ -80,6 +89,7 @@ def validate_sparse_prompt_overrides(overrides,*,chunks):
     return validated
 def _parse_timeline(script,chunks,chunk_seconds):
     sections=_parse_timeline_sections(script); prompts=[]; notes=[]
+    if _timeline_preamble(script): notes.append("applied timeline preamble to all chunks")
     for chunk_index in range(1,chunks+1):
         chunk_sections=[item for item in sections if item["kind"]=="chunk" and item["index"]==chunk_index]
         if len(chunk_sections)>1: raise PromptPlanError(f"timeline defines Chunk {chunk_index} more than once")

@@ -17,6 +17,7 @@ import torch
 
 
 REFERENCE_CONTRACT_VERSION = 1
+REFERENCE_PREPROCESS_VERSION = 1
 REFERENCE_SIZE_MATCH_OUTPUT = "Match Output"
 REFERENCE_SIZE_MAX_IDENTITY = "Max Identity"
 REFERENCE_SIZE_OPTIONS = (
@@ -46,13 +47,26 @@ class ReferenceAssets:
 
     @property
     def contract(self) -> dict[str, Any]:
-        return {
+        result = {
             "reference_contract_version": REFERENCE_CONTRACT_VERSION,
             "count": self.count,
             "size_mode": self.size_mode,
             "image_hashes": list(self.image_hashes),
             "combined_hash": self.combined_hash,
         }
+        # Preserve the V3.2.2 JSON contract byte-for-byte for zero, one, and
+        # two references. The V3.2.3 extension exists only when Image 3 is
+        # connected, so removing it can resolve back to an older Revision.
+        if self.count == 3:
+            image = self.images[2]
+            result["reference_image_3"] = {
+                "reference_position": 3,
+                "shape": [int(value) for value in image.shape],
+                "dtype": str(image.dtype),
+                "sha256": self.image_hashes[2],
+                "preprocess_version": REFERENCE_PREPROCESS_VERSION,
+            }
+        return result
 
 
 def _canonical_hash(value: Any) -> str:
@@ -135,25 +149,16 @@ def prepare_reference_assets(
     size_mode: str,
     reference_image_3: torch.Tensor | None = None,
 ) -> ReferenceAssets | None:
-    if reference_image_1 is None:
-        if reference_image_2 is not None:
-            raise ReferenceConditioningError(
-                "Reference Image 2 requires Reference Image 1"
-            )
-        if reference_image_3 is not None:
-            raise ReferenceConditioningError(
-                "Reference Image 3 requires Reference Images 1 and 2"
-            )
+    # Match Core's dynamic Reference inputs: bypassed or otherwise absent
+    # sockets are ignored, then active images are numbered contiguously in
+    # connection order as Picture 1..N.
+    inputs = [
+        image
+        for image in (reference_image_1, reference_image_2, reference_image_3)
+        if image is not None
+    ]
+    if not inputs:
         return None
-    if reference_image_3 is not None and reference_image_2 is None:
-        raise ReferenceConditioningError(
-            "Reference Image 3 requires Reference Image 2"
-        )
-    inputs = [reference_image_1]
-    if reference_image_2 is not None:
-        inputs.append(reference_image_2)
-    if reference_image_3 is not None:
-        inputs.append(reference_image_3)
     images = tuple(
         _resize_reference(
             _validate_image(f"Reference Image {index}", image),
@@ -193,9 +198,13 @@ def validate_reference_prompts(prompts: list[str], reference_count: int) -> str:
         found.update(int(value) for value in _PICTURE_TAG.findall(str(prompt)))
     invalid = sorted(value for value in found if value < 1 or value > reference_count)
     if invalid:
-        raise ReferenceConditioningError(
-            f"Prompt references unavailable <Picture {invalid[0]}>; "
-            f"connected reference count is {reference_count}"
+        unavailable = ", ".join(f"<Picture {value}>" for value in invalid)
+        return (
+            f"Warning: prompt references unavailable {unavailable}; only "
+            f"{reference_count} active reference image(s) reached the Sampler. "
+            "ComfyUI Core permits this and generation will continue, but the "
+            "unavailable reference may be ignored or hallucinated. Enable the "
+            "corresponding Reference Image input or remove the unavailable tag."
         )
     if not found:
         return (
@@ -210,6 +219,7 @@ def encode_reference_prompt(
     clip: Any,
     prompt: str,
     assets: ReferenceAssets,
+    reference_audio_assets=None,
 ) -> list[list[Any]]:
     if any(latent is None for latent in assets.latents):
         raise ReferenceConditioningError("reference latents were not encoded")
@@ -217,6 +227,10 @@ def encode_reference_prompt(
         {"type": "image", "data": image}
         for image in assets.images
     ]
+    if reference_audio_assets is not None:
+        from .reference_audio import reference_audio_item
+
+        reference_items.append(reference_audio_item())
     try:
         tokens = clip.tokenize(str(prompt), minimax_ref_items=reference_items)
     except TypeError as exc:
@@ -234,6 +248,10 @@ def encode_reference_prompt(
                 "latent": latent,
             }
         )
+    if reference_audio_assets is not None:
+        from .reference_audio import reference_audio_block
+
+        refs.append(reference_audio_block(reference_audio_assets))
     return [
         [tensor, {**dict(metadata), "minimax_refs": list(refs)}]
         for tensor, metadata in conditioning

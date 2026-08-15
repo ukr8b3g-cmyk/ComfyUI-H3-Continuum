@@ -1,8 +1,8 @@
-# ComfyUI-H3-Continuum 3.2.1
+# ComfyUI-H3-Continuum 3.2.4
 
 Native long-form MiniMax H3 video and audio continuation for ComfyUI.
 
-**Current package:** V3.2.2. It extends the validated V3.2.1 baseline with a third ordered Reference Image and diagnostic-only Ref2VA/FL2VA checkpoint classification.
+**Current package:** V3.2.4. It adds native Reference Audio 1 conditioning, keeps up to three ordered Reference Images, and preserves no-audio V3.2.3 Run Storage contracts and Revision IDs.
 
 https://github.com/user-attachments/assets/bfa8c683-fc9d-48f1-9cdb-477ca110cdf2
 
@@ -15,7 +15,8 @@ V3 delegates video and audio decoding to normal **ComfyUI Core VAE Decode nodes*
 - Raw paired video/audio latent continuation without decode/re-encode between chunks.
 - One production sampler UI with normal controls first and infrequent controls marked Advanced.
 - T2VA, First Frame, Last Frame, First + Last Frame, and Reference conditioning.
-- Up to two persistent Reference images across every chunk.
+- Up to three active Reference images across every chunk, compacted in Core connection order.
+- One native Reference Audio item across every chunk.
 - Disk-backed Run Storage with automatic resume and compatible Revision reuse.
 - Fixed, List, and Timeline prompts through one Sequence Prompt input.
 - ComfyUI Core Video/Audio VAE Decode and a separate Continuum Assemble stage.
@@ -53,7 +54,7 @@ MiniMax H3 Video VAE -------------> video_vae
 Sampler --------------------------> sampler
 Sigmas ---------------------------> sigmas
 Text (Multiline) -----------------> Sequence Prompt
-Optional images ------------------> first_frame / last_frame / reference_image_1/2
+Optional images ------------------> first_frame / last_frame / reference_image_1/2/3
 
 video_latents --> Core VAE Decode -----------+
 audio_latents --> Core VAE Decode Audio -----+--> H3 Continuum Assemble V3
@@ -76,17 +77,18 @@ The sampler selects the mode from connected image inputs.
 | First Frame | I2VA + Continuation |
 | Last Frame | Last-frame-conditioned + Continuation |
 | First + Last Frame | FL2VA + Continuation |
-| Reference 1, optionally Reference 2 | Reference + Continuation |
+| Reference 1, optionally Reference 2 and 3 | Reference + Continuation |
 
-Reference images and First/Last Frame are mutually exclusive. `Reference 2` cannot be used without `Reference 1`.
+Reference images and First/Last Frame are mutually exclusive. Active Reference inputs are compacted in Core connection order; bypassed sockets are ignored.
 
-Reference Image 1, 1+2, or 1+2+3 may be connected. Gaps are rejected. **Ref2VA** is the reference-specialized checkpoint and may provide stronger reference fidelity, while **FL2VA + Reference** is also allowed. Checkpoint classification is diagnostic only; the sampler never switches MODELs automatically. **Strict Compatibility** remains reserved for H3 contracts that are actually unsafe or unsupported.
+Reference Image 1, 1+2, or 1+2+3 may be connected. A single active image is treated as Picture 1, and active images are numbered without gaps. **Ref2VA** is the reference-specialized checkpoint and may provide stronger reference fidelity, while **FL2VA + Reference** is also allowed. Checkpoint classification is diagnostic only; the sampler never switches MODELs automatically. **Strict Compatibility** remains reserved for H3 contracts that are actually unsafe or unsupported.
 
 Reference prompts should identify the images explicitly:
 
 ```text
 <Picture 1> defines the subject's face and identity.
 <Picture 2> defines the subject's clothing, body design, and skateboard.
+<Picture 3> optionally defines another ordered identity, object, or environment reference.
 ```
 
 Reference images persist across all Continuum chunks.

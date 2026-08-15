@@ -1,9 +1,22 @@
 # Changelog
 
+## 3.2.4
+
+- Added native MiniMax H3 Reference Audio 1 conditioning with deferred Audio VAE encoding.
+- Matched Core's permissive prompt handling by warning instead of stopping on unavailable Picture or Audio tags.
+- Matched Core's dynamic Reference behavior by compacting active image inputs into Picture 1 through Picture N.
+- Kept Sampling, Continuation, Spectrum Interop, external Core VAE Decode, and assembly semantics unchanged.
+
+## 3.2.3
+
+- Formalized the third ordered Reference Image as a compatibility-preserving extension.
+- Kept V3.2.2 zero, one, and two-image Reference Contract JSON unchanged.
+- Added Image 3 shape, dtype, exact SHA-256, position, and preprocess metadata only for three-image runs.
+- Added Golden Contract and Revision identity regression coverage for V3.2.2 saved runs.
+- Kept Sampling, Continuation, Spectrum Interop, Core VAE Decode, and assembly semantics unchanged.
+
 ## 3.2.2
 
-- Added a third ordered Reference Image input to the production sampler.
-- Required Reference Images to be connected contiguously from Image 1.
 - Allowed Ref2VA, FL2VA, and unverified checkpoints with Reference conditioning.
 - Kept checkpoint classification as diagnostics without automatic MODEL switching.
 - Kept Strict Compatibility for genuinely unsafe or unsupported H3 contracts.

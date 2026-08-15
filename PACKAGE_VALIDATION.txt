@@ -1,30 +1,19 @@
-ComfyUI-H3-Continuum 3.2.1 - Stable Package Validation
-Date: 2026-08-14
-Status: PASS / Stable
+ComfyUI-H3-Continuum 3.2.4 - Package Validation
+Date: 2026-08-15
 
 Release hardening scope:
-- Graph + runtime MODEL/CLIP/VAE sampling contract
-- Chunk file SHA-256 verification
-- Run Storage automatic ID fallback and Storage-only partial regeneration
-- V3.2.1 Windows installer/runtime verifier
-- Explicit CI numpy/safetensors test dependencies
+- Up to three active Reference Images compacted in Core connection order
+- Reference Audio 1 with Core-compatible non-fatal prompt tag handling
+- V3.2.2 Golden Contract compatibility for zero, one, and two images
+- Three-image-only exact Reference metadata extension
+- Unchanged Sampling, Continuation, Spectrum, VAE Decode and assembly semantics
 
-Completed automated validation:
-- Python syntax / compileall: PASS
-- pytest: 129 passed
-- GitHub Actions: GREEN
-- Local package sync: 100 files matched, 0 hash differences
+Required automated validation:
+- python -m compileall -q .
+- python -m pytest -q -p no:cacheprovider
 
-Completed Windows runtime validation:
-- RTX 5060 Ti 16GB / ComfyUI v0.32.0
-- Ref2VA Reference + Continuation with two images: PASS
-- 3 x 5 second generation at 1056x608: 0 reused / 3 generated
-- Stored manifest complete, resume_safe=true, three Chunk SHA-256 values matched
-- Complete Auto Resume: 3 reused / 0 generated
-- Spectrum Continuum API accepted Actual Prefix 2 on continuation chunks
-- FL2VA / Ref2VA, Prompt, resolution and Reference changes created distinct contracts
-- Strict FL2VA + Reference and non-32-multiple resolution rejection: PASS
-
-Release decision:
-- V3.2.1 is the current stable production baseline.
-- A GitHub tag or Release remains a separate publication step.
+Runtime validation still required before a public Release:
+- Ref2VA with Reference Images 1 + 2 + 3, 3 x 5 seconds
+- Chunk 2 and 3 each accept Spectrum Actual Prefix 2 exactly once
+- Three images remain persistent across every chunk
+- Save + Auto Resume reports 3 reused / 0 generated

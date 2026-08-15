@@ -1,8 +1,14 @@
-# ComfyUI-H3-Continuum 2.1.7
+# ComfyUI-H3-Continuum 3.2.4
 
 MiniMax H3を複数チャンクで連続生成し、直前チャンク末尾の**映像latent / 音声latentを直接**次チャンクへ継承するComfyUIカスタムノードです。チャンク間でVideo/Audio VAEのDecode→Encodeは行いません。
 
-## V2.1.7 Stable Facade UI
+## V3.2.4 Stable
+
+V3.2.4は、T2VA / I2VA / FL2VA / Reference + Continuationに対応し、最大3枚のReference ImageとReference Audio 1をCore互換の順序で扱います。First/Last FrameとReference Audioを併用する場合も、Tokenizer側のPicture/Audio表示とDiT側のKeyframe/Audio conditioningを分離して処理します。Run Storage、Spectrum Interop、外部Core VAE Decodeは従来どおりです。
+
+Reference入力のバイパスされたソケットは無視され、有効な画像だけがPicture 1から連続採番されます。プロンプト内の利用できないPicture/Audioタグは警告として扱い、生成は継続します。
+
+## Legacy V2.1.7 Stable Facade UI
 
 V2.1.7では、V2.1.6の動的表示制御を廃止し、標準ComfyUI描画だけを使用する静的Facadeへ移行しました。生成処理は互換用`H3ContinuumSamplerV2`を再利用し、State、Session、Prompt Plan、Spectrum Interop、保存Schemaは変更していません。
 

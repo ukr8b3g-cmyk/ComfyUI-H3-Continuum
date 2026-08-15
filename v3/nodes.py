@@ -257,6 +257,8 @@ class H3ContinuumSamplerV3:
         prompt_overrides=None,
         advanced=None,
         reference_assets=None,
+        reference_audio_source=None,
+        reference_audio_vae=None,
     ):
         if prompt_overrides is not None and not isinstance(prompt_overrides, dict):
             raise TypeError(
@@ -327,6 +329,8 @@ class H3ContinuumSamplerV3:
             show_preview=advanced_values["show_preview"],
             latent_only=True,
             reference_assets=reference_assets,
+            reference_audio_source=reference_audio_source,
+            reference_audio_vae=reference_audio_vae,
             **clip_prompt_inputs,
         )
 
@@ -528,6 +532,8 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                 "reference_image_1": ("IMAGE",),
                 "reference_image_2": ("IMAGE",),
                 "reference_image_3": ("IMAGE",),
+                "reference_audio_1": ("AUDIO",),
+                "reference_audio_vae": ("VAE",),
             },
             "hidden": {
                 "prompt": "PROMPT",
@@ -569,8 +575,11 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
         prompt=None,
         unique_id=None,
         reference_image_3=None,
+        reference_audio_1=None,
+        reference_audio_vae=None,
     ):
         from ..reference import prepare_reference_assets
+        from ..reference_audio import prepare_reference_audio_source
         regenerate_from = _regenerate_from_value(
             reroll_from_chunk,
             chunks=int(chunks),
@@ -583,9 +592,13 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
             size_mode=reference_size,
             reference_image_3=reference_image_3,
         )
+        reference_audio_source = prepare_reference_audio_source(
+            reference_audio_1,
+            reference_audio_vae,
+        )
         if reference_assets is not None and (first_frame is not None or last_frame is not None):
             raise ValueError(
-                "V3.2 Reference Images cannot be combined with First Frame or Last Frame"
+                "Reference Images cannot be combined with First Frame or Last Frame"
             )
         reference_checkpoint = None
         if reference_assets is not None:
@@ -624,6 +637,8 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                 first_frame=first_frame,
                 prompt_overrides=prompt_overrides,
                 reference_assets=reference_assets,
+                reference_audio_source=reference_audio_source,
+                reference_audio_vae=reference_audio_vae,
                 advanced={
                     "audio_continuity": bool(audio_continuity),
                     "diagnostics": diagnostics,

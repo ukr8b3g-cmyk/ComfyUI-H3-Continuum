@@ -81,6 +81,30 @@ def test_apply_model_wrapper_repairs_payload_before_executor():
     assert torch.equal(result["layout"].position_ids[3:4], result["layout"].position_ids[6:7])
 
 
+def test_apply_model_wrapper_repairs_keyframes_with_audio_reference_without_continuum():
+    first = torch.zeros(1, 24, 1, 1, 1)
+    last = torch.ones(1, 24, 1, 1, 1)
+    audio = torch.zeros(1, 32, 2, 1)
+    payload = {
+        "keyframes": [
+            {"resolved_frame_index": 0, "latent": first},
+            {"resolved_frame_index": 4, "latent": last},
+        ],
+        "refs": [
+            {"kind": "audio", "ref_audio_t": 1, "audio_latent": audio}
+        ],
+        # ComfyUI Core 0.33.1 overwrites this list while processing refs.
+        "cond_video_latents": [],
+        "cond_audio_latents": [audio],
+    }
+    wrapper = _wrapper_factory(strict=True, debug=False)
+
+    result = wrapper(Executor(), torch.zeros(1), minimax_payload=payload)
+
+    assert result["cond_video_latents"] == [first, last]
+    assert result["cond_audio_latents"] == [audio]
+
+
 def test_apply_model_wrapper_fails_when_actual_topology_changes():
     video = torch.zeros(1, 24, 1, 1, 1)
     audio = torch.zeros(1, 32, 2, 1)

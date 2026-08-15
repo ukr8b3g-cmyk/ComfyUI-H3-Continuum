@@ -3,7 +3,7 @@ import hashlib
 import torch
 from ComfyUI_H3_Continuum_Join.constants import CONTINUUM_INTEROP_KEY, DIAGNOSTICS_BASIC, PROMPT_MODE_FIXED, V2_CONTINUITY_OPTIONS
 from ComfyUI_H3_Continuum_Join.temporal import audio_latent_t, video_latent_t
-from ComfyUI_H3_Continuum_Join.v2.h3_builder import IdentityAssets, _tensor_fingerprint
+from ComfyUI_H3_Continuum_Join.v2.h3_builder import IdentityAssets, _tensor_fingerprint, encode_prompt_conditioning
 from ComfyUI_H3_Continuum_Join.v2.prompts import make_prompt_plan
 from ComfyUI_H3_Continuum_Join.v2 import sequence
 
@@ -19,6 +19,18 @@ class FakeClip:
     def encode_from_tokens_scheduled(self,tokens): self.events.append(("encode",tokens)); return [[torch.zeros(1,1,2),{}]]
 
 
+class ReferenceAudioClip:
+    def __init__(self):
+        self.tokenize_options = None
+
+    def tokenize(self, prompt, **kwargs):
+        self.tokenize_options = kwargs
+        return prompt
+
+    def encode_from_tokens_scheduled(self, tokens):
+        return [[torch.zeros(1, 1, 2), {}]]
+
+
 def test_identity_fingerprint_hashes_full_resized_rgb_tensor():
     image = torch.zeros((1, 96, 64, 3), dtype=torch.float32)
     image[0, 95, 63, 2] = 1.0
@@ -27,6 +39,30 @@ def test_identity_fingerprint_hashes_full_resized_rgb_tensor():
     digest.update(str(image.dtype).encode("ascii"))
     digest.update(image.contiguous().view(torch.uint8).numpy().tobytes(order="C"))
     assert _tensor_fingerprint(image) == digest.hexdigest()
+
+
+def test_first_last_and_reference_audio_use_ordered_tokenizer_items_only():
+    first = torch.zeros((1, 32, 32, 3))
+    last = torch.ones((1, 32, 32, 3))
+    audio_latent = torch.zeros((1, 32, 2, 1))
+    clip = ReferenceAudioClip()
+
+    conditioning = encode_prompt_conditioning(
+        clip,
+        "Use <Picture 1>, <Picture 2>, and <Audio 1>.",
+        first_image=first,
+        last_image=last,
+        reference_audio_assets=SimpleNamespace(audio_latent=audio_latent),
+    )
+
+    items = clip.tokenize_options["minimax_ref_items"]
+    assert [item["type"] for item in items] == ["image", "image", "audio"]
+    assert items[0]["data"] is first
+    assert items[1]["data"] is last
+    assert "images" not in clip.tokenize_options
+    assert conditioning[0][1]["minimax_refs"] == [
+        {"kind": "audio", "ref_audio_t": 1, "audio_latent": audio_latent}
+    ]
 
 def test_v2_samples_every_chunk_before_any_decode(monkeypatch):
     events=[]; width,height=96,64

@@ -28,22 +28,32 @@ def _wrapper_factory(*, strict: bool, debug: bool) -> Callable[..., Any]:
 
     def apply_model_wrapper(executor, *args, **kwargs):
         payload = kwargs.get("minimax_payload")
-        if not payload_has_continuum(payload):
+        has_continuum = payload_has_continuum(payload)
+        has_mixed_keyframe_refs = (
+            isinstance(payload, dict)
+            and bool(payload.get("keyframes"))
+            and payload.get("refs") is not None
+        )
+        if not has_continuum and not has_mixed_keyframe_refs:
             return executor(*args, **kwargs)
         try:
             ensure_native_h3_base_model(executor.class_obj)
             patched_payload = dict(payload)
-            patch_layout_in_place(patched_payload, strict=True, debug=debug)
-            transformer_options = kwargs.get("transformer_options")
-            validate_native_continuity_layout(
-                patched_payload,
-                transformer_options=(
-                    transformer_options if isinstance(transformer_options, dict) else {}
-                ),
-                branch_baselines=branch_baselines,
-            )
-            input_x = args[0] if args else None
-            materialize_continuum_latents(patched_payload, input_x, debug=debug)
+            if has_continuum:
+                patch_layout_in_place(patched_payload, strict=True, debug=debug)
+                transformer_options = kwargs.get("transformer_options")
+                validate_native_continuity_layout(
+                    patched_payload,
+                    transformer_options=(
+                        transformer_options if isinstance(transformer_options, dict) else {}
+                    ),
+                    branch_baselines=branch_baselines,
+                )
+                input_x = args[0] if args else None
+                materialize_continuum_latents(patched_payload, input_x, debug=debug)
+            # ComfyUI Core 0.33.1 replaces keyframe condition latents with
+            # reference latents when both contracts are present. Rebuild the
+            # combined list for First/Last Frame + standalone Reference Audio.
             normalize_condition_latents(patched_payload)
             kwargs["minimax_payload"] = patched_payload
         except (CompatibilityError, LayoutCompatibilityError, KeyError, TypeError, ValueError) as exc:

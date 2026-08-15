@@ -72,6 +72,17 @@ def test_timeline_prompt_maps_ranges_and_chunk_headers():
     assert plan["prompts"] == ["one", "two", "three"]
 
 
+def test_timeline_preamble_is_applied_to_every_chunk():
+    plan = make_prompt_plan(
+        mode=PROMPT_FORMAT_AUTO,
+        script="Refer to <Picture 1>.\n[0-5s]\none\n[5-10s]\ntwo",
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == ["Refer to <Picture 1>.\n\none", "Refer to <Picture 1>.\n\ntwo"]
+    assert plan["notes"] == ["Auto detected Timeline", "applied timeline preamble to all chunks"]
+
+
 def test_timeline_requires_coverage():
     with pytest.raises(PromptPlanError):
         make_prompt_plan(
@@ -148,3 +159,8 @@ def test_sparse_override_rejects_out_of_range_clip():
 def test_sparse_override_rejects_duplicate_clip():
     with pytest.raises(PromptPlanError, match="more than once"):
         parse_sparse_prompt_overrides("[Clip 2]\nfirst\n\n[Chunk 2]\nsecond")
+
+
+def test_sparse_override_rejects_timeline_preamble():
+    with pytest.raises(PromptPlanError, match="before the first"):
+        parse_sparse_prompt_overrides("global text\n[Clip 1]\nopening override")
