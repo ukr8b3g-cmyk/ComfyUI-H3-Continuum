@@ -14,6 +14,7 @@ from ComfyUI_H3_Continuum_Join.v2.prompts import (
     detect_prompt_mode,
     make_prompt_plan,
     parse_sparse_prompt_overrides,
+    prompt_plan_report,
     validate_sparse_prompt_overrides,
     validate_prompt_plan,
 )
@@ -83,14 +84,83 @@ def test_timeline_preamble_is_applied_to_every_chunk():
     assert plan["notes"] == ["Auto detected Timeline", "applied timeline preamble to all chunks"]
 
 
-def test_timeline_requires_coverage():
-    with pytest.raises(PromptPlanError):
+def test_timeline_missing_coverage_warns_and_repeats_previous_prompt():
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_TIMELINE,
+        script="[0-5s]\none",
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == ["one", "one"]
+    assert any(item["code"] == "H3C-P101" for item in plan["diagnostics"])
+    assert "fallback" in prompt_plan_report(plan)
+
+
+def test_timeline_leading_gap_uses_earliest_valid_prompt():
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_TIMELINE,
+        script="[5-10s]\nsecond",
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == ["second", "second"]
+    assert plan["diagnostics"][0]["code"] == "H3C-P101"
+
+
+def test_timeline_extra_sections_warn_and_are_ignored():
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_TIMELINE,
+        script="[0-5s]\none\n[5-10s]\ntwo\n[10-15s]\nextra",
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == ["one", "two"]
+    assert any(item["code"] == "H3C-P104" for item in plan["diagnostics"])
+
+
+@pytest.mark.parametrize(
+    ("script", "code"),
+    [
+        ("[0 to 5s]\none", "H3C-P001"),
+        ("[5-5s]\none", "H3C-P002"),
+        ("[Chunk 0]\none", "H3C-P004"),
+        ("[0-5s]\n", "H3C-P005"),
+    ],
+)
+def test_invalid_timeline_reports_actionable_diagnostic(script, code):
+    with pytest.raises(PromptPlanError) as captured:
         make_prompt_plan(
             mode=PROMPT_MODE_TIMELINE,
-            script="[0-5s]\none",
+            script=script,
             chunks=2,
             chunk_seconds=5,
         )
+    message = str(captured.value)
+    assert code in message
+    assert "Suggested fix:" in message
+
+
+def test_duplicate_chunk_section_is_an_error():
+    with pytest.raises(PromptPlanError, match="H3C-P003"):
+        make_prompt_plan(
+            mode=PROMPT_MODE_TIMELINE,
+            script="[Chunk 1]\none\n[Chunk 1]\ntwo",
+            chunks=2,
+            chunk_seconds=5,
+        )
+
+
+def test_prompt_preflight_reports_explicit_chunk_sources():
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_TIMELINE,
+        script="[0-5s]\none\n[5-10s]\ntwo",
+        chunks=2,
+        chunk_seconds=5,
+    )
+    report = prompt_plan_report(plan)
+    assert "Prompt Preflight:" in report
+    assert "Chunk 1 source:" in report
+    assert "Chunk 2 source:" in report
 
 
 def test_native_h3_chunk_duration_rejects_sub_four_seconds():

@@ -79,6 +79,7 @@ def test_v323_third_reference_adds_only_the_image_3_extension():
 def test_unavailable_picture_tags_warn_without_stopping_like_core():
     assert validate_reference_prompts(["Use <Picture 1> and <Picture 2>."], 2) == ""
     message = validate_reference_prompts(["Use <Picture 2>."], 1)
+    assert "H3C-P102" in message
     assert "only 1 active reference image(s) reached the Sampler" in message
     assert "generation will continue" in message
     assert "ignored or hallucinated" in message
@@ -89,6 +90,7 @@ def test_unavailable_picture_tags_warn_without_stopping_like_core():
 
 def test_missing_picture_tag_is_a_warning_not_an_error():
     warning = validate_reference_prompts(["The same person walks forward."], 1)
+    assert "H3C-P103" in warning
     assert "no <Picture N> tag" in warning
 
 
@@ -166,6 +168,7 @@ def test_unavailable_audio_tags_warn_without_stopping_like_core():
         ["Perform <Audio 1> and <Audio 2>."], None
     )
     assert "unavailable <Audio 1>" in message
+    assert "H3C-P102" in message
     assert "unavailable <Audio 2>" in message
     assert "generation will continue" in message
 
@@ -176,6 +179,7 @@ def test_connected_audio_keeps_unavailable_extra_tag_as_warning():
     )
     assert "unavailable <Audio 2>" in message
     assert "no <Audio 1> tag" in message
+    assert "H3C-P103" in message
 
 
 def _reference_prompt(checkpoint_name: str) -> dict:

@@ -123,7 +123,7 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
         if reference_warning: reuse_notes.append(reference_warning)
     if reference_audio_source is not None:
         reuse_notes.insert(0,"Reference Audio 1 conditioning: persistent across all chunks.")
-        if reference_audio_warning: reuse_notes.append("Warning: "+reference_audio_warning)
+        if reference_audio_warning: reuse_notes.append(reference_audio_warning)
     if session is not None:
         old_fingerprint=str(session.get("model_fingerprint",""))
         if old_fingerprint and old_fingerprint!=current_model_fingerprint: reuse_notes.append("model/accelerator fingerprint differs from the saved session; accepted chunks were kept")

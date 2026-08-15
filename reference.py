@@ -197,22 +197,29 @@ def validate_reference_prompts(prompts: list[str], reference_count: int) -> str:
     for prompt in prompts:
         found.update(int(value) for value in _PICTURE_TAG.findall(str(prompt)))
     invalid = sorted(value for value in found if value < 1 or value > reference_count)
+    warnings: list[str] = []
     if invalid:
         unavailable = ", ".join(f"<Picture {value}>" for value in invalid)
-        return (
-            f"Warning: prompt references unavailable {unavailable}; only "
+        warnings.append(
+            f"H3C-P102 Warning: prompt references unavailable {unavailable}; only "
             f"{reference_count} active reference image(s) reached the Sampler. "
             "ComfyUI Core permits this and generation will continue, but the "
             "unavailable reference may be ignored or hallucinated. Enable the "
             "corresponding Reference Image input or remove the unavailable tag."
         )
-    if not found:
-        return (
-            "Reference images are connected but the prompt contains no "
-            "<Picture N> tag; images still condition generation, but explicit "
-            "identity references are recommended."
+    missing = sorted(set(range(1, reference_count + 1)) - found)
+    if missing:
+        labels = ", ".join(f"<Picture {value}>" for value in missing)
+        detail = (
+            "the prompt contains no <Picture N> tag"
+            if not found
+            else f"connected reference {labels} is not explicitly mentioned in the prompt"
         )
-    return ""
+        warnings.append(
+            f"H3C-P103 Warning: {detail}; images still condition generation, but "
+            "explicit identity references are recommended."
+        )
+    return "\n".join(warnings)
 
 
 def encode_reference_prompt(

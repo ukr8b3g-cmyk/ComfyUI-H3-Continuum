@@ -202,14 +202,14 @@ def validate_reference_audio_prompts(
     )
     for value in unavailable:
         warnings.append(
-            f"Warning: prompt references unavailable <Audio {value}>; only "
+            f"H3C-P102 Warning: prompt references unavailable <Audio {value}>; only "
             f"{active_count} active reference audio item(s) reached the Sampler. "
             "Core-compatible generation will continue; the tag may be ignored "
             "or hallucinated."
         )
     if source is not None and 1 not in found:
         warnings.append(
-            "Reference Audio 1 is connected but the prompt contains no <Audio 1> "
+            "H3C-P103 Warning: Reference Audio 1 is connected but the prompt contains no <Audio 1> "
             "tag; audio still conditions generation, but an explicit tag is recommended."
         )
     return "\n".join(warnings)
