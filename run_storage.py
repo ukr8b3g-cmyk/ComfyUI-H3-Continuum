@@ -126,6 +126,16 @@ def automatic_project_key(prompt: Any, unique_id: Any) -> str:
         next_stack.add(current_id)
         if isinstance(inputs, dict):
             for name in sorted(inputs):
+                if current_id == node_id and name == "reference_audio_vae":
+                    audio_link = inputs.get("reference_audio_1")
+                    if not (
+                        isinstance(audio_link, (list, tuple))
+                        and len(audio_link) == 2
+                        and isinstance(audio_link[0], (str, int))
+                        and isinstance(audio_link[1], int)
+                        and str(audio_link[0]) in prompt
+                    ):
+                        continue
                 value = inputs[name]
                 if (
                     isinstance(value, (list, tuple))
@@ -468,6 +478,26 @@ def _video_vae_signature(video_vae: Any, *, required: bool) -> tuple[dict[str, A
     return observed, module_safe
 
 
+def _audio_vae_signature(audio_vae: Any) -> tuple[dict[str, Any], bool]:
+    first_stage = getattr(audio_vae, "first_stage_model", None)
+    module_value, module_safe = _module_signature(first_stage)
+    patcher_value, patcher_safe = _patcher_signature(getattr(audio_vae, "patcher", None))
+    config = {
+        "wrapper_type": _qualified(audio_vae),
+        "first_stage": module_value,
+        "patcher": patcher_value,
+        "vae_dtype": str(getattr(audio_vae, "vae_dtype", "unknown")),
+        "audio_sample_rate": getattr(audio_vae, "audio_sample_rate", 32000),
+        "latent_channels": getattr(audio_vae, "latent_channels", None),
+    }
+    observed, config_safe = _observe(config)
+    observed["runtime_observation"] = {
+        "patcher_complete": bool(patcher_safe),
+        "config_complete": bool(config_safe),
+    }
+    return observed, module_safe
+
+
 def _apply_nonce_contract(
     contract: dict[str, Any], *, requested_nonce: int, effective_nonce: int,
 ) -> dict[str, Any]:
@@ -493,6 +523,9 @@ def _apply_nonce_contract(
             "effective_reroll_nonce": int(effective_nonce) if affected else 0,
             "last_frame_hash": str(result["last_frame_hash"]) if number == int(result["chunk_count"]) else "",
         }
+        timeline_chunks = result.get("timeline_video_chunk_contracts") or []
+        if position < len(timeline_chunks):
+            chunk_contract["timeline_video"] = dict(timeline_chunks[position])
         chunk_contracts.append(chunk_contract)
         chunk_hashes.append(_hash(chunk_contract))
     result.update(
@@ -522,6 +555,9 @@ def build_sampling_contract(
     upstream_graph_contract: dict[str, Any] | None = None,
     upstream_graph_safe: bool | None = None,
     upstream_graph_reasons: list[str] | None = None,
+    reference_audio_contract: dict[str, Any] | None = None,
+    reference_audio_vae: Any = None,
+    timeline_video_contract: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], bool, list[str]]:
     model_value, model_safe = _model_signature(model, model_fingerprint_value)
     clip_value, clip_safe = _clip_signature(clip)
@@ -538,7 +574,10 @@ def build_sampling_contract(
             "conditioning mode does not match the connected image inputs: "
             f"declared={conditioning_mode}, inferred={inferred_mode}"
         )
-    uses_video_vae = conditioning_mode_uses_video_vae(conditioning_mode)
+    uses_video_vae = (
+        conditioning_mode_uses_video_vae(conditioning_mode)
+        or timeline_video_contract is not None
+    )
     if uses_video_vae:
         video_vae_value, video_vae_safe = _video_vae_signature(
             video_vae, required=True
@@ -546,6 +585,10 @@ def build_sampling_contract(
     else:
         video_vae_value, video_vae_safe = None, True
     sampler_value, sampler_safe = _sampler_signature(sampler)
+    if reference_audio_contract is not None:
+        audio_vae_value, audio_vae_safe = _audio_vae_signature(reference_audio_vae)
+    else:
+        audio_vae_value, audio_vae_safe = None, True
     if not torch.is_tensor(sigmas) or sigmas.ndim != 1:
         raise RunStorageError("Run Storage requires a one-dimensional SIGMAS tensor")
     chunks = int(prompt_plan["chunks"])
@@ -566,6 +609,11 @@ def build_sampling_contract(
             video_vae_value = {
                 "runtime": video_vae_value,
                 "graph_route": routes.get("video_vae"),
+            }
+        if reference_audio_contract is not None:
+            audio_vae_value = {
+                "runtime": audio_vae_value,
+                "graph_route": routes.get("reference_audio_vae"),
             }
     global_contract = {
         "sampling_contract_version": SAMPLING_CONTRACT_VERSION,
@@ -591,12 +639,25 @@ def build_sampling_contract(
         global_contract["first_frame_hash"] = str(first_frame_hash)
     if reference_contract is not None:
         global_contract["reference"] = dict(reference_contract)
+    if reference_audio_contract is not None:
+        global_contract["reference_audio"] = dict(reference_audio_contract)
+        global_contract["reference_audio_vae"] = audio_vae_value
+    timeline_chunk_contracts = []
+    if timeline_video_contract is not None:
+        timeline_value = dict(timeline_video_contract)
+        timeline_chunk_contracts = list(timeline_value.pop("chunk_slices", []))
+        if len(timeline_chunk_contracts) != chunks:
+            raise RunStorageError(
+                "Timeline Video contract does not match the configured chunk count"
+            )
+        global_contract["timeline_video"] = timeline_value
     lineage_sha256 = _hash({
         "global_hash": _hash(global_contract),
         "chunk_count": chunks,
         "prompt_mode": str(prompt_plan["mode"]),
         "prompt_hashes": prompt_hashes,
         "last_frame_hash": str(last_frame_hash),
+        "timeline_video_chunk_contracts": timeline_chunk_contracts,
     })
     contract = {
         "global": global_contract,
@@ -625,8 +686,10 @@ def build_sampling_contract(
         reasons.append("CLIP/Qwen encoder contract is not completely observable")
     if not video_vae_safe:
         reasons.append("Video VAE contract is not completely observable")
+    if not audio_vae_safe:
+        reasons.append("Reference Audio VAE contract is not completely observable")
     graph_safe = bool(upstream_graph_safe) if graph_authoritative else True
-    return contract, model_safe and clip_safe and video_vae_safe and sampler_safe and graph_safe, reasons
+    return contract, model_safe and clip_safe and video_vae_safe and audio_vae_safe and sampler_safe and graph_safe, reasons
 
 
 def revision_identity(contract: dict[str, Any]) -> tuple[str, str]:
@@ -898,6 +961,9 @@ class RunStorageController:
         existing_session: dict[str, Any] | None,
         reference_contract: dict[str, Any] | None = None,
         conditioning_mode: str | None = None,
+        reference_audio_contract: dict[str, Any] | None = None,
+        reference_audio_vae: Any = None,
+        timeline_video_contract: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         if existing_session is not None:
             raise RunStorageError("Run Storage cannot be combined with an explicit Session")
@@ -906,9 +972,11 @@ class RunStorageController:
         graph_contract, graph_safe, graph_reasons = build_upstream_graph_contract(
             self.prompt_graph,
             self.sampler_node_id,
-            require_video_vae=conditioning_mode_uses_video_vae(
-                str(conditioning_mode)
+            require_video_vae=(
+                conditioning_mode_uses_video_vae(str(conditioning_mode))
+                or timeline_video_contract is not None
             ),
+            require_reference_audio_vae=reference_audio_contract is not None,
         )
         contract, safe, reasons = build_sampling_contract(
             model=model, model_fingerprint_value=model_fingerprint_value,
@@ -925,6 +993,9 @@ class RunStorageController:
             upstream_graph_contract=graph_contract,
             upstream_graph_safe=graph_safe,
             upstream_graph_reasons=graph_reasons,
+            reference_audio_contract=reference_audio_contract,
+            reference_audio_vae=reference_audio_vae,
+            timeline_video_contract=timeline_video_contract,
         )
         effective_nonce, nonce_decision = self._resolve_effective_nonce(
             contract, requested_nonce=int(reroll_nonce), resume_safe=safe

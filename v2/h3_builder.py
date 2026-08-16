@@ -91,14 +91,43 @@ def encode_prompt_conditioning(
     *,
     first_image: torch.Tensor | None,
     last_image: torch.Tensor | None,
+    reference_audio_assets=None,
+    timeline_video_assets=None,
 ) -> list:
     images = []
     if first_image is not None:
         images.append(first_image)
     if last_image is not None:
         images.append(last_image)
-    tokens = clip.tokenize(str(prompt), images=images)
-    return clip.encode_from_tokens_scheduled(tokens)
+    tokenize_options = {"images": images}
+    if reference_audio_assets is not None or timeline_video_assets is not None:
+        from ..reference_audio import reference_audio_item
+
+        ref_items = [
+            *({"type": "image", "data": image} for image in images),
+        ]
+        if timeline_video_assets is not None:
+            ref_items.append(dict(timeline_video_assets.item))
+        if reference_audio_assets is not None:
+            ref_items.append(reference_audio_item())
+        tokenize_options = {
+            "minimax_ref_items": ref_items
+        }
+    tokens = clip.tokenize(str(prompt), **tokenize_options)
+    conditioning = clip.encode_from_tokens_scheduled(tokens)
+    if reference_audio_assets is None and timeline_video_assets is None:
+        return conditioning
+    refs = []
+    if timeline_video_assets is not None:
+        refs.append(dict(timeline_video_assets.block))
+    if reference_audio_assets is not None:
+        from ..reference_audio import reference_audio_block
+
+        refs.append(dict(reference_audio_block(reference_audio_assets)))
+    return [
+        [tensor, {**dict(metadata), "minimax_refs": list(refs)}]
+        for tensor, metadata in conditioning
+    ]
 
 
 def attach_keyframes(

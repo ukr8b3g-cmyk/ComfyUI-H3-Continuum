@@ -1,10 +1,10 @@
 [project]
 name = "comfyui-h3-continuum"
-version = "3.2.1"
+version = "3.3.0"
 description = "Integrated N-chunk continuation for ComfyUI native MiniMax H3 video and audio"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [{ name = "ukr8b3g-cmyk" }]
 dependencies = []
 keywords = ["comfyui", "minimax-h3", "video", "audio", "continuation"]
@@ -15,4 +15,4 @@ Repository = "https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum"
 [tool.comfy]
 PublisherId = "ukr8b3g-cmyk"
 DisplayName = "H3 Continuum"
-Icon = ""
+requires-comfyui = ">=0.32.0"

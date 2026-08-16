@@ -1,30 +1,21 @@
-ComfyUI-H3-Continuum 3.2.1 - Stable Package Validation
-Date: 2026-08-14
-Status: PASS / Stable
+ComfyUI-H3-Continuum V3.3.0 package validation
 
-Release hardening scope:
-- Graph + runtime MODEL/CLIP/VAE sampling contract
-- Chunk file SHA-256 verification
-- Run Storage automatic ID fallback and Storage-only partial regeneration
-- V3.2.1 Windows installer/runtime verifier
-- Explicit CI numpy/safetensors test dependencies
+Status: Stable release candidate validated for publication.
 
-Completed automated validation:
-- Python syntax / compileall: PASS
-- pytest: 129 passed
-- GitHub Actions: GREEN
-- Local package sync: 100 files matched, 0 hash differences
+Required automated checks:
+- python -m compileall -q .
+- python -m pytest -q -p no:cacheprovider
+- python tools/verify_runtime.py <runtime-path>
 
-Completed Windows runtime validation:
-- RTX 5060 Ti 16GB / ComfyUI v0.32.0
-- Ref2VA Reference + Continuation with two images: PASS
-- 3 x 5 second generation at 1056x608: 0 reused / 3 generated
-- Stored manifest complete, resume_safe=true, three Chunk SHA-256 values matched
-- Complete Auto Resume: 3 reused / 0 generated
-- Spectrum Continuum API accepted Actual Prefix 2 on continuation chunks
-- FL2VA / Ref2VA, Prompt, resolution and Reference changes created distinct contracts
-- Strict FL2VA + Reference and non-32-multiple resolution rejection: PASS
+Validated runtime paths include:
+- Production sampler and Core VAE Decode assembly
+- Reference Image 1-3 and Reference Audio 1
+- Run Storage save, checksum verification, and complete reuse
+- Timeline Video chunk-local slicing at Efficient 0.4 MP
+- Spectrum Interop API v1 with Actual Prefix 2 on continuation chunks
+- Audio Seam Auto
+- Video Seam Auto guarded transient and micro-flash correction
 
-Release decision:
-- V3.2.1 is the current stable production baseline.
-- A GitHub tag or Release remains a separate publication step.
+Auto 2 remains experimental. It is an optional fallback for exposure-ramp boundaries and is not the default.
+
+Detailed evidence: docs/VALIDATION_RESULTS.md

@@ -13,12 +13,19 @@ from ..constants import (
 from ..version import PROMPT_PLAN_SCHEMA_VERSION
 _TIMELINE_HEADER=re.compile(r"^\s*\[\s*(?P<start>\d+(?:\.\d+)?)\s*(?:s|sec|seconds)?\s*[-–—]\s*(?P<end>\d+(?:\.\d+)?)\s*(?:s|sec|seconds)?\s*\]\s*$",re.IGNORECASE)
 _CHUNK_HEADER=re.compile(r"^\s*\[\s*(?:chunk|clip)\s*(?P<index>\d+)\s*\]\s*$",re.IGNORECASE)
+_TIMELINE_LIKE_HEADER=re.compile(r"^\s*\[\s*(?:(?:chunk|clip)\b|\d+(?:\.\d+)?[^\]]*(?:[-–—]|\bto\b))",re.IGNORECASE)
 _LIST_SEPARATOR=re.compile(r"^\s*---+\s*$",re.MULTILINE)
 class PromptPlanError(ValueError): pass
+def _prompt_error(code,reason,*,line_number=None,source=None,suggested_fix):
+    location=f" line {line_number}" if line_number is not None else ""
+    lines=[f"{code}{location}: {reason}"]
+    if source is not None: lines.append(f"Source: {source}")
+    if suggested_fix: lines.append(f"Suggested fix: {suggested_fix}")
+    raise PromptPlanError("\n".join(lines))
 def prompt_hash(prompt:str)->str: return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
 def _normalize_prompt(value:str,*,label:str)->str:
     text=str(value).strip()
-    if not text: raise PromptPlanError(f"{label} is empty")
+    if not text: _prompt_error("H3C-P005",f"{label} is empty",suggested_fix="provide non-empty prompt text")
     return text
 def _parse_json_list(script:str):
     stripped=script.lstrip()
@@ -35,33 +42,46 @@ def _parse_list(script,chunks):
     if len(values)<chunks: notes.append(f"repeated the last prompt for {chunks-len(values)} chunk(s)"); values.extend([values[-1]]*(chunks-len(values)))
     elif len(values)>chunks: notes.append(f"ignored {len(values)-chunks} extra prompt(s)"); values=values[:chunks]
     return values,notes
-def _parse_timeline_sections(script):
+def _timeline_preamble(script):
+    body=[]
+    for line in str(script).splitlines():
+        if _TIMELINE_HEADER.match(line) or _CHUNK_HEADER.match(line): break
+        body.append(line)
+    return "\n".join(body).strip()
+def _parse_timeline_sections(script,*,allow_preamble=True):
+    preamble=_timeline_preamble(script)
     sections=[]; current=None; body=[]
     def finish():
         nonlocal current,body
         if current is None:
-            if any(line.strip() for line in body): raise PromptPlanError("timeline text before the first [0-5s] or [Chunk 1] header is not allowed")
+            if any(line.strip() for line in body) and not allow_preamble: raise PromptPlanError("timeline text before the first [0-5s] or [Chunk 1] header is not allowed")
             body=[]; return
-        current["prompt"]=_normalize_prompt("\n".join(body),label="timeline section"); sections.append(current); current=None; body=[]
-    for line in str(script).splitlines():
+        if not any(line.strip() for line in body):
+            _prompt_error("H3C-P005","timeline section body is empty",line_number=current["line_number"],source=current["source"],suggested_fix="add prompt text below this header")
+        prompt=_normalize_prompt("\n".join(body),label="timeline section")
+        current["prompt"]=f"{preamble}\n\n{prompt}" if preamble else prompt
+        sections.append(current); current=None; body=[]
+    for line_number,line in enumerate(str(script).splitlines(),start=1):
         time_match=_TIMELINE_HEADER.match(line); chunk_match=_CHUNK_HEADER.match(line)
         if time_match or chunk_match:
             finish()
             if time_match:
                 start=float(time_match.group("start")); end=float(time_match.group("end"))
-                if not end>start: raise PromptPlanError(f"timeline range must increase: {line.strip()}")
-                current={"kind":"time","start":start,"end":end}
+                if not end>start: _prompt_error("H3C-P002","timeline end must be greater than its start",line_number=line_number,source=line.strip(),suggested_fix="use an increasing range such as [0-5s]")
+                current={"kind":"time","start":start,"end":end,"line_number":line_number,"source":line.strip()}
             else:
                 index=int(chunk_match.group("index"))
-                if index<1: raise PromptPlanError("chunk numbers are one-based")
-                current={"kind":"chunk","index":index}
+                if index<1: _prompt_error("H3C-P004","chunk numbers are one-based",line_number=line_number,source=line.strip(),suggested_fix="use [Chunk 1] or a larger one-based chunk number")
+                current={"kind":"chunk","index":index,"line_number":line_number,"source":line.strip()}
             continue
+        if _TIMELINE_LIKE_HEADER.match(line):
+            _prompt_error("H3C-P001","invalid timeline header",line_number=line_number,source=line.strip(),suggested_fix="use [0-5s] or [Chunk 1]")
         body.append(line)
     finish()
     if not sections: raise PromptPlanError("timeline contains no sections")
     return sections
 def parse_sparse_prompt_overrides(script):
-    sections=_parse_timeline_sections(script); overrides={}
+    sections=_parse_timeline_sections(script,allow_preamble=False); overrides={}
     for item in sections:
         if item["kind"]!="chunk": raise PromptPlanError("Sparse Clip Overrides only accepts [Clip N] or [Chunk N] sections")
         index=int(item["index"])
@@ -79,24 +99,53 @@ def validate_sparse_prompt_overrides(overrides,*,chunks):
     if not validated: raise PromptPlanError("Sparse Clip Overrides contains no overrides")
     return validated
 def _parse_timeline(script,chunks,chunk_seconds):
-    sections=_parse_timeline_sections(script); prompts=[]; notes=[]
+    sections=_parse_timeline_sections(script); prompts=[]; notes=[]; diagnostics=[]
+    if _timeline_preamble(script): notes.append("applied timeline preamble to all chunks")
+    seen_chunks={}; total_end=chunks*chunk_seconds; usable=[]
+    for item in sections:
+        if item["kind"]=="chunk":
+            index=int(item["index"])
+            if index in seen_chunks:
+                _prompt_error("H3C-P003",f"timeline defines Chunk {index} more than once",line_number=item["line_number"],source=item["source"],suggested_fix=f"keep only one [Chunk {index}] section")
+            seen_chunks[index]=item
+            if index<=chunks: usable.append(item)
+            else: diagnostics.append({"level":"warning","code":"H3C-P104","message":f"ignored {item['source']} because the configured sequence has only {chunks} chunk(s)"})
+        elif min(total_end,item["end"])-max(0.0,item["start"])>0:
+            usable.append(item)
+        else:
+            diagnostics.append({"level":"warning","code":"H3C-P104","message":f"ignored {item['source']} because it is outside 0-{total_end:.3f}s"})
+    if not usable:
+        _prompt_error("H3C-P005","timeline contains no usable prompt section for the configured sequence",suggested_fix="add a section such as [0-5s] with non-empty prompt text")
+    previous_prompt=None; previous_source=None
     for chunk_index in range(1,chunks+1):
         chunk_sections=[item for item in sections if item["kind"]=="chunk" and item["index"]==chunk_index]
-        if len(chunk_sections)>1: raise PromptPlanError(f"timeline defines Chunk {chunk_index} more than once")
-        if chunk_sections: prompts.append(chunk_sections[0]["prompt"]); continue
+        if chunk_sections:
+            selected=chunk_sections[0]; prompts.append(selected["prompt"]); previous_prompt=selected["prompt"]; previous_source=f"{selected['source']} at line {selected['line_number']}"
+            diagnostics.append({"level":"info","code":"H3C-P000","message":f"Chunk {chunk_index} source: {previous_source}"}); continue
         start=(chunk_index-1)*chunk_seconds; end=chunk_index*chunk_seconds; scored=[]
         for order,item in enumerate(sections):
             if item["kind"]!="time": continue
             overlap=max(0.0,min(end,item["end"])-max(start,item["start"]))
             if overlap>0: scored.append((overlap,-order,item))
-        if not scored: raise PromptPlanError(f"timeline does not cover chunk {chunk_index} ({start:.3f}-{end:.3f}s)")
-        scored.sort(reverse=True,key=lambda row:(row[0],row[1])); prompts.append(scored[0][2]["prompt"])
+        if not scored:
+            if previous_prompt is None:
+                selected=usable[0]; fallback_reason=f"used earliest valid prompt from {selected['source']}"
+            else:
+                selected=None; fallback_reason=f"reused previous prompt from {previous_source}"
+            prompt=selected["prompt"] if selected is not None else previous_prompt
+            source=f"{selected['source']} at line {selected['line_number']}" if selected is not None else previous_source
+            prompts.append(prompt); previous_prompt=prompt; previous_source=source
+            diagnostics.append({"level":"warning","code":"H3C-P101","message":f"Timeline does not cover Chunk {chunk_index} ({start:.3f}-{end:.3f}s); {fallback_reason}."})
+            diagnostics.append({"level":"info","code":"H3C-P000","message":f"Chunk {chunk_index} source: fallback to {source}"}); continue
+        scored.sort(reverse=True,key=lambda row:(row[0],row[1])); selected=scored[0][2]; prompts.append(selected["prompt"]); previous_prompt=selected["prompt"]; previous_source=f"{selected['source']} at line {selected['line_number']}"
+        diagnostics.append({"level":"info","code":"H3C-P000","message":f"Chunk {chunk_index} source: {previous_source}"})
         if len(scored)>1 and abs(scored[0][0]-scored[1][0])<1e-9: notes.append(f"chunk {chunk_index} had an equal-overlap timeline tie; used the earlier section")
-    return prompts,notes
+    return prompts,notes,diagnostics
 def detect_prompt_mode(script):
     text=str(script)
     for line in text.splitlines():
         if _TIMELINE_HEADER.match(line) or _CHUNK_HEADER.match(line): return PROMPT_MODE_TIMELINE
+        if _TIMELINE_LIKE_HEADER.match(line): _prompt_error("H3C-P001","invalid timeline header",source=line.strip(),suggested_fix="use [0-5s] or [Chunk 1]")
     if _parse_json_list(text) is not None or _LIST_SEPARATOR.search(text): return PROMPT_MODE_LIST
     return PROMPT_MODE_FIXED
 def resolve_prompt_mode(mode,script):
@@ -114,9 +163,11 @@ def make_prompt_plan(*,mode,script,chunks,chunk_seconds):
         detected={PROMPT_MODE_FIXED:PROMPT_FORMAT_FIXED,PROMPT_MODE_LIST:PROMPT_FORMAT_LIST,PROMPT_MODE_TIMELINE:PROMPT_FORMAT_TIMELINE}[resolved_mode]; notes.append(f"Auto detected {detected}")
     if resolved_mode==PROMPT_MODE_FIXED: prompt=_normalize_prompt(script,label="fixed prompt"); prompts=[prompt]*chunks
     elif resolved_mode==PROMPT_MODE_LIST: prompts,parse_notes=_parse_list(script,chunks); notes.extend(parse_notes)
-    elif resolved_mode==PROMPT_MODE_TIMELINE: prompts,parse_notes=_parse_timeline(script,chunks,chunk_seconds); notes.extend(parse_notes)
+    elif resolved_mode==PROMPT_MODE_TIMELINE: prompts,parse_notes,diagnostics=_parse_timeline(script,chunks,chunk_seconds); notes.extend(parse_notes)
     else: raise PromptPlanError(f"unknown prompt mode: {resolved_mode!r}")
-    return {"magic":PROMPT_PLAN_MAGIC,"schema_version":PROMPT_PLAN_SCHEMA_VERSION,"mode":resolved_mode,"chunks":chunks,"chunk_seconds":chunk_seconds,"prompts":prompts,"hashes":[prompt_hash(p) for p in prompts],"notes":notes}
+    result={"magic":PROMPT_PLAN_MAGIC,"schema_version":PROMPT_PLAN_SCHEMA_VERSION,"mode":resolved_mode,"chunks":chunks,"chunk_seconds":chunk_seconds,"prompts":prompts,"hashes":[prompt_hash(p) for p in prompts],"notes":notes}
+    if resolved_mode==PROMPT_MODE_TIMELINE: result["diagnostics"]=diagnostics
+    return result
 def validate_prompt_plan(plan):
     if not isinstance(plan,dict) or plan.get("magic")!=PROMPT_PLAN_MAGIC: raise PromptPlanError("invalid H3 Continuum prompt plan")
     if int(plan.get("schema_version",-1))!=PROMPT_PLAN_SCHEMA_VERSION: raise PromptPlanError(f"unsupported prompt-plan schema {plan.get('schema_version')}; expected {PROMPT_PLAN_SCHEMA_VERSION}")
@@ -127,6 +178,8 @@ def validate_prompt_plan(plan):
     for index,prompt in enumerate(prompts):
         _normalize_prompt(prompt,label=f"prompt {index+1}")
         if hashes[index]!=prompt_hash(prompt): raise PromptPlanError(f"prompt-plan hash mismatch at chunk {index+1}")
+    diagnostics=plan.get("diagnostics")
+    if diagnostics is not None and (not isinstance(diagnostics,list) or not all(isinstance(item,dict) for item in diagnostics)): raise PromptPlanError("prompt-plan diagnostics are invalid")
     return plan
 def build_sampler_prompt_plan(*,prompt_mode,prompt_script,sequence_prompt,prompt_plan,chunks,chunk_seconds):
     chunks=int(chunks); chunk_seconds=float(chunk_seconds)
@@ -143,9 +196,16 @@ def apply_prompt_overrides(plan,overrides):
         if value is None: continue
         prompts[index]=_normalize_prompt(value,label=f"Clip {index+1} Prompt"); replaced.append(index+1)
     if not replaced: return plan
-    result=dict(plan); result["mode"]=PROMPT_MODE_LIST; result["prompts"]=prompts; result["hashes"]=[prompt_hash(p) for p in prompts]; result["notes"]=list(plan.get("notes") or [])+["external Clip Prompt input(s): "+", ".join(map(str,replaced))]
+    result=dict(plan); result["mode"]=PROMPT_MODE_LIST; result["prompts"]=prompts; result["hashes"]=[prompt_hash(p) for p in prompts]; result["notes"]=list(plan.get("notes") or [])+["external Clip Prompt input(s): "+", ".join(map(str,replaced))]; result.pop("diagnostics",None)
     return validate_prompt_plan(result)
 def prompt_plan_report(plan):
     plan=validate_prompt_plan(plan); unique=len(set(plan["hashes"])); note="; ".join(plan.get("notes") or [])
     result=f"Prompt plan: {plan['mode']}; {plan['chunks']} chunks; {unique} unique prompt(s); {plan['chunk_seconds']:.3f}s per chunk."
-    return result+(" "+note+"." if note else "")
+    if note: result+=" "+note+"."
+    diagnostics=list(plan.get("diagnostics") or [])
+    if not diagnostics: return result+"\nPrompt Preflight: OK."
+    lines=[result,"Prompt Preflight:"]
+    for item in diagnostics:
+        level=str(item.get("level","info")).upper(); code=str(item.get("code","H3C-P000")); message=str(item.get("message",""))
+        lines.append(f"- {level} {code}: {message}")
+    return "\n".join(lines)

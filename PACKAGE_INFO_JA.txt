@@ -1,23 +1,14 @@
-名称: ComfyUI-H3-Continuum
-バージョン: 3.2.1
-対象: ComfyUI native MiniMax H3
-主ノード: H3 Continuum Sampler
-ライセンス: MIT
-追加pip依存: なし
+ComfyUI-H3-Continuum V3.3.0 Stable
 
-V3.2.1:
-- 正式安定版。CI、Windows実機、Ref2VA、Spectrum Actual Prefix 2、Run Storage完全再開を確認
-- T2VA / I2VA / FL2VA / Reference + Continuation
-- 最大2枚のReference Imageを全Chunkで維持
-- Core Video/Audio VAE Decodeへ外出し
-- Run StorageによるChunk保存、自動再開、部分再生成
-- Graph + runtime署名とChunk SHA-256による安全側の再利用判定
-- 旧V1/V2/V3 Node IDをWorkflow互換のため維持
+MiniMax H3の5秒ChunkをAV latent contextで継続し、長尺映像として組み立てるComfyUIカスタムノードです。
 
-Core:
-- native H3 raw video/audio latent continuation
-- 5/22/39f + Auto context
-- Spectrum Interop API v1 Actual Prefix 2 request
-- SageAttention / Sol-Attn / Spectrum外部併用
-- Session / Run Storage resume / reroll
-- Audio Seam Off / Auto
+V3.3.0:
+- Timeline VideoをChunk単位で参照する安定ノード
+- Audio Seam Autoを既定化
+- Video Seam Autoによるguarded transient / micro-flash補正
+- Auto 2による実験的なexposure-ramp補正
+- Reference Image 1-3 / Reference Audio 1
+- Run Storage / Auto Resume
+- Spectrum Interop API v1 / Actual Prefix 2を維持
+
+詳細: README.md および docs/VALIDATION_RESULTS.md

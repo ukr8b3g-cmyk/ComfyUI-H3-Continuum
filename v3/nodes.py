@@ -12,8 +12,9 @@ from ..v2.nodes import (
     V2_CONTINUITY_OPTIONS,
     validate_sparse_prompt_overrides,
 )
-from .assembly import H3ContinuumAssembleV3
+from .assembly import H3ContinuumAssembleSeamExperimental, H3ContinuumAssembleV3
 from .plan import make_assembly_plan
+from ..timeline_video import TIMELINE_VIDEO_SIZE_OPTIONS
 
 
 REGENERATE_AUTO = "Auto"
@@ -53,24 +54,12 @@ def _validate_regenerate_storage(run_storage: str, regenerate_from: int) -> None
 def _validate_reference_checkpoint(
     prompt, unique_id, *, strict_compatibility: bool
 ) -> str:
-    from ..graph_contract import (
-        CHECKPOINT_FL2VA,
-        CHECKPOINT_REF2VA,
-        classify_h3_checkpoint,
-    )
+    from ..graph_contract import classify_h3_checkpoint
 
-    classification = classify_h3_checkpoint(prompt, unique_id)
-    if strict_compatibility and classification != CHECKPOINT_REF2VA:
-        if classification == CHECKPOINT_FL2VA:
-            detail = "an FL2VA checkpoint is connected"
-        else:
-            detail = "the base checkpoint cannot be verified as Ref2VA"
-        raise ValueError(
-            "Reference Images require a verified MiniMax H3 Ref2VA MODEL when "
-            f"Strict Compatibility is enabled; {detail}. Disable Strict "
-            "Compatibility only for experimental FL2VA/unknown combinations."
-        )
-    return classification
+    # Checkpoint choice is diagnostic only. Strict Compatibility remains
+    # reserved for H3 contracts that are actually unsafe or unsupported.
+    _ = strict_compatibility
+    return classify_h3_checkpoint(prompt, unique_id)
 
 
 class H3ContinuumAdvancedV3:
@@ -269,6 +258,9 @@ class H3ContinuumSamplerV3:
         prompt_overrides=None,
         advanced=None,
         reference_assets=None,
+        reference_audio_source=None,
+        reference_audio_vae=None,
+        timeline_video_source=None,
     ):
         if prompt_overrides is not None and not isinstance(prompt_overrides, dict):
             raise TypeError(
@@ -339,6 +331,9 @@ class H3ContinuumSamplerV3:
             show_preview=advanced_values["show_preview"],
             latent_only=True,
             reference_assets=reference_assets,
+            reference_audio_source=reference_audio_source,
+            reference_audio_vae=reference_audio_vae,
+            timeline_video_source=timeline_video_source,
             **clip_prompt_inputs,
         )
 
@@ -539,6 +534,9 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                 "last_frame": ("IMAGE",),
                 "reference_image_1": ("IMAGE",),
                 "reference_image_2": ("IMAGE",),
+                "reference_image_3": ("IMAGE",),
+                "reference_audio_1": ("AUDIO",),
+                "reference_audio_vae": ("VAE",),
             },
             "hidden": {
                 "prompt": "PROMPT",
@@ -579,8 +577,13 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
         prompt_overrides=None,
         prompt=None,
         unique_id=None,
+        reference_image_3=None,
+        reference_audio_1=None,
+        reference_audio_vae=None,
+        timeline_video_source=None,
     ):
         from ..reference import prepare_reference_assets
+        from ..reference_audio import prepare_reference_audio_source
         regenerate_from = _regenerate_from_value(
             reroll_from_chunk,
             chunks=int(chunks),
@@ -591,13 +594,18 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
             output_width=int(width),
             output_height=int(height),
             size_mode=reference_size,
+            reference_image_3=reference_image_3,
+        )
+        reference_audio_source = prepare_reference_audio_source(
+            reference_audio_1,
+            reference_audio_vae,
         )
         if reference_assets is not None and (first_frame is not None or last_frame is not None):
             raise ValueError(
-                "V3.2 Reference Images cannot be combined with First Frame or Last Frame"
+                "Reference Images cannot be combined with First Frame or Last Frame"
             )
         reference_checkpoint = None
-        if reference_assets is not None:
+        if reference_assets is not None or timeline_video_source is not None:
             reference_checkpoint = _validate_reference_checkpoint(
                 prompt,
                 unique_id,
@@ -609,11 +617,10 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                 return str(report)
             if reference_checkpoint == "ref2va":
                 status = "Ref2VA verified."
+            elif reference_checkpoint == "fl2va":
+                status = "FL2VA; allowed, but reference fidelity may differ from Ref2VA."
             else:
-                status = (
-                    f"{reference_checkpoint}; Experimental because Strict "
-                    "Compatibility is disabled."
-                )
+                status = "unverified; execution allowed, Core contract errors remain fatal."
             return str(report) + "\nReference MODEL: " + status
 
         def execute():
@@ -634,6 +641,9 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                 first_frame=first_frame,
                 prompt_overrides=prompt_overrides,
                 reference_assets=reference_assets,
+                reference_audio_source=reference_audio_source,
+                reference_audio_vae=reference_audio_vae,
+                timeline_video_source=timeline_video_source,
                 advanced={
                     "audio_continuity": bool(audio_continuity),
                     "diagnostics": diagnostics,
@@ -680,16 +690,94 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
             return video_latents, audio_latents, assembly_plan, report
 
 
+class H3ContinuumSamplerTimelineVideo(H3ContinuumSamplerProduction):
+    """Chunk-local Timeline Video facade over the stable engine."""
+
+    DEPRECATED = False
+    DESCRIPTION = (
+        "Timeline Video sampler. It slices one Core VIDEO per chunk, "
+        "resizes only that slice, and reuses the stable Continuum sampling engine."
+    )
+    SEARCH_ALIASES = [
+        "H3 Continuum Timeline Video",
+        "MiniMax H3 video reference timeline",
+    ]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        schema = super().INPUT_TYPES()
+        required = {}
+        for name, definition in schema["required"].items():
+            required[name] = definition
+            if name == "reference_size":
+                required["timeline_video_size"] = (
+                    TIMELINE_VIDEO_SIZE_OPTIONS,
+                    {
+                        "default": TIMELINE_VIDEO_SIZE_OPTIONS[0],
+                        "display_name": "Timeline Video Size",
+                        "advanced": True,
+                        "tooltip": (
+                            "Efficient limits each chunk-local reference slice to about 0.4 MP. "
+                            "Match Output uses the output pixel area and may be substantially heavier."
+                        ),
+                    },
+                )
+        schema["required"] = required
+        optional = dict(schema.get("optional", {}))
+        optional["timeline_video"] = (
+            "VIDEO",
+            {
+                "tooltip": (
+                    "Optional. One continuous Core VIDEO covering every configured chunk. "
+                    "When omitted or bypassed, the node uses the standard conditioning path. "
+                    "Its audio is ignored; use the normal audio inputs for generated audio."
+                )
+            },
+        )
+        schema["optional"] = optional
+        return schema
+
+    def run(
+        self,
+        timeline_video=None,
+        timeline_video_size=TIMELINE_VIDEO_SIZE_OPTIONS[0],
+        **kwargs,
+    ):
+        if timeline_video is None:
+            return super().run(**kwargs)
+
+        from ..timeline_video import prepare_timeline_video_source
+
+        source = prepare_timeline_video_source(
+            timeline_video,
+            chunks=int(kwargs["chunks"]),
+            chunk_seconds=float(kwargs["chunk_seconds"]),
+            output_width=int(kwargs["width"]),
+            output_height=int(kwargs["height"]),
+            size_mode=str(timeline_video_size),
+        )
+        return super().run(timeline_video_source=source, **kwargs)
+
+
+from .seam_test_source import H3ContinuumSeamTestSource
+
+
 NODE_CLASS_MAPPINGS = {
     "H3ContinuumSamplerProduction": H3ContinuumSamplerProduction,
+    "H3ContinuumSamplerTimelineVideo": H3ContinuumSamplerTimelineVideo,
     "H3ContinuumSamplerV3": H3ContinuumSamplerV3,
     "H3ContinuumAdvancedV3": H3ContinuumAdvancedV3,
     "H3ContinuumAssembleV3": H3ContinuumAssembleV3,
+    "H3ContinuumAssembleSeamExperimental": H3ContinuumAssembleSeamExperimental,
+    "H3ContinuumSeamTestSource": H3ContinuumSeamTestSource,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "H3ContinuumSamplerProduction": "H3 Continuum Sampler V3.2",
+    "H3ContinuumSamplerTimelineVideo": "H3 Continuum Timeline Video",
     "H3ContinuumSamplerV3": "H3 Continuum Sampler V3",
     "H3ContinuumAdvancedV3": "H3 Continuum Advanced V3",
     "H3ContinuumAssembleV3": "H3 Continuum Assemble V3",
+    "H3ContinuumAssembleSeamExperimental": "H3 Continuum Assemble + Seam",
+    "H3ContinuumSeamTestSource": "H3 Continuum Seam Test Source (Experimental)",
 }

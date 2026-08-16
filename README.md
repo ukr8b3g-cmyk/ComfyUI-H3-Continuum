@@ -1,8 +1,8 @@
-# ComfyUI-H3-Continuum 3.2.1
+# ComfyUI-H3-Continuum 3.3.0
 
 Native long-form MiniMax H3 video and audio continuation for ComfyUI.
 
-**Stable release:** V3.2.1. The production path has passed local syntax and pytest checks, GitHub Actions, Windows generation, Ref2VA Reference + Continuation, Spectrum Actual Prefix 2, and complete Run Storage resume.
+**Stable release:** V3.3.0. It adds chunk-local Timeline Video and guarded decoded-video seam correction while preserving the stable sampler, Run Storage contracts, and Spectrum Interop API v1.
 
 https://github.com/user-attachments/assets/bfa8c683-fc9d-48f1-9cdb-477ca110cdf2
 
@@ -15,10 +15,13 @@ V3 delegates video and audio decoding to normal **ComfyUI Core VAE Decode nodes*
 - Raw paired video/audio latent continuation without decode/re-encode between chunks.
 - One production sampler UI with normal controls first and infrequent controls marked Advanced.
 - T2VA, First Frame, Last Frame, First + Last Frame, and Reference conditioning.
-- Up to two persistent Reference images across every chunk.
+- Up to three active Reference images across every chunk, compacted in Core connection order.
+- One native Reference Audio item across every chunk.
 - Disk-backed Run Storage with automatic resume and compatible Revision reuse.
 - Fixed, List, and Timeline prompts through one Sequence Prompt input.
 - ComfyUI Core Video/Audio VAE Decode and a separate Continuum Assemble stage.
+- Chunk-local Timeline Video conditioning with an efficient 0.4 MP default.
+- Guarded Audio Seam and Video Seam correction after Core decode.
 - Optional Spectrum Actual Prefix 2 interoperability.
 - External SageAttention, LoRA, Turbo, and Spectrum MODEL chains remain composable.
 - Existing legacy node identifiers remain registered for saved-workflow compatibility.
@@ -53,7 +56,7 @@ MiniMax H3 Video VAE -------------> video_vae
 Sampler --------------------------> sampler
 Sigmas ---------------------------> sigmas
 Text (Multiline) -----------------> Sequence Prompt
-Optional images ------------------> first_frame / last_frame / reference_image_1/2
+Optional images ------------------> first_frame / last_frame / reference_image_1/2/3
 
 video_latents --> Core VAE Decode -----------+
 audio_latents --> Core VAE Decode Audio -----+--> H3 Continuum Assemble V3
@@ -76,17 +79,18 @@ The sampler selects the mode from connected image inputs.
 | First Frame | I2VA + Continuation |
 | Last Frame | Last-frame-conditioned + Continuation |
 | First + Last Frame | FL2VA + Continuation |
-| Reference 1, optionally Reference 2 | Reference + Continuation |
+| Reference 1, optionally Reference 2 and 3 | Reference + Continuation |
 
-Reference images and First/Last Frame are mutually exclusive. `Reference 2` cannot be used without `Reference 1`.
+Reference images and First/Last Frame are mutually exclusive. Active Reference inputs are compacted in Core connection order; bypassed sockets are ignored.
 
-For the formally supported Reference path, connect a MiniMax H3 **Ref2VA** MODEL upstream. With **Strict Compatibility** enabled (the default), Reference generation stops unless the upstream base checkpoint can be verified as Ref2VA. FL2VA MODEL + Reference conditioning has also worked in local testing, but requires Strict Compatibility to be disabled and remains experimental.
+Reference Image 1, 1+2, or 1+2+3 may be connected. A single active image is treated as Picture 1, and active images are numbered without gaps. **Ref2VA** is the reference-specialized checkpoint and may provide stronger reference fidelity, while **FL2VA + Reference** is also allowed. Checkpoint classification is diagnostic only; the sampler never switches MODELs automatically. **Strict Compatibility** remains reserved for H3 contracts that are actually unsafe or unsupported.
 
 Reference prompts should identify the images explicitly:
 
 ```text
 <Picture 1> defines the subject's face and identity.
 <Picture 2> defines the subject's clothing, body design, and skateboard.
+<Picture 3> optionally defines another ordered identity, object, or environment reference.
 ```
 
 Reference images persist across all Continuum chunks.
@@ -115,7 +119,7 @@ Recommended safe defaults:
 | Prompt Format | Auto |
 | Continuity | Balanced - 22 frames |
 | Audio Continuity | On |
-| Audio Seam | Off |
+| Audio Seam | Auto |
 | Report Detail | Basic |
 | Regenerate From | Auto |
 | Run Storage | Off for short tests; Save + Auto Resume for long runs |
@@ -210,7 +214,7 @@ Select `Chunk N` in `Regenerate From` to reuse chunks before N and regenerate N 
 
 ## Spectrum-aware continuation
 
-With a compatible [ComfyUI Spectrum MiniMax H3](https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3), Continuum requests **Actual Prefix 2** for continuation chunks through Interop API v1.
+With a compatible [ComfyUI Spectrum MiniMax H3](https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3), Continuum requests **Actual Prefix 2** for continuation chunks through Interop API v1. Upstream integration is currently pending in [PR #52](https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3/pull/52); until it is merged, use the validated PR/Fork receiver and confirm the acceptance log below.
 
 ```text
 Chunk 1: normal path
@@ -247,6 +251,24 @@ Experimental
 
 Turbo + Spectrum is not the recommended default because local testing showed a higher risk of artifacts. Sol-Attn is also not part of the current recommended continuity profile.
 
+## Timeline Video
+
+`H3 Continuum Timeline Video` adds an optional `VIDEO` source to the existing continuation pipeline. The source is sliced per 5-second chunk, resized independently from the output, encoded only for chunks that must be generated, and released after use.
+
+- `Efficient - 0.4 MP` is the default and recommended starting point.
+- `Match Output` preserves more source detail but can be substantially slower and heavier.
+- Timeline-video audio is not used; connect Reference Audio separately when needed.
+- Results still depend on the checkpoint, prompt, source motion, and reference compatibility.
+
+## Assemble + Seam
+
+Connect decoded chunk images, audio, and `assembly_plan` to `H3 Continuum Assemble + Seam`.
+
+- Default: `Audio Seam = Auto`, `Video Seam = Auto`, `Report Detail = Basic`.
+- Video modes: `Auto`, `Auto 2`, `Analyze Only`, `Off`.
+- `Auto` applies guarded transient and micro-flash correction without frame deletion.
+- `Auto 2` additionally enables guarded exposure-ramp correction and remains experimental.
+- `Analyze Only` reports the boundary classification without changing images or audio.
 ## Why Core Decode is external
 
 Continuum owns sampling, continuation planning, chunk metadata, context trimming, audio alignment, exact duration, and final assembly.
@@ -257,78 +279,11 @@ This allows the normal Core `VAE Decode` to benefit from ComfyUI updates without
 
 Full raw chunks are decoded before Continuum trims repeated context. Trimming latents before decode would change temporal VAE conditioning.
 
-## Tested results
+## Validation summary
 
-### V3.2.1 stable acceptance
+V3.3.0 passed the automated suite and Windows runtime checks for the production sampler, Reference Image/Audio, Run Storage, Timeline Video, Spectrum Actual Prefix 2, Audio Seam Auto, and guarded Video Seam Auto.
 
-```text
-Release baseline       Commit 2be54bd / ComfyUI v0.32.0
-GPU                    NVIDIA GeForce RTX 5060 Ti 16GB
-Python checks          PASS
-pytest                 129 passed
-GitHub Actions         GREEN
-Local package sync     100 files matched / 0 hash differences
-Conditioning           Ref2VA Reference + Continuation
-Reference images       2
-Chunks                 3 x 5 seconds
-Continuity             Balanced 22
-Spectrum Interop       Actual Prefix 2 accepted
-```
-
-The initial 1056 x 608 run generated and stored all three chunks (`0 reused / 3 generated`) in 1073.81 seconds. Its manifest completed with `resume_safe = true`, and all three stored chunk SHA-256 values matched. The follow-up run reused all three chunks (`3 reused / 0 generated`) and completed Core decode and assembly in 116.86 seconds.
-
-The sampling contract also distinguished MODEL family, prompt, resolution, Run Storage mode, upscale path, and Reference configuration changes without observed cross-condition chunk reuse.
-
-Local validation environment:
-
-```text
-GPU: NVIDIA GeForce RTX 5060 Ti 16GB
-System RAM: 64GB
-ComfyUI: v0.32.0 generation
-```
-
-Observed successful runs include:
-
-- 3 x 5 seconds at approximately 0.3 MP, 0.5 MP, and 0.6 MP.
-- 6 x 5 seconds (30 seconds) at approximately 0.3 MP.
-- 12 x 5 seconds (60 seconds) at approximately 0.3 MP.
-- 12 x 5 seconds at approximately 0.5 MP without OOM; generation was substantially slower.
-- Reference + Continuation with two images using both FL2VA and Ref2VA MODEL tests.
-- V3.2.1 Revision switching: FL2VA -> Ref2VA -> FL2VA.
-- LoRA strength change created a new Revision; restoring the prior strength reused the earlier Revision.
-- Complete 3-chunk reuse reported `3 reused / 0 generated`; Core decode/assembly took about 58-61 seconds at 736 x 416.
-
-These are local results, not minimum hardware guarantees. Resolution, model precision, patches, offload behavior, and other loaded nodes determine actual limits.
-
-## Diagnostics
-
-`status` is a normal STRING output. Connect it to Core **Preview as Text** when you need the sampling and Run Storage report.
-
-Useful lines include:
-
-```text
-Conditioning mode: Reference + Continuation.
-interop=emitted actual_prefix=2
-3 reused, 0 generated
-resume=complete
-```
-
-`accelerator markers not detected (informational only)` is not an error. It only means the optional accelerator marker was not observable.
-
-Use `Report Detail = Basic` normally. Enable detailed diagnostics and `debug` only when troubleshooting.
-
-## Compatibility and scope
-
-- Native MiniMax H3 PackedLayout is preserved.
-- Video and audio VAEs are not run between sampling chunks.
-- Accepted raw chunk latents are retained on CPU.
-- MODEL input is cloned once per chunk; the workflow MODEL is not mutated.
-- SageAttention, LoRA/Turbo, Spectrum, and model weights remain external.
-- Unknown H3 layout contracts fail clearly.
-- Legacy V1/V2/V3 node identifiers remain registered for older workflows but are not the recommended starting point.
-
-Continuum is independently implemented. It does not copy or bundle source code from Spectrum or [H3 Motion Context](https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context).
-
+`Auto 2` is included as an experimental fallback when `Auto` does not sufficiently reduce a boundary exposure ramp. Detailed test conditions, results, and remaining limits are recorded in [docs/VALIDATION_RESULTS.md](docs/VALIDATION_RESULTS.md).
 ## Development checks
 
 ```bash

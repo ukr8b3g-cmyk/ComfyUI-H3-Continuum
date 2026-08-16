@@ -305,6 +305,9 @@ class H3ContinuumSamplerV2:
         show_preview=True,
         latent_only=False,
         reference_assets=None,
+        reference_audio_source=None,
+        reference_audio_vae=None,
+        timeline_video_source=None,
         **clip_prompt_inputs,
     ):
         (
@@ -371,6 +374,9 @@ class H3ContinuumSamplerV2:
             initial_state=initial_state,
             latent_only=bool(latent_only),
             reference_assets=reference_assets,
+            reference_audio_source=reference_audio_source,
+            reference_audio_vae=reference_audio_vae,
+            timeline_video_source=timeline_video_source,
         )
 
 

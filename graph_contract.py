@@ -110,7 +110,8 @@ def _node(prompt: dict[str, Any], node_id: str, *, allowed: set[str], stack: set
 
 
 def build_upstream_graph_contract(
-    prompt: Any, unique_id: Any, *, require_video_vae: bool
+    prompt: Any, unique_id: Any, *, require_video_vae: bool,
+    require_reference_audio_vae: bool = False,
 ) -> tuple[dict[str, Any], bool, list[str]]:
     """Fingerprint MODEL/CLIP/VAE routes feeding the Continuum sampler."""
     if not isinstance(prompt, dict):
@@ -123,11 +124,13 @@ def build_upstream_graph_contract(
     routes: dict[str, Any] = {}
     safe = True
     reasons: list[str] = []
-    specs = (
+    specs = [
         ("model", _KNOWN_MODEL_NODES, True),
         ("clip", _KNOWN_CLIP_NODES, True),
         ("video_vae", _KNOWN_VAE_NODES, bool(require_video_vae)),
-    )
+    ]
+    if require_reference_audio_vae:
+        specs.append(("reference_audio_vae", _KNOWN_VAE_NODES, True))
     for name, allowed, required in specs:
         if not required:
             continue

@@ -1,5 +1,35 @@
 # Changelog
 
+## 3.3.0
+
+- Promoted Timeline Video to a stable public node with chunk-local slicing and a 0.4 MP default.
+- Added `H3 Continuum Assemble + Seam` with stable Audio Seam Auto and guarded Video Seam Auto defaults.
+- Kept `Auto 2` as an experimental exposure-ramp extension without widening the visible option label.
+- Added native Reference Audio conditioning and retained up to three ordered Reference Images.
+- Preserved stable sampler Node IDs, Run Storage compatibility, Core VAE decode, and Spectrum Interop API v1 Actual Prefix 2 behavior.
+- Added consolidated runtime validation results and documented known Timeline Video and Auto 2 limitations.
+
+## 3.2.4
+
+- Added native MiniMax H3 Reference Audio 1 conditioning with deferred Audio VAE encoding.
+- Matched Core's permissive prompt handling by warning instead of stopping on unavailable Picture or Audio tags.
+- Matched Core's dynamic Reference behavior by compacting active image inputs into Picture 1 through Picture N.
+- Kept Sampling, Continuation, Spectrum Interop, external Core VAE Decode, and assembly semantics unchanged.
+
+## 3.2.3
+
+- Formalized the third ordered Reference Image as a compatibility-preserving extension.
+- Kept V3.2.2 zero, one, and two-image Reference Contract JSON unchanged.
+- Added Image 3 shape, dtype, exact SHA-256, position, and preprocess metadata only for three-image runs.
+- Added Golden Contract and Revision identity regression coverage for V3.2.2 saved runs.
+- Kept Sampling, Continuation, Spectrum Interop, Core VAE Decode, and assembly semantics unchanged.
+
+## 3.2.2
+
+- Allowed Ref2VA, FL2VA, and unverified checkpoints with Reference conditioning.
+- Kept checkpoint classification as diagnostics without automatic MODEL switching.
+- Kept Strict Compatibility for genuinely unsafe or unsupported H3 contracts.
+
 ## 3.2.1
 
 - Declared V3.2.1 stable after GitHub Actions, Windows Ref2VA generation, Spectrum Actual Prefix 2, chunk integrity and complete Auto Resume passed.

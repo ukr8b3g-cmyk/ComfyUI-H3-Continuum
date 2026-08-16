@@ -20,6 +20,16 @@ from .plan import FPS, validate_assembly_plan
 AUDIO_SEAM_OFF = "Off"
 AUDIO_SEAM_AUTO = "Auto"
 AUDIO_SEAM_OPTIONS = (AUDIO_SEAM_OFF, AUDIO_SEAM_AUTO)
+VIDEO_SEAM_OFF = "Off"
+VIDEO_SEAM_ANALYZE = "Analyze Only"
+VIDEO_SEAM_AUTO = "Auto"
+VIDEO_SEAM_AUTO_2 = "Auto 2"
+VIDEO_SEAM_ANALYSIS_OPTIONS = (
+    VIDEO_SEAM_AUTO,
+    VIDEO_SEAM_AUTO_2,
+    VIDEO_SEAM_ANALYZE,
+    VIDEO_SEAM_OFF,
+)
 
 
 def _singleton(value: Any, name: str) -> Any:
@@ -224,7 +234,7 @@ class H3ContinuumAssembleV3:
                 "audio_seam": (
                     AUDIO_SEAM_OPTIONS,
                     {
-                        "default": AUDIO_SEAM_OFF,
+                        "default": AUDIO_SEAM_AUTO,
                         "display_name": "Audio Seam",
                         "tooltip": (
                             "Auto corrects only decoded audio boundaries; "
@@ -275,3 +285,123 @@ _assemble_decoded_chunks_v300 = assemble_decoded_chunks
 
 def assemble_decoded_chunks(*args, **kwargs):
     return _assemble_with_hardening(_assemble_decoded_chunks_v300, args, kwargs)
+
+
+class H3ContinuumAssembleSeamExperimental(H3ContinuumAssembleV3):
+    DESCRIPTION = (
+        "Analyze decoded chunk boundaries and apply guarded video seam correction."
+    )
+    SEARCH_ALIASES = ["H3 seam analysis", "H3 boundary flicker analysis"]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        schema = super().INPUT_TYPES()
+        required = dict(schema["required"])
+        diagnostics = required.pop("diagnostics")
+        required["video_seam"] = (
+            VIDEO_SEAM_ANALYSIS_OPTIONS,
+            {
+                "default": VIDEO_SEAM_AUTO,
+                "display_name": "Video Seam",
+                "tooltip": (
+                    "Analyze Only reports decoded video boundaries without changing them. "
+                    "Auto applies the validated transient and micro-flash correction. "
+                    "Auto 2 experimentally adds qualified exposure-ramp smoothing."
+                ),
+            },
+        )
+        required["diagnostics"] = diagnostics
+        schema["required"] = required
+        return schema
+
+    def assemble(
+        self,
+        images,
+        audio,
+        assembly_plan,
+        exact_total_duration,
+        audio_seam,
+        video_seam,
+        diagnostics,
+    ):
+        mode = str(_singleton(video_seam, "video_seam"))
+        if mode not in VIDEO_SEAM_ANALYSIS_OPTIONS:
+            raise ValueError(f"unknown Video Seam mode: {mode!r}")
+        if mode == VIDEO_SEAM_OFF:
+            return super().assemble(
+                images,
+                audio,
+                assembly_plan,
+                exact_total_duration,
+                audio_seam,
+                diagnostics,
+            )
+
+        image_chunks = _chunk_list(images)
+        plan = _singleton(assembly_plan, "assembly_plan")
+        analyses = []
+        analysis_error = None
+        actions = {}
+        try:
+            from .video_seam import (
+                analyze_decoded_boundaries,
+                correct_decoded_boundaries,
+                format_video_boundary_analysis,
+            )
+
+            analyses = analyze_decoded_boundaries(
+                images=image_chunks,
+                assembly_plan=plan,
+            )
+            if mode in (VIDEO_SEAM_AUTO, VIDEO_SEAM_AUTO_2):
+                image_chunks, actions = correct_decoded_boundaries(
+                    images=image_chunks,
+                    assembly_plan=plan,
+                    analyses=analyses,
+                    enable_exposure_ramp=mode == VIDEO_SEAM_AUTO_2,
+                )
+        except Exception as exc:
+            analysis_error = exc
+
+        result_images, result_audio, report = assemble_decoded_chunks(
+            images=image_chunks,
+            audio=_chunk_list(audio),
+            assembly_plan=plan,
+            exact_total_duration=bool(
+                _singleton(exact_total_duration, "exact_total_duration")
+            ),
+            audio_seam=str(_singleton(audio_seam, "audio_seam")),
+            diagnostics=str(_singleton(diagnostics, "diagnostics")),
+        )
+        if mode == VIDEO_SEAM_ANALYZE:
+            status = "Video Seam: Analyze Only; decoded frames and audio are unchanged."
+        elif mode == VIDEO_SEAM_AUTO:
+            status = (
+                "Video Seam: Auto; guarded transient and micro-flash correction enabled."
+            )
+        else:
+            status = (
+                "Video Seam: Auto 2 (Experimental); guarded transient, micro-flash, "
+                "and exposure-ramp correction enabled."
+            )
+        report = report.replace("Video seam correction is disabled.", status, 1)
+        if analysis_error is None:
+            lines = [
+                format_video_boundary_analysis(
+                    item,
+                    action=(
+                        "analysis only"
+                        if mode == VIDEO_SEAM_ANALYZE
+                        else actions.get(item.boundary_index, "kept native boundary")
+                    ),
+                )
+                for item in analyses
+            ]
+            if not lines:
+                lines = [f"Video Seam {mode}: no decoded chunk boundary to analyze."]
+        else:
+            lines = [
+                f"Video Seam {mode}: native output preserved; analysis unavailable "
+                f"({type(analysis_error).__name__}: {analysis_error})"
+            ]
+        return result_images, result_audio, report.rstrip() + "\n" + "\n".join(lines)

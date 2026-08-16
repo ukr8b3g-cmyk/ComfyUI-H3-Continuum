@@ -18,6 +18,10 @@ from ComfyUI_H3_Continuum_Join.run_storage import (
     resolve_run_storage_name,
     revision_identity,
 )
+from ComfyUI_H3_Continuum_Join.reference import (
+    REFERENCE_SIZE_MATCH_OUTPUT,
+    ReferenceAssets,
+)
 from ComfyUI_H3_Continuum_Join.graph_contract import (
     CHECKPOINT_FL2VA,
     CHECKPOINT_REF2VA,
@@ -309,6 +313,64 @@ def _sampling_contract(
         upstream_graph_safe=upstream_graph_safe,
         upstream_graph_reasons=upstream_graph_reasons,
     )
+
+
+def test_v322_golden_reference_contract_preserves_revision_identity():
+    model = _Model()
+    clip = _Clip()
+    video_vae = _VideoVAE()
+    sampler = _Sampler()
+
+    no_reference, safe, reasons = _sampling_contract(
+        model=model,
+        clip=clip,
+        video_vae=video_vae,
+        sampler=sampler,
+        conditioning_mode="t2va",
+        first_frame_hash="",
+        reference_contract=None,
+    )
+    assert safe, reasons
+    assert "reference" not in no_reference["global"]
+
+    for count in (1, 2):
+        hashes = tuple(str(index) * 64 for index in range(1, count + 1))
+        expected_reference = {
+            "reference_contract_version": 1,
+            "count": count,
+            "size_mode": REFERENCE_SIZE_MATCH_OUTPUT,
+            "image_hashes": list(hashes),
+            "combined_hash": "a" * 64,
+        }
+        actual_reference = ReferenceAssets(
+            images=tuple(torch.zeros((1, 32, 32, 3)) for _ in range(count)),
+            latents=tuple(None for _ in range(count)),
+            image_hashes=hashes,
+            combined_hash="a" * 64,
+            size_mode=REFERENCE_SIZE_MATCH_OUTPUT,
+        ).contract
+        expected, expected_safe, expected_reasons = _sampling_contract(
+            model=model,
+            clip=clip,
+            video_vae=video_vae,
+            sampler=sampler,
+            conditioning_mode="reference",
+            first_frame_hash="",
+            reference_contract=expected_reference,
+        )
+        actual, actual_safe, actual_reasons = _sampling_contract(
+            model=model,
+            clip=clip,
+            video_vae=video_vae,
+            sampler=sampler,
+            conditioning_mode="reference",
+            first_frame_hash="",
+            reference_contract=actual_reference,
+        )
+        assert expected_safe, expected_reasons
+        assert actual_safe, actual_reasons
+        assert actual == expected
+        assert revision_identity(actual) == revision_identity(expected)
 
 
 def test_clip_and_required_video_vae_are_part_of_sampling_contract():
