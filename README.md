@@ -1,4 +1,7 @@
-# ComfyUI-H3-Continuum 3.3.0
+# ComfyUI-H3-Continuum 3.2.4
+<img width="5250" height="2020" alt="workflow (8)" src="https://github.com/user-attachments/assets/58bc27d7-cab4-4f7d-9f58-ed94bdad4a1d" />
+
+
 
 Native long-form MiniMax H3 video and audio continuation for ComfyUI.
 
@@ -9,6 +12,15 @@ https://github.com/user-attachments/assets/bfa8c683-fc9d-48f1-9cdb-477ca110cdf2
 **H3 Continuum Sampler V3.2** generates 1 to 16 linked H3 chunks, carries raw video/audio latent context between chunks, supports T2VA, I2VA, FL2VA and multi-image Reference conditioning, and can resume completed chunks from disk.
 
 V3 delegates video and audio decoding to normal **ComfyUI Core VAE Decode nodes**. No model weights or third-party accelerator code are bundled.
+
+## Sample workflows
+
+- [Standard workflow](examples/workflows/MiniMax_H3_Continuum_V32.json) - quality-oriented `res_multistep` profile with Spectrum enabled.
+- [Turbo workflow](examples/workflows/MiniMax_H3_Continuum_V32_turbo.json) - 8-step `euler` profile with Spectrum bypassed.
+
+Download a JSON file and drag it onto the ComfyUI canvas. The examples use optional external custom nodes and local image/audio inputs; replace or bypass unavailable assets for your environment.
+
+Turbo weights are available from [LightX2V MiniMax H3 Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/main).
 
 ## Key features
 
@@ -27,6 +39,16 @@ V3 delegates video and audio decoding to normal **ComfyUI Core VAE Decode nodes*
 - Existing legacy node identifiers remain registered for saved-workflow compatibility.
 
 ## Installation
+
+### ComfyUI Manager
+
+Open **ComfyUI Manager**, search for **H3 Continuum** or **Continuum**, and select **Install**.
+
+![H3 Continuum in ComfyUI Manager](docs/images/comfyui-manager-h3-continuum.png)
+
+Restart ComfyUI after installation, then search for **H3 Continuum Sampler V3.2** in the node menu.
+
+### Manual installation
 
 From `ComfyUI/custom_nodes/`:
 
@@ -124,6 +146,51 @@ Recommended safe defaults:
 | Regenerate From | Auto |
 | Run Storage | Off for short tests; Save + Auto Resume for long runs |
 | SageAttention | Auto when backend compatibility is unknown |
+
+## H3 Continuum Sampler UI
+
+The production node keeps normal generation controls visible and marks infrequent controls as native ComfyUI **Advanced** widgets. Most users only need the main controls.
+
+### Main inputs and controls
+
+| Group | Input or control | Purpose |
+| --- | --- | --- |
+| H3 pipeline | `model`, `clip`, `video_vae`, `sampler`, `sigmas` | Connect the normal MiniMax H3 MODEL, text encoder, Video VAE, sampler, and sigma schedule. |
+| Prompt | `Sequence Prompt` | Fixed, List, or Timeline text for the complete Continuum run. |
+| Keyframes | `first_frame`, `last_frame` | Optional I2VA, last-frame-conditioned, or FL2VA keyframes. |
+| Reference images | `reference_image_1`, `reference_image_2`, `reference_image_3` | Up to three ordered Picture references. Bypassed inputs are ignored. |
+| Reference audio | `reference_audio_1`, `reference_audio_vae` | Optional native H3 Reference Audio. Connect the Audio VAE only when Reference Audio is used. |
+| Duration | `chunks`, `chunk_seconds` | Number of linked chunks and duration of each chunk. Start with `3 x 5.0` seconds. |
+| Canvas | `width`, `height` | Output dimensions. Use values compatible with the current H3 Core path, normally multiples of 32. |
+| Continuity | `continuity` | Number of previous raw frames carried into the next chunk. `Balanced - 22 frames` is the practical default. |
+| Seed | `base_seed` | Base seed used to derive deterministic per-chunk seeds. |
+
+Reference images and First/Last Frame are mutually exclusive. Reference Audio can be combined with either keyframe conditioning or Reference Image conditioning.
+
+### Advanced controls
+
+| Control | Default | Use |
+| --- | --- | --- |
+| Prompt Format | Auto | Detect Fixed, List, or Timeline prompts. |
+| Audio Continuity | On | Carry raw audio context between chunks. |
+| Report Detail | Basic | Select the amount of status and diagnostic text. |
+| Regenerate From | Auto | Resume normally, or regenerate from a selected saved chunk. |
+| `reroll_nonce` | 0 | Automatic Revision behavior. Positive values provide explicit legacy branch selection. |
+| Strict Compatibility | On | Stop only on H3 contracts that are actually unsafe or unsupported. |
+| Debug | Off | Enable additional troubleshooting output. |
+| Show Preview | On | Show normal progress and preview information. |
+| Run Storage | Off | Use `Save + Auto Resume` for long or interruptible runs. |
+| Run Name | blank | Optional manual storage-name override. Automatic identification is used when blank. |
+| Reference Size | Match Output | Choose practical output-area matching or larger identity preservation. |
+
+### Outputs
+
+| Output | Connect to |
+| --- | --- |
+| `video_latents` | One normal ComfyUI Core Video VAE Decode node. |
+| `audio_latents` | One normal ComfyUI Core Audio VAE Decode node. |
+| `assembly_plan` | **H3 Continuum Assemble V3**. |
+| `status` | Core **Preview as Text** when a readable run report is needed. |
 
 ## Sequence Prompt
 
@@ -233,6 +300,18 @@ Spectrum H3: accepted H3 Continuum API v1, actual prefix=2
 
 Actual Prefix 2 is active only when the Spectrum log reports that the Continuum API request was accepted. Older or incompatible Spectrum versions continue without that receiver behavior.
 
+### Benefits after the Spectrum upstream merge
+
+Once the Continuum receiver is included in an official Spectrum release, users no longer need a Continuum-specific Spectrum fork or local patch. Installing or updating Spectrum through its normal distribution path will preserve the integration.
+
+- **Automatic handshake:** Continuum emits the request only for continuation chunks, and Spectrum applies Actual Prefix 2 when it recognizes Interop API v1.
+- **Safer chunk transitions:** the first two Transformer evaluations after a new raw AV Context are evaluated normally before Spectrum forecasting resumes. This is intended to reduce forecast instability immediately after a chunk boundary; it does not guarantee that every visible seam or flicker will disappear.
+- **No additional solver steps:** Actual Prefix 2 changes which existing evaluations are calculated as Actual steps; it does not increase the configured step count.
+- **Update-friendly operation:** the receiver becomes part of upstream Spectrum, so a normal Spectrum update does not overwrite a separate local interoperability patch.
+- **Optional composition:** Continuum still works without Spectrum. MODEL selection, Turbo/LoRA, SageAttention, and Spectrum remain external workflow choices, and Continuum does not install or switch them automatically.
+
+After updating Spectrum, confirm that Chunk 2 and later print the acceptance log shown above. Its presence is the runtime proof that the upstream receiver is active.
+
 ### Standard and Turbo profiles
 
 ```text
@@ -250,6 +329,8 @@ Experimental
 ```
 
 Turbo + Spectrum is not the recommended default because local testing showed a higher risk of artifacts. Sol-Attn is also not part of the current recommended continuity profile.
+
+Turbo LoRA files are available from [LightX2V MiniMax H3 Turbo](https://huggingface.co/lightx2v/Minimax-h3-Turbo/tree/main). The ComfyUI-specific FL2VA and Ref2VA variants can be selected in the upstream MODEL/LoRA chain; Continuum does not bundle or switch them automatically.
 
 ## Timeline Video
 
@@ -284,6 +365,35 @@ Full raw chunks are decoded before Continuum trims repeated context. Trimming la
 V3.3.0 passed the automated suite and Windows runtime checks for the production sampler, Reference Image/Audio, Run Storage, Timeline Video, Spectrum Actual Prefix 2, Audio Seam Auto, and guarded Video Seam Auto.
 
 `Auto 2` is included as an experimental fallback when `Auto` does not sufficiently reduce a boundary exposure ramp. Detailed test conditions, results, and remaining limits are recorded in [docs/VALIDATION_RESULTS.md](docs/VALIDATION_RESULTS.md).
+## Diagnostics
+
+`status` is a normal STRING output. Connect it to Core **Preview as Text** when you need the sampling and Run Storage report.
+
+Useful lines include:
+
+```text
+Conditioning mode: Reference + Continuation.
+interop=emitted actual_prefix=2
+3 reused, 0 generated
+resume=complete
+```
+
+`accelerator markers not detected (informational only)` is not an error. It only means the optional accelerator marker was not observable.
+
+Use `Report Detail = Basic` normally. Enable detailed diagnostics and `debug` only when troubleshooting.
+
+## Compatibility and scope
+
+- Native MiniMax H3 PackedLayout is preserved.
+- Video and audio VAEs are not run between sampling chunks.
+- Accepted raw chunk latents are retained on CPU.
+- MODEL input is cloned once per chunk; the workflow MODEL is not mutated.
+- SageAttention, LoRA/Turbo, Spectrum, and model weights remain external.
+- Unknown H3 layout contracts fail clearly.
+- Legacy V1/V2/V3 node identifiers remain registered for older workflows but are not the recommended starting point.
+
+Continuum is independently implemented. It does not copy or bundle source code from Spectrum or [H3 Motion Context](https://github.com/NikoDemon80/ComfyUI-H3-Motion-Context).
+
 ## Development checks
 
 ```bash
