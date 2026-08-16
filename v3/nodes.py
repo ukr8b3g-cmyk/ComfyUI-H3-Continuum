@@ -353,7 +353,7 @@ class H3ContinuumSamplerV3:
 
 
 class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
-    """Stable single-entry sampler UI for V3.2 and later releases."""
+    """Stable single-entry sampler UI for V3.3 and later releases."""
 
     DEPRECATED = False
     CATEGORY = CATEGORY
@@ -363,6 +363,7 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
         "ComfyUI Core."
     )
     SEARCH_ALIASES = [
+        "H3 Continuum Sampler V3.3",
         "H3 Continuum Sampler V3.2",
         "H3 Continuum Production",
         "MiniMax H3 long video",
@@ -773,7 +774,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "H3ContinuumSamplerProduction": "H3 Continuum Sampler V3.2",
+    "H3ContinuumSamplerProduction": "H3 Continuum Sampler V3.3",
     "H3ContinuumSamplerTimelineVideo": "H3 Continuum Timeline Video",
     "H3ContinuumSamplerV3": "H3 Continuum Sampler V3",
     "H3ContinuumAdvancedV3": "H3 Continuum Advanced V3",

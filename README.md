@@ -1,4 +1,4 @@
-# ComfyUI-H3-Continuum 3.2.4
+# ComfyUI-H3-Continuum 3.3.0
 <img width="5250" height="2020" alt="workflow (8)" src="https://github.com/user-attachments/assets/58bc27d7-cab4-4f7d-9f58-ed94bdad4a1d" />
 
 
@@ -9,14 +9,14 @@ Native long-form MiniMax H3 video and audio continuation for ComfyUI.
 
 https://github.com/user-attachments/assets/bfa8c683-fc9d-48f1-9cdb-477ca110cdf2
 
-**H3 Continuum Sampler V3.2** generates 1 to 16 linked H3 chunks, carries raw video/audio latent context between chunks, supports T2VA, I2VA, FL2VA and multi-image Reference conditioning, and can resume completed chunks from disk.
+**H3 Continuum Sampler V3.3** generates 1 to 16 linked H3 chunks, carries raw video/audio latent context between chunks, supports T2VA, I2VA, FL2VA and multi-image Reference conditioning, and can resume completed chunks from disk.
 
 V3 delegates video and audio decoding to normal **ComfyUI Core VAE Decode nodes**. No model weights or third-party accelerator code are bundled.
 
 ## Sample workflows
 
-- [Standard workflow](examples/workflows/MiniMax_H3_Continuum_V32.json) - quality-oriented `res_multistep` profile with Spectrum enabled.
-- [Turbo workflow](examples/workflows/MiniMax_H3_Continuum_V32_turbo.json) - 8-step `euler` profile with Spectrum bypassed.
+- [Standard workflow](examples/workflows/MiniMax_H3_Continuum_V33.json) - quality-oriented `res_multistep` profile with Spectrum enabled.
+- [Turbo workflow](examples/workflows/MiniMax_H3_Continuum_V33_turbo.json) - 8-step `euler` profile with Spectrum bypassed.
 
 Download a JSON file and drag it onto the ComfyUI canvas. The examples use optional external custom nodes and local image/audio inputs; replace or bypass unavailable assets for your environment.
 
@@ -46,7 +46,7 @@ Open **ComfyUI Manager**, search for **H3 Continuum** or **Continuum**, and sele
 
 ![H3 Continuum in ComfyUI Manager](docs/images/comfyui-manager-h3-continuum.png)
 
-Restart ComfyUI after installation, then search for **H3 Continuum Sampler V3.2** in the node menu.
+Restart ComfyUI after installation, then search for **H3 Continuum Sampler V3.3** in the node menu.
 
 ### Manual installation
 
@@ -56,7 +56,7 @@ From `ComfyUI/custom_nodes/`:
 git clone https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum.git
 ```
 
-Restart ComfyUI and search for **H3 Continuum Sampler V3.2**.
+Restart ComfyUI and search for **H3 Continuum Sampler V3.3**.
 
 For ZIP installation, extract the repository as `ComfyUI-H3-Continuum` under `ComfyUI/custom_nodes/`, then restart ComfyUI.
 
@@ -71,7 +71,7 @@ H3 MODEL Loader
   -> optional SageAttention
   -> optional Turbo/LoRA
   -> optional Spectrum
-  -> H3 Continuum Sampler V3.2.model
+  -> H3 Continuum Sampler V3.3.model
 
 MiniMax H3 CLIP/Text Encoder ------> clip
 MiniMax H3 Video VAE -------------> video_vae
@@ -126,7 +126,7 @@ Both modes avoid stretching and use crop-free Reference preprocessing.
 
 ## Quick start
 
-1. Add **H3 Continuum Sampler V3.2**.
+1. Add **H3 Continuum Sampler V3.3**.
 2. Connect MODEL, CLIP, Video VAE, sampler, sigmas, and one Text (Multiline) node.
 3. Set `Prompt Format = Auto`.
 4. Start with `chunks = 3`, `chunk_seconds = 5.0`, and `Balanced - 22 frames`.

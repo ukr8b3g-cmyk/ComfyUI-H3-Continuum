@@ -1,4 +1,4 @@
-# ComfyUI-H3-Continuum 3.2.4
+# ComfyUI-H3-Continuum 3.3.0
 
 **V3.3.0 Stable:** Timeline Video、Audio Seam Auto、Video Seam Auto、Reference Audio、Run Storageを含む安定版です。
 
