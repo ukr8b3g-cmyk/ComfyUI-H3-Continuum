@@ -9,7 +9,7 @@ Native long-form MiniMax H3 video and audio continuation for ComfyUI.
 
 https://github.com/user-attachments/assets/bfa8c683-fc9d-48f1-9cdb-477ca110cdf2
 
-**H3 Continuum Sampler V3.3** generates 1 to 16 linked H3 chunks, carries raw video/audio latent context between chunks, supports T2VA, I2VA, FL2VA and multi-image Reference conditioning, and can resume completed chunks from disk.
+**H3 Continuum Sampler V3.3** generates 1 to 16 linked H3 chunks, carries raw video/audio latent context between chunks, supports T2VA, I2VA, FL2VA, multi-image Reference conditioning, and optional Timeline Video, and can resume completed chunks from disk.
 
 V3 delegates video and audio decoding to normal **ComfyUI Core VAE Decode nodes**. No model weights or third-party accelerator code are bundled.
 
@@ -61,6 +61,20 @@ Restart ComfyUI and search for **H3 Continuum Sampler V3.3**.
 For ZIP installation, extract the repository as `ComfyUI-H3-Continuum` under `ComfyUI/custom_nodes/`, then restart ComfyUI.
 
 Use an up-to-date ComfyUI. ComfyUI v0.32.0 or later is recommended for the current MiniMax H3 Core VAE fixes and memory improvements.
+
+## Current and legacy nodes
+
+V3.3 uses two current workflow nodes:
+
+- **H3 Continuum Sampler V3.3** - unified sampler for normal generation and optional Timeline Video conditioning.
+- **H3 Continuum Assemble + Seam** - Core-decoded chunk assembly with Audio Seam and guarded Video Seam correction.
+
+The V3.2.4 nodes remain registered only so existing saved workflows continue to load:
+
+- **[Legacy] H3 Continuum Sampler V3.2.4**
+- **[Legacy] H3 Continuum Assemble V3.2.4**
+
+New workflows should use the two V3.3 nodes. The legacy Node IDs are preserved, but they do not receive the integrated Timeline Video and current seam workflow surface.
 
 No additional Python package is required beyond a working ComfyUI MiniMax H3 environment.
 
@@ -131,7 +145,7 @@ Both modes avoid stretching and use crop-free Reference preprocessing.
 3. Set `Prompt Format = Auto`.
 4. Start with `chunks = 3`, `chunk_seconds = 5.0`, and `Balanced - 22 frames`.
 5. Connect the raw latent outputs to Core VAE Decode and Core VAE Decode Audio.
-6. Connect decoded outputs and `assembly_plan` to **H3 Continuum Assemble V3**.
+6. Connect decoded outputs and `assembly_plan` to **H3 Continuum Assemble + Seam**.
 7. Connect Assemble images/audio to Create Video.
 
 Recommended safe defaults:
@@ -334,7 +348,7 @@ Turbo LoRA files are available from [LightX2V MiniMax H3 Turbo](https://huggingf
 
 ## Timeline Video
 
-`H3 Continuum Timeline Video` adds an optional `VIDEO` source to the existing continuation pipeline. The source is sliced per 5-second chunk, resized independently from the output, encoded only for chunks that must be generated, and released after use.
+`H3 Continuum Sampler V3.3` includes an optional `timeline_video` input. When connected, the source is sliced per 5-second chunk, resized independently from the output, encoded only for chunks that must be generated, and released after use. When it is not connected, the same node operates as the normal Continuum sampler.
 
 - `Efficient - 0.4 MP` is the default and recommended starting point.
 - `Match Output` preserves more source detail but can be substantially slower and heavier.

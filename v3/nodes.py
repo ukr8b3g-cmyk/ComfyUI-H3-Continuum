@@ -692,9 +692,10 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
 
 
 class H3ContinuumSamplerTimelineVideo(H3ContinuumSamplerProduction):
-    """Chunk-local Timeline Video facade over the stable engine."""
+    """V3.3 sampler with optional chunk-local Timeline Video conditioning."""
 
     DEPRECATED = False
+    CATEGORY = CATEGORY
     DESCRIPTION = (
         "Timeline Video sampler. It slices one Core VIDEO per chunk, "
         "resizes only that slice, and reuses the stable Continuum sampling engine."
@@ -760,9 +761,6 @@ class H3ContinuumSamplerTimelineVideo(H3ContinuumSamplerProduction):
         return super().run(timeline_video_source=source, **kwargs)
 
 
-from .seam_test_source import H3ContinuumSeamTestSource
-
-
 NODE_CLASS_MAPPINGS = {
     "H3ContinuumSamplerProduction": H3ContinuumSamplerProduction,
     "H3ContinuumSamplerTimelineVideo": H3ContinuumSamplerTimelineVideo,
@@ -770,15 +768,13 @@ NODE_CLASS_MAPPINGS = {
     "H3ContinuumAdvancedV3": H3ContinuumAdvancedV3,
     "H3ContinuumAssembleV3": H3ContinuumAssembleV3,
     "H3ContinuumAssembleSeamExperimental": H3ContinuumAssembleSeamExperimental,
-    "H3ContinuumSeamTestSource": H3ContinuumSeamTestSource,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "H3ContinuumSamplerProduction": "H3 Continuum Sampler V3.3",
-    "H3ContinuumSamplerTimelineVideo": "H3 Continuum Timeline Video",
+    "H3ContinuumSamplerProduction": "H3 Continuum Sampler V3.2.4",
+    "H3ContinuumSamplerTimelineVideo": "H3 Continuum Sampler V3.3",
     "H3ContinuumSamplerV3": "H3 Continuum Sampler V3",
     "H3ContinuumAdvancedV3": "H3 Continuum Advanced V3",
-    "H3ContinuumAssembleV3": "H3 Continuum Assemble V3",
+    "H3ContinuumAssembleV3": "H3 Continuum Assemble V3.2.4",
     "H3ContinuumAssembleSeamExperimental": "H3 Continuum Assemble + Seam",
-    "H3ContinuumSeamTestSource": "H3 Continuum Seam Test Source (Experimental)",
 }

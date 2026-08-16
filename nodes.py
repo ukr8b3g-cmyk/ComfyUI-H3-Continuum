@@ -377,11 +377,8 @@ NODE_DISPLAY_NAME_MAPPINGS.update(V3_NODE_DISPLAY_NAME_MAPPINGS)
 # every older identifier registered so saved workflows still load, while
 # ComfyUI's native deprecated-node filter hides legacy building blocks.
 _primary_node_ids = {
-    "H3ContinuumSamplerProduction",
     "H3ContinuumSamplerTimelineVideo",
-    "H3ContinuumAssembleV3",
     "H3ContinuumAssembleSeamExperimental",
-    "H3ContinuumSeamTestSource",
     "H3ContinuumClipOverrides",
     "H3ContinuumResult",
 }

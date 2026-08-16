@@ -86,7 +86,6 @@ def main() -> int:
         "H3ContinuumAdvancedV3",
         "H3ContinuumAssembleV3",
         "H3ContinuumAssembleSeamExperimental",
-        "H3ContinuumSeamTestSource",
     }
     actual = set(module.NODE_CLASS_MAPPINGS)
     if actual != expected:

@@ -288,6 +288,8 @@ def assemble_decoded_chunks(*args, **kwargs):
 
 
 class H3ContinuumAssembleSeamExperimental(H3ContinuumAssembleV3):
+    DEPRECATED = False
+    CATEGORY = "MiniMax H3/Continuum"
     DESCRIPTION = (
         "Analyze decoded chunk boundaries and apply guarded video seam correction."
     )

@@ -73,13 +73,22 @@ def _source(size_mode=TIMELINE_VIDEO_SIZE_MATCH_OUTPUT):
     return video, source
 
 
-def test_timeline_node_is_separate_and_stable_schema_is_unchanged():
-    stable = H3ContinuumSamplerProduction.INPUT_TYPES()
-    experimental = H3ContinuumSamplerTimelineVideo.INPUT_TYPES()
-    assert "timeline_video" not in stable["required"]
-    assert "timeline_video_size" not in stable["required"]
-    assert "timeline_video" not in experimental["required"]
-    assert experimental["optional"]["timeline_video"][0] == "VIDEO"
+def test_v33_unifies_optional_timeline_video_and_keeps_v324_schema():
+    legacy = H3ContinuumSamplerProduction.INPUT_TYPES()
+    unified = H3ContinuumSamplerTimelineVideo.INPUT_TYPES()
+    assert "timeline_video" not in legacy["required"]
+    assert "timeline_video_size" not in legacy["required"]
+    assert "timeline_video" not in unified["required"]
+    assert unified["optional"]["timeline_video"][0] == "VIDEO"
+
+    from ComfyUI_H3_Continuum_Join import nodes as root_nodes
+
+    assert root_nodes.NODE_DISPLAY_NAME_MAPPINGS["H3ContinuumSamplerTimelineVideo"] == (
+        "H3 Continuum Sampler V3.3"
+    )
+    assert root_nodes.NODE_DISPLAY_NAME_MAPPINGS["H3ContinuumSamplerProduction"] == (
+        "[Legacy] H3 Continuum Sampler V3.2.4"
+    )
 
 
 def test_timeline_node_without_video_delegates_to_stable_engine(monkeypatch):

@@ -354,3 +354,6 @@ def test_experimental_seam_analyzer_is_public_in_root_registration():
     assert root_nodes.NODE_DISPLAY_NAME_MAPPINGS["H3ContinuumAssembleSeamExperimental"] == (
         "H3 Continuum Assemble + Seam"
     )
+    assert root_nodes.NODE_DISPLAY_NAME_MAPPINGS["H3ContinuumAssembleV3"] == (
+        "[Legacy] H3 Continuum Assemble V3.2.4"
+    )
