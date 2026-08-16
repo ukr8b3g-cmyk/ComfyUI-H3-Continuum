@@ -6,7 +6,7 @@ from ComfyUI_H3_Continuum_Join.compatibility import (
 )
 
 
-def test_signature_contract_accepts_native_packed_layout_signature():
+def test_signature_contract_accepts_legacy_packed_layout_signature():
     def native(
         self,
         text_len,
@@ -23,7 +23,27 @@ def test_signature_contract_accepts_native_packed_layout_signature():
     assert _missing_callable_parameters(
         native,
         positional=("text_len", "latent_t", "latent_h", "latent_w", "audio_t"),
-        keywords=("keyframes", "refs", "frame_count"),
+        keywords=("keyframes", "refs"),
+    ) == []
+
+
+def test_signature_contract_accepts_current_packed_layout_without_frame_count():
+    def native(
+        self,
+        text_len,
+        latent_t,
+        latent_h,
+        latent_w,
+        audio_t,
+        keyframes=None,
+        refs=None,
+    ):
+        pass
+
+    assert _missing_callable_parameters(
+        native,
+        positional=("text_len", "latent_t", "latent_h", "latent_w", "audio_t"),
+        keywords=("keyframes", "refs"),
     ) == []
 
 
@@ -38,7 +58,7 @@ def test_signature_contract_accepts_sol_attn_style_forwarding_wrapper():
     assert _missing_callable_parameters(
         sol_wrapper,
         positional=("text_len", "latent_t", "latent_h", "latent_w", "audio_t"),
-        keywords=("keyframes", "refs", "frame_count"),
+        keywords=("keyframes", "refs"),
     ) == []
 
 
@@ -49,8 +69,8 @@ def test_signature_contract_still_fails_closed_for_real_keyword_removal():
     assert _missing_callable_parameters(
         incompatible,
         positional=("text_len", "latent_t", "latent_h", "latent_w", "audio_t"),
-        keywords=("keyframes", "refs", "frame_count"),
-    ) == ["keyframes", "refs", "frame_count"]
+        keywords=("keyframes", "refs"),
+    ) == ["keyframes", "refs"]
 
 
 def test_accelerator_summary_reads_modelpatcher_wrappers_and_transformer_markers():

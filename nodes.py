@@ -180,6 +180,7 @@ class H3ContinuumJoin:
             context_frames=context_frames,
             new_frame_count=shape.total_frames,
             first_frame_policy=first_frame_policy,
+            source_frame_count=current_frames,
             preserve_last_frame=bool(preserve_last_frame),
         )
         clip_index = int(state.get("clip_index", 0)) + 1

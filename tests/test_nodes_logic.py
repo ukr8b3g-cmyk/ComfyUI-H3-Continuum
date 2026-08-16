@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from ComfyUI_H3_Continuum_Join.constants import (
@@ -53,6 +54,41 @@ def test_prepare_conditioning_uses_one_video_audio_ref_and_moves_last():
     assert ref["latent"] is video_context
     assert ref["audio_latent"] is audio_context
     assert _conditioning_diagnostics(conditioning)["visual_tokens"] == 2
+
+
+def test_prepare_conditioning_uses_source_frame_count_when_core_metadata_is_absent():
+    old_last = torch.ones(1, 24, 1, 2, 2)
+    conditioning = [[torch.zeros(1, 2, 3), {"minimax_keyframes": [{"resolved_frame_index": 123, "latent": old_last}]}]]
+    out = _prepare_conditioning(
+        conditioning,
+        video_context=torch.randn(1, 24, 7, 2, 2),
+        audio_context=None,
+        audio_grid_offset=0.0,
+        context_frames=22,
+        new_frame_count=141,
+        first_frame_policy=POLICY_REPLACE,
+        preserve_last_frame=True,
+        source_frame_count=124,
+    )
+    keyframes = out[0][1]["minimax_keyframes"]
+    assert len(keyframes) == 1
+    assert keyframes[0]["resolved_frame_index"] == 140
+
+
+def test_prepare_conditioning_still_rejects_arbitrary_current_core_guides():
+    conditioning = [[torch.zeros(1, 2, 3), {"minimax_keyframes": [{"resolved_frame_index": 60, "latent": torch.ones(1, 24, 1, 2, 2)}]}]]
+    with pytest.raises(ValueError, match="unsupported existing H3 keyframe index 60"):
+        _prepare_conditioning(
+            conditioning,
+            video_context=torch.randn(1, 24, 7, 2, 2),
+            audio_context=None,
+            audio_grid_offset=0.0,
+            context_frames=22,
+            new_frame_count=141,
+            first_frame_policy=POLICY_REPLACE,
+            preserve_last_frame=True,
+            source_frame_count=124,
+        )
 
 
 def test_prepare_video_only_context():

@@ -79,10 +79,13 @@ def check_comfy_h3_runtime() -> list[str]:
                     "latent_w",
                     "audio_t",
                 ),
+                # ComfyUI #15439 removed ``frame_count`` from PackedLayout.
+                # Continuum requires only the stable keyframe/reference inputs;
+                # older cores may still expose frame_count as an optional legacy
+                # keyword and remain supported.
                 keywords=(
                     "keyframes",
                     "refs",
-                    "frame_count",
                 ),
             )
             for name in missing:
@@ -170,9 +173,9 @@ def run_native_layout_self_test() -> str:
         MARK_AUDIO_END_FRAME: 5.0,
         MARK_AUDIO_OVERHANG: -1.0 / 3.0,
     }
-    layout = h3_model.PackedLayout(
-        3, 7, 2, 2, 10, keyframes=None, refs=[ref], frame_count=22
-    )
+    # This refs-only probe intentionally uses the common constructor
+    # contract shared by pre- and post-#15439 ComfyUI revisions.
+    layout = h3_model.PackedLayout(3, 7, 2, 2, 10, keyframes=None, refs=[ref])
     position_id = id(layout.position_ids)
     payload = {"layout": layout, "keyframes": [], "refs": [ref]}
     normalize_condition_latents(payload)

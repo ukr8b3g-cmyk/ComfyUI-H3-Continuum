@@ -51,9 +51,9 @@ def _wrapper_factory(*, strict: bool, debug: bool) -> Callable[..., Any]:
                 )
                 input_x = args[0] if args else None
                 materialize_continuum_latents(patched_payload, input_x, debug=debug)
-            # ComfyUI Core 0.33.1 replaces keyframe condition latents with
-            # reference latents when both contracts are present. Rebuild the
-            # combined list for First/Last Frame + standalone Reference Audio.
+            # Core revisions differ in how mixed keyframe/reference latent
+            # lists are assembled. Rebuild them deterministically, including
+            # post-#15439 audio-bearing keyframes.
             normalize_condition_latents(patched_payload)
             kwargs["minimax_payload"] = patched_payload
         except (CompatibilityError, LayoutCompatibilityError, KeyError, TypeError, ValueError) as exc:

@@ -20,15 +20,22 @@ def _video_times(origin: float):
     return [origin + value * 5.0 / 3.0 for value in offsets]
 
 
-def _fake_layout(*, with_last_keyframe=False):
+def _fake_layout(*, with_last_keyframe=False, keyframe_target_relative=False, with_keyframe_audio=False):
     # text=3, optional one stock keyframe, a 22-frame video/audio context ref,
     # target audio=10 steps, target video=7 slots x 2 rows.
     row = 0
     segments = [(row, row + 3, "text")]
     row += 3
+    keyframe_video = None
+    keyframe_audio = None
     if with_last_keyframe:
-        segments.append((row, row + 2, "cond"))
+        keyframe_video = (row, row + 2)
+        segments.append((*keyframe_video, "cond"))
         row += 2
+        if with_keyframe_audio:
+            keyframe_audio = (row, row + 8)
+            segments.append((*keyframe_audio, "cond_audio"))
+            row += 8
     audio_ref = (row, row + 74)
     segments.append((*audio_ref, "ref_audio"))
     row += 74
@@ -45,8 +52,15 @@ def _fake_layout(*, with_last_keyframe=False):
     pos = torch.zeros(row, 3, dtype=torch.float64)
     pos[:3, 0] = torch.arange(3, dtype=torch.float64)
     if with_last_keyframe:
-        # Stock last keyframe is text-relative before refs shift the target.
-        pos[3:5, 0] = 3.0 + 35.0
+        # Pre-#15439 Core used text-relative keyframe time; current Core already
+        # uses the target origin after reference spans. Both must normalize to 75.
+        keyframe_origin = 75.0 if keyframe_target_relative else 3.0 + 35.0
+        kv0, kv1 = keyframe_video
+        pos[kv0:kv1, 0] = keyframe_origin
+        if keyframe_audio is not None:
+            ka0, ka1 = keyframe_audio
+            pos[ka0 : ka0 + 4, 0] = torch.arange(4, dtype=torch.float64) + keyframe_origin
+            pos[ka0 + 4 : ka1, 0] = torch.arange(4, dtype=torch.float64) + keyframe_origin
     # Stock context ref lives in its own pre-target coordinate span.
     a0, a1 = audio_ref
     pos[a0 : a0 + 37, 0] = torch.arange(37, dtype=torch.float64) + 3.0
@@ -127,7 +141,7 @@ def test_existing_last_keyframe_is_shifted_with_context_ref():
     audio = torch.zeros(1, 32, 2, 37)
     payload = {
         "layout": layout,
-        "keyframes": [{"resolved_frame_index": 140, "latent": image}],
+        "keyframes": [{"resolved_frame_index": 21, "latent": image}],
         "refs": [_context_ref(video, audio)],
     }
     normalize_condition_latents(payload)
@@ -136,6 +150,50 @@ def test_existing_last_keyframe_is_shifted_with_context_ref():
     # Reference cursor shift is 37.
     assert torch.all(layout.position_ids[cond_start : cond_start + 2, 0] == 75.0)
     assert payload["cond_video_latents"] == [image, video]
+
+
+def test_current_core_target_relative_keyframe_is_not_double_shifted():
+    layout, _video_ref_span, _target_video_span = _fake_layout(
+        with_last_keyframe=True, keyframe_target_relative=True
+    )
+    image = torch.zeros(1, 24, 1, 2, 2)
+    video = torch.zeros(1, 24, 7, 2, 2)
+    audio = torch.zeros(1, 32, 2, 37)
+    payload = {
+        "layout": layout,
+        "keyframes": [{"resolved_frame_index": 21, "latent": image}],
+        "refs": [_context_ref(video, audio)],
+    }
+    patch_layout_in_place(payload)
+    cond_start = next(a for a, _b, kind in layout.segments if kind == "cond")
+    assert torch.all(layout.position_ids[cond_start : cond_start + 2, 0] == 75.0)
+
+
+def test_current_core_audio_keyframe_is_mapped_and_preserved_with_refs():
+    layout, _video_ref_span, _target_video_span = _fake_layout(
+        with_last_keyframe=True,
+        keyframe_target_relative=True,
+        with_keyframe_audio=True,
+    )
+    image = torch.zeros(1, 24, 1, 2, 2)
+    guide_audio = torch.zeros(1, 32, 2, 4)
+    video = torch.zeros(1, 24, 7, 2, 2)
+    context_audio = torch.zeros(1, 32, 2, 37)
+    payload = {
+        "layout": layout,
+        "keyframes": [{"resolved_frame_index": 21, "latent": image, "audio_latent": guide_audio}],
+        "refs": [_context_ref(video, context_audio)],
+    }
+    normalize_condition_latents(payload)
+    result = patch_layout_in_place(payload)
+    cond_audio_start = next(a for a, _b, kind in layout.segments if kind == "cond_audio")
+    assert torch.isclose(
+        layout.position_ids[cond_audio_start, 0],
+        torch.tensor(75.0, dtype=torch.float64),
+    )
+    assert result["keyframe_audio_windows"] == 1
+    assert payload["cond_audio_latents"][0] is guide_audio
+    assert payload["cond_audio_latents"][1] is context_audio
 
 
 def test_negative_audio_grid_offset_places_context_before_target_origin():
