@@ -148,13 +148,27 @@ def prepare_reference_assets(
     output_height: int,
     size_mode: str,
     reference_image_3: torch.Tensor | None = None,
+    reference_image_4: torch.Tensor | None = None,
+    reference_image_5: torch.Tensor | None = None,
+    reference_image_6: torch.Tensor | None = None,
+    reference_image_7: torch.Tensor | None = None,
+    reference_image_8: torch.Tensor | None = None,
 ) -> ReferenceAssets | None:
     # Match Core's dynamic Reference inputs: bypassed or otherwise absent
     # sockets are ignored, then active images are numbered contiguously in
     # connection order as Picture 1..N.
     inputs = [
         image
-        for image in (reference_image_1, reference_image_2, reference_image_3)
+        for image in (
+            reference_image_1,
+            reference_image_2,
+            reference_image_3,
+            reference_image_4,
+            reference_image_5,
+            reference_image_6,
+            reference_image_7,
+            reference_image_8,
+        )
         if image is not None
     ]
     if not inputs:

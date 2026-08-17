@@ -27,7 +27,7 @@ Turbo weights are available from [LightX2V MiniMax H3 Turbo](https://huggingface
 - Raw paired video/audio latent continuation without decode/re-encode between chunks.
 - One production sampler UI with normal controls first and infrequent controls marked Advanced.
 - T2VA, First Frame, Last Frame, First + Last Frame, and Reference conditioning.
-- Up to three active Reference images across every chunk, compacted in Core connection order.
+- Up to eight active Reference images across every chunk, compacted in Core connection order; reference inputs auto-expand as they are connected.
 - One native Reference Audio item across every chunk.
 - Disk-backed Run Storage with automatic resume and compatible Revision reuse.
 - Fixed, List, and Timeline prompts through one Sequence Prompt input.
@@ -92,7 +92,8 @@ MiniMax H3 Video VAE -------------> video_vae
 Sampler --------------------------> sampler
 Sigmas ---------------------------> sigmas
 Text (Multiline) -----------------> Sequence Prompt
-Optional images ------------------> first_frame / last_frame / reference_image_1/2/3
+Optional keyframes ---------------> first_frame / last_frame
+Optional references -------------> reference_image_1 ... reference_image_8
 
 video_latents --> Core VAE Decode -----------+
 audio_latents --> Core VAE Decode Audio -----+--> H3 Continuum Assemble V3
@@ -115,11 +116,11 @@ The sampler selects the mode from connected image inputs.
 | First Frame | I2VA + Continuation |
 | Last Frame | Last-frame-conditioned + Continuation |
 | First + Last Frame | FL2VA + Continuation |
-| Reference 1, optionally Reference 2 and 3 | Reference + Continuation |
+| One to eight Reference images | Reference + Continuation |
 
-Reference images and First/Last Frame are mutually exclusive. Active Reference inputs are compacted in Core connection order; bypassed sockets are ignored.
+Reference images and First/Last Frame are mutually exclusive. They are separate H3 conditioning modes. Use the FL2VA model family for First/Last Frame workflows and the Ref2VA family for Reference workflows. Continuum does not classify or reject MODEL filenames and never switches MODELs automatically.
 
-Reference Image 1, 1+2, or 1+2+3 may be connected. A single active image is treated as Picture 1, and active images are numbered without gaps. **Ref2VA** is the reference-specialized checkpoint and may provide stronger reference fidelity, while **FL2VA + Reference** is also allowed. Checkpoint classification is diagnostic only; the sampler never switches MODELs automatically. **Strict Compatibility** remains reserved for H3 contracts that are actually unsafe or unsupported.
+The node begins with Reference Image 1-3 visible. Connecting the highest exposed Reference input adds the next socket automatically, one at a time, up to Reference Image 8. Disconnecting trailing references removes unused dynamic tail sockets while preserving every connected socket. Active Reference inputs are compacted in connection order; bypassed or absent sockets are ignored, so active images are always numbered contiguously as Picture 1..N.
 
 Reference prompts should identify the images explicitly:
 
@@ -129,7 +130,7 @@ Reference prompts should identify the images explicitly:
 <Picture 3> optionally defines another ordered identity, object, or environment reference.
 ```
 
-Reference images persist across all Continuum chunks.
+The same numbering continues through `<Picture 8>` when more references are connected. Reference images persist across all Continuum chunks.
 
 ### Reference Size
 
@@ -173,7 +174,7 @@ The V3.3 production node keeps normal generation controls visible and moves deve
 | H3 pipeline | `model`, `clip`, `video_vae`, `sampler`, `sigmas` | Connect the normal MiniMax H3 MODEL, text encoder, Video VAE, sampler, and sigma schedule. |
 | Prompt | `Sequence Prompt` | Fixed, List, or Timeline text for the complete Continuum run. |
 | Keyframes | `first_frame`, `last_frame` | Optional I2VA, last-frame-conditioned, or FL2VA keyframes. |
-| Reference images | `reference_image_1`, `reference_image_2`, `reference_image_3` | Up to three ordered Picture references. Bypassed inputs are ignored. |
+| Reference images | `reference_image_1` ... `reference_image_8` | Up to eight ordered Picture references. Inputs auto-expand from the first three as references are connected; bypassed inputs are ignored. |
 | Reference audio | `reference_audio_1`, `reference_audio_vae` | Optional native H3 Reference Audio. Connect the Audio VAE only when Reference Audio is used. |
 | Duration | `chunks`, `chunk_seconds` | Number of linked chunks and duration of each chunk. Start with `3 x 5.0` seconds. |
 | Canvas | `width`, `height` | Output dimensions. Use values compatible with the current H3 Core path, normally multiples of 32. |
