@@ -11,7 +11,7 @@ from ComfyUI_H3_Continuum_Join.reference import (
     validate_reference_prompts,
 )
 from ComfyUI_H3_Continuum_Join.reference_audio import validate_reference_audio_prompts
-from ComfyUI_H3_Continuum_Join.v3.nodes import _validate_reference_checkpoint
+from ComfyUI_H3_Continuum_Join.v3 import nodes as v3_nodes
 
 
 def test_reference_size_is_appended_after_v31_widgets():
@@ -182,32 +182,5 @@ def test_connected_audio_keeps_unavailable_extra_tag_as_warning():
     assert "H3C-P103" in message
 
 
-def _reference_prompt(checkpoint_name: str) -> dict:
-    return {
-        "1": {
-            "class_type": "UNETLoader",
-            "inputs": {"unet_name": checkpoint_name},
-        },
-        "2": {
-            "class_type": "H3ContinuumSamplerProduction",
-            "inputs": {"model": ["1", 0]},
-        },
-    }
-
-
-def test_reference_checkpoint_classification_is_diagnostic_only():
-    assert _validate_reference_checkpoint(
-        _reference_prompt("minimax_h3_ref2va_pruned_int8.safetensors"),
-        "2",
-        strict_compatibility=True,
-    ) == "ref2va"
-    assert _validate_reference_checkpoint(
-        _reference_prompt("minimax_h3_fl2va_pruned_int8.safetensors"),
-        "2",
-        strict_compatibility=True,
-    ) == "fl2va"
-    assert _validate_reference_checkpoint(
-        _reference_prompt("minimax_h3_unknown.safetensors"),
-        "2",
-        strict_compatibility=True,
-    ) == "unknown"
+def test_reference_checkpoint_filename_classification_is_removed():
+    assert not hasattr(v3_nodes, "_validate_reference_checkpoint")

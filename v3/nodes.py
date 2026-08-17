@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import time
+
+from ..constants import DIAGNOSTICS_FULL
 from ..v2.nodes import (
     CATEGORY,
     DIAGNOSTICS_OPTIONS,
@@ -49,17 +52,6 @@ def _validate_regenerate_storage(run_storage: str, regenerate_from: int) -> None
         raise ValueError(
             "Regenerate From requires Run Storage = Save + Auto Resume"
         )
-
-
-def _validate_reference_checkpoint(
-    prompt, unique_id, *, strict_compatibility: bool
-) -> str:
-    from ..graph_contract import classify_h3_checkpoint
-
-    # Checkpoint choice is diagnostic only. Strict Compatibility remains
-    # reserved for H3 contracts that are actually unsafe or unsupported.
-    _ = strict_compatibility
-    return classify_h3_checkpoint(prompt, unique_id)
 
 
 class H3ContinuumAdvancedV3:
@@ -414,25 +406,56 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                     {
                         "default": PROMPT_FORMAT_OPTIONS[0],
                         "display_name": "Prompt Format",
+                        "tooltip": "Auto accepts Fixed, list-separated, and timeline prompt styles.",
                         **advanced,
                     },
                 ),
-                "chunks": ("INT", {"default": 3, "min": 1, "max": 16, "step": 1}),
+                "chunks": (
+                    "INT",
+                    {
+                        "default": 3,
+                        "min": 1,
+                        "max": 16,
+                        "step": 1,
+                        "tooltip": "Number of sequential Continuum chunks to generate.",
+                    },
+                ),
                 "chunk_seconds": (
                     "FLOAT",
-                    {"default": 5.0, "min": 4.0, "max": 15.0, "step": 0.1},
+                    {
+                        "default": 5.0,
+                        "min": 4.0,
+                        "max": 15.0,
+                        "step": 0.1,
+                        "tooltip": "Target duration per chunk. Five seconds is the validated default.",
+                    },
                 ),
                 "width": (
                     "INT",
-                    {"default": 1344, "min": 32, "max": 16384, "step": 32},
+                    {
+                        "default": 1344,
+                        "min": 32,
+                        "max": 16384,
+                        "step": 32,
+                        "tooltip": "Output width. Use a multiple of 32.",
+                    },
                 ),
                 "height": (
                     "INT",
-                    {"default": 768, "min": 32, "max": 16384, "step": 32},
+                    {
+                        "default": 768,
+                        "min": 32,
+                        "max": 16384,
+                        "step": 32,
+                        "tooltip": "Output height. Use a multiple of 32.",
+                    },
                 ),
                 "continuity": (
                     V2_CONTINUITY_OPTIONS,
-                    {"default": V2_CONTINUITY_OPTIONS[1]},
+                    {
+                        "default": V2_CONTINUITY_OPTIONS[1],
+                        "tooltip": "Amount of prior video context retained at each chunk boundary.",
+                    },
                 ),
                 "base_seed": (
                     "INT",
@@ -441,11 +464,19 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                         "min": 0,
                         "max": 0xFFFFFFFFFFFFFFFF,
                         "control_after_generate": True,
+                        "tooltip": "Base seed used to derive deterministic per-chunk seeds.",
                     },
                 ),
                 "audio_continuity": (
                     "BOOLEAN",
-                    {"default": True, "advanced": True},
+                    {
+                        "default": True,
+                        "advanced": True,
+                        "tooltip": (
+                            "On passes prior audio context into continuation chunks. "
+                            "Turn it off only to isolate or replace generated audio."
+                        ),
+                    },
                 ),
                 "diagnostics": (
                     DIAGNOSTICS_OPTIONS,
@@ -476,6 +507,11 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                         "max": 0xFFFFFFFF,
                         "step": 1,
                         "advanced": True,
+                        "display_name": "Variation Nonce",
+                        "tooltip": (
+                            "Change only when regenerating an explicit chunk and you want "
+                            "a new variation with otherwise identical settings."
+                        ),
                     },
                 ),
                 "strict_compatibility": (
@@ -583,6 +619,7 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
         reference_audio_vae=None,
         timeline_video_source=None,
     ):
+        runtime_started_at = time.perf_counter()
         from ..reference import prepare_reference_assets
         from ..reference_audio import prepare_reference_audio_source
         regenerate_from = _regenerate_from_value(
@@ -605,24 +642,10 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
             raise ValueError(
                 "Reference Images cannot be combined with First Frame or Last Frame"
             )
-        reference_checkpoint = None
-        if reference_assets is not None or timeline_video_source is not None:
-            reference_checkpoint = _validate_reference_checkpoint(
-                prompt,
-                unique_id,
-                strict_compatibility=bool(strict_compatibility),
-            )
-
-        def report_with_reference_status(report):
-            if reference_checkpoint is None:
-                return str(report)
-            if reference_checkpoint == "ref2va":
-                status = "Ref2VA verified."
-            elif reference_checkpoint == "fl2va":
-                status = "FL2VA; allowed, but reference fidelity may differ from Ref2VA."
-            else:
-                status = "unverified; execution allowed, Core contract errors remain fatal."
-            return str(report) + "\nReference MODEL: " + status
+        def mark_runtime_start(assembly_plan):
+            marked = dict(assembly_plan)
+            marked["_runtime_started_at"] = runtime_started_at
+            return marked
 
         def execute():
             return super(H3ContinuumSamplerProduction, self).run(
@@ -663,8 +686,8 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
             return (
                 video_latents,
                 audio_latents,
-                assembly_plan,
-                report_with_reference_status(result["report"]),
+                mark_runtime_start(assembly_plan),
+                str(result["report"]),
             )
         if run_storage != "Save + Auto Resume":
             raise ValueError(f"unknown Run Storage mode: {run_storage!r}")
@@ -683,12 +706,12 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
         ) as storage:
             video_latents, audio_latents, assembly_plan, result = execute()
             result = dict(result)
-            report = report_with_reference_status(result["report"]) + "\n" + storage.summary(
-                detailed=diagnostics == DIAGNOSTICS_OPTIONS[-1]
+            report = str(result["report"]) + "\n" + storage.summary(
+                detailed=diagnostics == DIAGNOSTICS_FULL
             )
             result["report"] = report
             storage.finalize(session=result["session"], report=report)
-            return video_latents, audio_latents, assembly_plan, report
+            return video_latents, audio_latents, mark_runtime_start(assembly_plan), report
 
 
 class H3ContinuumSamplerTimelineVideo(H3ContinuumSamplerProduction):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+import time
 from typing import Any
 
 import torch
@@ -46,6 +48,13 @@ def _chunk_list(value: Any) -> list[Any]:
             return list(value[0])
         return list(value)
     return [value]
+
+
+def _format_elapsed(seconds: float) -> str:
+    total = max(0.0, float(seconds))
+    hours, remainder = divmod(total, 3600.0)
+    minutes, seconds = divmod(remainder, 60.0)
+    return f"{int(hours):02d}:{int(minutes):02d}:{seconds:05.2f}"
 
 
 def assemble_decoded_chunks(
@@ -213,6 +222,11 @@ def assemble_decoded_chunks(
     )
     if duration_report:
         reports.append(duration_report)
+    runtime_started_at = plan.get("_runtime_started_at")
+    if isinstance(runtime_started_at, (int, float)):
+        elapsed = time.perf_counter() - float(runtime_started_at)
+        if math.isfinite(elapsed) and elapsed >= 0.0:
+            reports.append(f"Total workflow elapsed: {_format_elapsed(elapsed)}")
     return image_buffer.contiguous(), result_audio, "\n".join(reports)
 
 
@@ -230,7 +244,13 @@ class H3ContinuumAssembleV3:
                 "images": ("IMAGE",),
                 "audio": ("AUDIO",),
                 "assembly_plan": ("H3_CONTINUUM_ASSEMBLY_PLAN",),
-                "exact_total_duration": ("BOOLEAN", {"default": True}),
+                "exact_total_duration": (
+                    "BOOLEAN",
+                    {
+                        "default": True,
+                        "tooltip": "Adjust the final output to the exact requested total duration.",
+                    },
+                ),
                 "audio_seam": (
                     AUDIO_SEAM_OPTIONS,
                     {
