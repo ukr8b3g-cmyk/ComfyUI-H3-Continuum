@@ -96,6 +96,7 @@ def prepare_conditioning(
             "api": CONTINUUM_INTEROP_API,
             "role": "video_context",
             "audio_role": "audio_context" if audio_context is not None else None,
+            "preserve_rope": True,
         },
     }
     if audio_context is not None:

@@ -89,12 +89,14 @@ def validate_assembly_plan(plan: Any) -> dict[str, Any]:
         raise AssemblyPlanError("assembly plan dimensions are invalid")
     if float(plan.get("chunk_seconds", 0.0)) <= 0:
         raise AssemblyPlanError("assembly plan chunk duration is invalid")
-    if int(plan.get("target_frames", 0)) <= 0:
+    target_frames = int(plan.get("target_frames", 0))
+    if target_frames <= 0:
         raise AssemblyPlanError("assembly plan target frame count is invalid")
 
     chunks = plan.get("chunks")
     if not isinstance(chunks, list) or not chunks:
         raise AssemblyPlanError("assembly plan contains no chunks")
+    natural_frames = 0
     for expected_index, chunk in enumerate(chunks, start=1):
         if not isinstance(chunk, dict):
             raise AssemblyPlanError(f"assembly chunk {expected_index} is invalid")
@@ -107,6 +109,7 @@ def validate_assembly_plan(plan: Any) -> dict[str, Any]:
             raise AssemblyPlanError(
                 f"assembly chunk {expected_index} frame plan is invalid"
             )
+        natural_frames += net
         if int(chunk.get("context_frames", -1)) < 0:
             raise AssemblyPlanError(
                 f"assembly chunk {expected_index} context is invalid"
@@ -119,6 +122,11 @@ def validate_assembly_plan(plan: Any) -> dict[str, Any]:
             raise AssemblyPlanError(
                 f"assembly chunk {expected_index} audio latent length is invalid"
             )
+    if natural_frames < target_frames:
+        raise AssemblyPlanError(
+            f"assembly plan retains {natural_frames} frames for a {target_frames}-frame target; "
+            "regenerate the final chunk instead of padding the last frame"
+        )
     return plan
 # V3.0.1 hardening integration: redundant metadata plus fail-closed validation.
 from ..hardening import (

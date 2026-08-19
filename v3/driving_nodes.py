@@ -6,6 +6,7 @@ import torch
 
 from ..constants import FPS
 from ..driving_audio import prepare_driving_audio_source
+from ..reference import bundle_reference_images
 from ..reference_video import (
     REFERENCE_VIDEO_SIZE_EFFICIENT,
     REFERENCE_VIDEO_SIZE_OPTIONS,
@@ -98,6 +99,8 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
         optional = dict(schema.get("optional", {}))
         optional.pop("reference_audio_1", None)
         optional.pop("reference_audio_vae", None)
+        for index in range(4, 9):
+            optional[f"reference_image_{index}"] = ("IMAGE",)
         optional["reference_video_1"] = (
             "IMAGE",
             {
@@ -140,6 +143,26 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
     ):
         from ..reference_video import prepare_reference_video_source
         from ..temporal import align_frame_count_up
+
+        active_reference = any(
+            kwargs.get(f"reference_image_{index}") is not None
+            for index in range(1, 9)
+        )
+        if active_reference:
+            # V3.4 follows Core-style mode precedence: Reference mode wins over
+            # connected First/Last inputs rather than rejecting the combination.
+            kwargs["first_frame"] = None
+            kwargs["last_frame"] = None
+
+        extra_references = [
+            kwargs.pop(f"reference_image_{index}", None)
+            for index in range(4, 9)
+        ]
+        if any(image is not None for image in extra_references):
+            kwargs["reference_image_3"] = bundle_reference_images(
+                kwargs.get("reference_image_3"),
+                *extra_references,
+            )
 
         target_frames = round(
             int(kwargs["chunks"]) * float(kwargs["chunk_seconds"]) * FPS

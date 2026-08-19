@@ -1,0 +1,162 @@
+name: release
+
+on:
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out tested commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up release Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Install release validation dependency
+        run: python -m pip install --disable-pip-version-check 'packaging==25.0'
+
+      - name: Detect tested version bump
+        id: version
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          version="$(python - <<'PY'
+          import pathlib
+          import tomllib
+
+          from packaging.version import InvalidVersion, Version
+
+          raw = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
+          try:
+              parsed = Version(raw)
+          except InvalidVersion as exc:
+              raise SystemExit(f"Invalid PEP 440 project version: {raw!r}: {exc}") from exc
+          if len(parsed.release) != 3:
+              raise SystemExit(
+                  f"Project version must have exactly three release components: {raw!r}"
+              )
+          print(parsed)
+          PY
+          )"
+
+          parent="$(git rev-parse "${RELEASE_SHA}^")"
+          previous_file="$(mktemp)"
+          trap 'rm -f "${previous_file}"' EXIT
+          git show "${parent}:pyproject.toml" > "${previous_file}"
+          previous="$(PREVIOUS_PYPROJECT="${previous_file}" python - <<'PY'
+          import os
+          import pathlib
+          import tomllib
+
+          from packaging.version import InvalidVersion, Version
+
+          raw = tomllib.loads(
+              pathlib.Path(os.environ["PREVIOUS_PYPROJECT"]).read_text()
+          )["project"]["version"]
+          try:
+              parsed = Version(raw)
+          except InvalidVersion as exc:
+              raise SystemExit(
+                  f"Invalid previous PEP 440 project version: {raw!r}: {exc}"
+              ) from exc
+          if len(parsed.release) != 3:
+              raise SystemExit(
+                  f"Previous project version must have exactly three release components: {raw!r}"
+              )
+          print(parsed)
+          PY
+          )"
+
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "tag=v${version}" >> "${GITHUB_OUTPUT}"
+          if [[ "${version}" == "${previous}" ]]; then
+            echo "release=false" >> "${GITHUB_OUTPUT}"
+            echo "Project version is unchanged (${version}); no release requested."
+          else
+            echo "release=true" >> "${GITHUB_OUTPUT}"
+            echo "Validated tested version bump: ${previous} -> ${version}."
+          fi
+
+      - name: Extract changelog notes
+        if: steps.version.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          version = os.environ["VERSION"]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          match = re.search(
+              rf"(?ms)^##\s+{re.escape(version)}\s*$\n(.*?)(?=^##\s+|\Z)",
+              text,
+          )
+          if match is None:
+              raise SystemExit(
+                  f"CHANGELOG.md has no '## {version}' section; refusing to publish"
+              )
+          notes = match.group(1).strip()
+          if not notes:
+              raise SystemExit(f"CHANGELOG.md section {version} is empty")
+          pathlib.Path("/tmp/h3-continuum-release-notes.md").write_text(
+              notes + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Build release archive
+        if: steps.version.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          mkdir -p dist
+          archive="ComfyUI-H3-Continuum-v${VERSION}.zip"
+          git archive \
+            --format=zip \
+            --prefix="ComfyUI-H3-Continuum-v${VERSION}/" \
+            --output="dist/${archive}" \
+            HEAD
+          (cd dist && sha256sum "${archive}" > SHA256SUMS)
+
+      - name: Publish GitHub release
+        if: steps.version.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists; leaving it unchanged."
+            exit 0
+          fi
+          gh release create "${TAG}" \
+            dist/ComfyUI-H3-Continuum-v${VERSION}.zip \
+            dist/SHA256SUMS \
+            --target "${RELEASE_SHA}" \
+            --title "H3 Continuum ${TAG}" \
+            --notes-file /tmp/h3-continuum-release-notes.md

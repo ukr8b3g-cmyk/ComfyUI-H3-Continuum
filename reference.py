@@ -1,6 +1,6 @@
 """MiniMax H3 image-reference adapter for the V3 production sampler.
 
-This module only builds the public Core conditioning contract.  It does not
+This module only builds the public Core conditioning contract. It does not
 own model loading, sampling, VAE decoding, or any optimizer implementation.
 """
 
@@ -31,6 +31,13 @@ _PICTURE_TAG = re.compile(r"<Picture\s+(\d+)>")
 
 class ReferenceConditioningError(ValueError):
     pass
+
+
+@dataclass(frozen=True)
+class ReferenceImageBundle:
+    """Internal carrier used by the V3.4 facade for dynamic reference sockets."""
+
+    images: tuple[torch.Tensor, ...]
 
 
 @dataclass(frozen=True)
@@ -69,6 +76,13 @@ class ReferenceAssets:
         return result
 
 
+def bundle_reference_images(*images: torch.Tensor | None) -> ReferenceImageBundle | None:
+    """Compact dynamic V3.4 references without widening the legacy V3.3 API."""
+
+    active = tuple(image for image in images if image is not None)
+    return ReferenceImageBundle(active) if active else None
+
+
 def _canonical_hash(value: Any) -> str:
     payload = json.dumps(
         value, sort_keys=True, separators=(",", ":"), ensure_ascii=True
@@ -86,7 +100,10 @@ def _tensor_hash(value: torch.Tensor) -> str:
 
 
 def _round_canvas(value: float) -> int:
-    return max(_CANVAS_MULTIPLE, int(round(value / _CANVAS_MULTIPLE)) * _CANVAS_MULTIPLE)
+    return max(
+        _CANVAS_MULTIPLE,
+        int(round(value / _CANVAS_MULTIPLE)) * _CANVAS_MULTIPLE,
+    )
 
 
 def _validate_image(name: str, image: torch.Tensor) -> torch.Tensor:
@@ -118,7 +135,10 @@ def _resize_reference(
         target_area = float(int(output_width) * int(output_height))
         scale = min(1.0, math.sqrt(target_area / float(source_width * source_height)))
     else:
-        scale = min(1.0, float(_MAX_IDENTITY_SHORT_EDGE) / min(source_width, source_height))
+        scale = min(
+            1.0,
+            float(_MAX_IDENTITY_SHORT_EDGE) / min(source_width, source_height),
+        )
     target_width = _round_canvas(source_width * scale)
     target_height = _round_canvas(source_height * scale)
     if target_width == source_width and target_height == source_height:
@@ -147,16 +167,34 @@ def prepare_reference_assets(
     output_width: int,
     output_height: int,
     size_mode: str,
-    reference_image_3: torch.Tensor | None = None,
+    reference_image_3: torch.Tensor | ReferenceImageBundle | None = None,
+    reference_image_4: torch.Tensor | None = None,
+    reference_image_5: torch.Tensor | None = None,
+    reference_image_6: torch.Tensor | None = None,
+    reference_image_7: torch.Tensor | None = None,
+    reference_image_8: torch.Tensor | None = None,
 ) -> ReferenceAssets | None:
     # Match Core's dynamic Reference inputs: bypassed or otherwise absent
     # sockets are ignored, then active images are numbered contiguously in
-    # connection order as Picture 1..N.
-    inputs = [
-        image
-        for image in (reference_image_1, reference_image_2, reference_image_3)
-        if image is not None
-    ]
+    # connection order as Picture 1..N. V3.4 may carry sockets 3..8 through
+    # an internal bundle so the legacy V3.3 production signature stays stable.
+    inputs: list[torch.Tensor] = []
+    for image in (
+        reference_image_1,
+        reference_image_2,
+        reference_image_3,
+        reference_image_4,
+        reference_image_5,
+        reference_image_6,
+        reference_image_7,
+        reference_image_8,
+    ):
+        if image is None:
+            continue
+        if isinstance(image, ReferenceImageBundle):
+            inputs.extend(image.images)
+        else:
+            inputs.append(image)
     if not inputs:
         return None
     images = tuple(
@@ -185,7 +223,9 @@ def prepare_reference_assets(
     )
 
 
-def encode_reference_latents(video_vae: Any, assets: ReferenceAssets) -> ReferenceAssets:
+def encode_reference_latents(
+    video_vae: Any, assets: ReferenceAssets
+) -> ReferenceAssets:
     if all(latent is not None for latent in assets.latents):
         return assets
     latents = tuple(video_vae.encode(image) for image in assets.images)

@@ -21,7 +21,14 @@ MARK_CONTEXT_FRAMES = "_h3cj_context_frames"
 MARK_AUDIO_CONTEXT = "_h3cj_audio_context"
 MARK_AUDIO_END_FRAME = "_h3cj_audio_end_frame"
 MARK_AUDIO_OVERHANG = "_h3cj_audio_overhang"
+
+# Stable, namespaced metadata carried on the native MiniMax H3 ref dict that
+# Continuum appends for the previous-chunk AV context. Third-party model patches
+# may inspect this contract without importing Continuum as a dependency.
 CONTINUUM_REFERENCE_METADATA_KEY = "_h3_continuum"
+CONTINUUM_REFERENCE_ROLE_VIDEO_CONTEXT = "video_context"
+CONTINUUM_REFERENCE_AUDIO_ROLE_AUDIO_CONTEXT = "audio_context"
+CONTINUUM_REFERENCE_PRESERVE_ROPE_KEY = "preserve_rope"
 CONTINUUM_INTEROP_KEY = "h3_continuum"
 CONTINUUM_INTEROP_API = 1
 CONTINUUM_ACTUAL_PREFIX_STEPS = 2

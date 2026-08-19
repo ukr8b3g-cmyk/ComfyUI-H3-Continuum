@@ -418,31 +418,44 @@ def analyze_decoded_boundaries(
     return analyses
 
 
-def correct_decoded_boundaries(
+def _correction_kind_and_count(
+    analysis: VideoBoundaryAnalysis,
+    *,
+    enable_exposure_ramp: bool,
+) -> tuple[str, int]:
+    correction_kind = "transient flash"
+    replace_frames = int(analysis.recommended_rewind)
+    if analysis.micro_flash_candidate:
+        correction_kind = "micro-flash"
+        replace_frames = 1
+    elif enable_exposure_ramp and analysis.exposure_ramp_candidate:
+        correction_kind = "exposure ramp"
+        replace_frames = 4
+    return correction_kind, replace_frames
+
+
+def build_decoded_boundary_patches(
     *,
     images: list[Any],
     assembly_plan: dict[str, Any],
     analyses: list[VideoBoundaryAnalysis],
     enable_exposure_ramp: bool = False,
-) -> tuple[list[Any], dict[int, str]]:
-    """Normalize qualified transient exposure shifts without changing motion."""
+) -> tuple[dict[int, torch.Tensor], dict[int, str]]:
+    """Build only the corrected retained boundary frames for qualified seams."""
 
     plan = validate_assembly_plan(assembly_plan)
     chunks = list(plan["chunks"])
     if len(images) != len(chunks):
         raise ValueError("decoded image count does not match the assembly plan")
-    corrected = list(images)
+
+    patches: dict[int, torch.Tensor] = {}
     actions: dict[int, str] = {}
     for analysis in analyses:
         boundary = int(analysis.boundary_index)
-        correction_kind = "transient flash"
-        replace_frames = int(analysis.recommended_rewind)
-        if analysis.micro_flash_candidate:
-            correction_kind = "micro-flash"
-            replace_frames = 1
-        elif enable_exposure_ramp and analysis.exposure_ramp_candidate:
-            correction_kind = "exposure ramp"
-            replace_frames = 4
+        correction_kind, replace_frames = _correction_kind_and_count(
+            analysis,
+            enable_exposure_ramp=enable_exposure_ramp,
+        )
         if replace_frames <= 0:
             actions[boundary] = "kept native boundary"
             continue
@@ -453,6 +466,7 @@ def correct_decoded_boundaries(
         ):
             actions[boundary] = "kept native boundary; correction guard rejected candidate"
             continue
+
         previous_index = boundary - 1
         current_index = boundary
         if previous_index < 0 or current_index >= len(images):
@@ -472,30 +486,66 @@ def correct_decoded_boundaries(
         previous_segment = previous_raw[:previous_total][previous_trim:]
         if int(previous_segment.shape[0]) < 1:
             raise ValueError("video seam correction has no previous retained frame")
-        current_cpu = current_raw.detach().to(device="cpu").clone()
+
+        # Only 1-4 retained boundary frames are owned by the correction. The old
+        # implementation cloned the entire current decoded chunk, which multiplied
+        # host RAM at high resolutions for no semantic benefit.
+        patch = (
+            current_raw[current_trim : current_trim + replace_frames]
+            .detach()
+            .to(device="cpu")
+            .clone()
+        )
         previous_anchor = previous_segment[-1].detach().to(
             device="cpu", dtype=torch.float32
         )
-        recovery_anchor = current_cpu[current_trim + replace_frames].to(
-            dtype=torch.float32
+        recovery_anchor = current_raw[current_trim + replace_frames].detach().to(
+            device="cpu", dtype=torch.float32
         )
         if tuple(previous_anchor.shape) != tuple(recovery_anchor.shape):
             raise ValueError("decoded image geometry changed at video seam")
+
         for offset in range(replace_frames):
             alpha = float(offset + 1) / float(replace_frames + 1)
-            original = current_cpu[current_trim + offset].to(dtype=torch.float32)
+            original = patch[offset].to(dtype=torch.float32)
             target = torch.lerp(previous_anchor, recovery_anchor, alpha)
             original_mean = original.mean(dim=(0, 1), keepdim=True)
             target_mean = target.mean(dim=(0, 1), keepdim=True)
             normalized = (original + target_mean - original_mean).clamp(0.0, 1.0)
-            current_cpu[current_trim + offset].copy_(
-                normalized.to(dtype=current_cpu.dtype)
-            )
-        corrected[current_index] = current_cpu
+            patch[offset].copy_(normalized.to(dtype=patch.dtype))
+
+        patches[current_index] = patch
         actions[boundary] = (
             f"normalized exposure/color on {replace_frames} {correction_kind} "
             "boundary frame(s)"
         )
+    return patches, actions
+
+
+def correct_decoded_boundaries(
+    *,
+    images: list[Any],
+    assembly_plan: dict[str, Any],
+    analyses: list[VideoBoundaryAnalysis],
+    enable_exposure_ramp: bool = False,
+) -> tuple[list[Any], dict[int, str]]:
+    """Compatibility helper returning corrected full chunks for legacy callers."""
+
+    plan = validate_assembly_plan(assembly_plan)
+    chunks = list(plan["chunks"])
+    patches, actions = build_decoded_boundary_patches(
+        images=images,
+        assembly_plan=plan,
+        analyses=analyses,
+        enable_exposure_ramp=enable_exposure_ramp,
+    )
+    corrected = list(images)
+    for current_index, patch in patches.items():
+        current_raw = images[current_index]
+        current_trim = int(chunks[current_index]["trim_frames"])
+        current_cpu = current_raw.detach().to(device="cpu").clone()
+        current_cpu[current_trim : current_trim + int(patch.shape[0])].copy_(patch)
+        corrected[current_index] = current_cpu
     return corrected, actions
 
 

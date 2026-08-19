@@ -120,6 +120,17 @@ def make_extension_shape(context_frames:int, extend_seconds:float)->ExtensionSha
     if net<1: raise RuntimeError("computed continuation contains no new frames")
     return ExtensionShape(context_frames,requested_new,total,net,video_latent_t(total),audio_latent_t(total))
 
+def make_extension_shape_at_least(context_frames:int,requested_new_frames:int)->ExtensionShape:
+    """Create a native H3 continuation that never undershoots requested new frames."""
+    context_frames=int(context_frames)
+    context_slots(context_frames)
+    requested_new=max(1,int(requested_new_frames))
+    total=align_frame_count_up(context_frames+requested_new)
+    net=total-context_frames
+    if net<requested_new:
+        raise RuntimeError("computed continuation undershot requested new frame count")
+    return ExtensionShape(context_frames,requested_new,total,net,video_latent_t(total),audio_latent_t(total))
+
 def largest_context_capacity(frame_count:int)->int:
     available=int(frame_count)
     for capacity in (39,22,5):
@@ -135,6 +146,8 @@ def run_temporal_self_test()->None:
     shape=make_extension_shape(22,5.0)
     assert (shape.total_frames,shape.net_new_frames)==(141,119)
     assert (shape.video_latent_t,shape.audio_latent_t)==(42,235)
+    minimum_shape=make_extension_shape_at_least(22,161)
+    assert (minimum_shape.total_frames,minimum_shape.net_new_frames)==(192,170)
     window=make_av_context_window(141,235,22)
     assert (window.video_start_slot,window.video_stop_slot)==(35,42)
     assert (window.audio_start_tick,window.audio_stop_tick)==(198,235)
