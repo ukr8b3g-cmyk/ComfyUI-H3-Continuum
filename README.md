@@ -230,6 +230,30 @@ The older pull requests are not represented as merged V3.4 changes.
 
 PR #5 is the consolidated upstream-to-fork proposal covering current H3 compatibility, reference-input handling, assembly memory behavior, exact-duration handling, continuation-reference interoperability, and CI/release automation. V3.4 already contains the user-facing stability decisions described above; the PR remains an upstream review item and is not claimed as merged here.
 
+## V3.4 input connection patterns
+
+V3.4 separates the visual reference input from the driving-audio input. Choose the connection pattern that matches your source material.
+
+### 1. Audio only
+
+Connect `Load Audio` to `driving_audio`. Use this when an existing song, dialogue track, or sound effect should remain the final audio. A `Video Reference` is not required.
+
+![Driving Audio connection](docs/images/v34-driving-audio-connection.png)
+
+### 2. Video with its own audio
+
+Connect `Load Video (Upload)` `IMAGE` to `Video Reference`. If the uploaded video contains the audio you want to preserve, connect its `AUDIO` output to `driving_audio` as well.
+
+![Video Reference and embedded audio connection](docs/images/v34-video-reference-with-audio.png)
+
+### 3. Video and audio from separate sources
+
+Connect `Load Video (Upload)` `IMAGE` to `Video Reference`, then connect a separate `Load Audio` node to `driving_audio`. Use this when the visual reference video and the final audio source are different files.
+
+![Separate Video Reference and Driving Audio connection](docs/images/v34-video-reference-separate-audio.png)
+
+Both inputs are optional. Connect `Video Reference` when visual guidance is needed, and connect `driving_audio` when the supplied audio should be preserved in the final output.
+
 ## Current validation status
 
 V3.4 has been exercised locally with:
