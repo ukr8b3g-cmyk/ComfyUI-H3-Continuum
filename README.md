@@ -254,6 +254,10 @@ Connect `Load Video (Upload)` `IMAGE` to `Video Reference`, then connect a separ
 
 Both inputs are optional. Connect `Video Reference` when visual guidance is needed, and connect `driving_audio` when the supplied audio should be preserved in the final output.
 
+### Video Reference frame rate
+
+Use a 24 fps source for `Video Reference`. `Load Video (Upload)` may accept files recorded at 25 fps or another frame rate, but acceptance alone does not guarantee correct temporal alignment with H3. For a non-24 fps source, set `force_rate` to `24` in `Load Video (Upload)`, or convert the file to 24 fps before loading it. If the source is already 24 fps, leave `force_rate` at its default and do not resample it.
+
 ## Current validation status
 
 V3.4 has been exercised locally with:
