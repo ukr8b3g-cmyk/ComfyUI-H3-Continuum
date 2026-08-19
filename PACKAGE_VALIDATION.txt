@@ -1,20 +1,27 @@
-ComfyUI-H3-Continuum V3.3.0 package validation
+ComfyUI-H3-Continuum V3.4.0 package validation
 
 Status: Stable release candidate validated for publication.
 
 Required automated checks:
 - python -m compileall -q .
 - python -m pytest -q -p no:cacheprovider
-- python tools/verify_runtime.py <runtime-path>
+- python tools/verify_runtime.py --comfy-root <runtime-path>
 
 Validated runtime paths include:
 - Production sampler and Core VAE Decode assembly
-- Reference Image 1-3 and Reference Audio 1
+- Reference Image 1-3
+- Driving Audio absolute-time guide conditioning with original-source final output
+- Persistent Video Reference conditioning
+- Video Reference Size: Efficient 0.4 MP / Balanced 0.6 MP / Match Output
 - Run Storage save, checksum verification, and complete reuse
-- Timeline Video chunk-local slicing at Efficient 0.4 MP
+- Run Storage identity coverage for Driving Audio and Video Reference
+- Permissive prompt warning/fallback behavior
 - Spectrum Interop API v1 with Actual Prefix 2 on continuation chunks
 - Audio Seam Auto
 - Video Seam Auto guarded transient and micro-flash correction
+
+Latest verified automated result: 192 passed.
+Automated verification does not execute GPU checkpoint generation.
 
 Auto 2 remains experimental. It is an optional fallback for exposure-ramp boundaries and is not the default.
 

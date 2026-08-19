@@ -1,18 +1,24 @@
-# ComfyUI-H3-Continuum 3.3.0
+# ComfyUI-H3-Continuum 3.4.0
 
-**V3.3.0 Stable:** Timeline Video、Audio Seam Auto、Video Seam Auto、Reference Audio、Run Storageを含む安定版です。
+**V3.4.0 Stable:** Driving Audio、Video Reference、Audio / Video Seam、Run Storageを含む安定版です。
 
 MiniMax H3を複数チャンクで連続生成し、直前チャンク末尾の**映像latent / 音声latentを直接**次チャンクへ継承するComfyUIカスタムノードです。チャンク間でVideo/Audio VAEのDecode→Encodeは行いません。
 
-## V3.3.0 Stable
+## V3.4.0 Stable
 
-V3.3.0は、V3.2.4のReference Audio、最大3枚のReference Image、Run Storage、Spectrum Interopを維持し、Chunk単位のTimeline VideoとDecode後のAudio / Video Seam補正を追加します。Video SeamはAutoを標準とし、Auto 2は露出ランプ向けの実験的な追加モードです。
+V3.4.0は、最大3枚のReference Image、Run Storage、Spectrum Interop、Decode後のAudio / Video Seam補正を維持し、Driving AudioとVideo Referenceを正式な入力として追加します。
 
-Reference入力のバイパスされたソケットは無視され、有効な画像だけがPicture 1から連続採番されます。プロンプト内の利用できないPicture/Audioタグは警告として扱い、生成は継続します。
+Driving Audioは入力音声を絶対時間で各Chunkのガイドに使い、最終出力には元音声を維持します。Video Referenceは参照映像を全Chunkで継続使用し、`Efficient - 0.4 MP`、`Balanced - 0.6 MP`、`Match Output`から処理解像度を選択できます。
 
-## Timeline Video / Seam
+Reference入力のバイパスされたソケットは無視され、有効な画像だけがPicture 1から連続採番されます。空欄や不完全なプロンプトも停止せず、警告とFixed fallbackで生成を続行します。未知のモデル、ノード、プロンプト形式を独自判断で拒否する制限も撤廃しました。
 
-Timeline Videoは入力動画を5秒Chunkごとに切り出し、既定の0.4 MPで処理します。Match Outputは高負荷です。H3 Continuum Assemble + SeamはAudio Seam Auto、Video Seam Auto、Basic Reportを既定とし、フレーム削除を行わずに境界の一時的な露出・色変化を補正します。Auto 2は実験的です。
+Run Storageの保存契約にはDriving AudioとVideo Referenceのidentityを含め、入力変更後に古いChunkを誤再利用しないようにしています。
+
+## Driving Audio / Video Reference / Seam
+
+Driving Audioだけを使う、Video Referenceだけを使う、Video Referenceと別音声を組み合わせる、という3通りの接続に対応します。Video Referenceは24 fps入力を基準とし、異なるfpsの素材はLoad Video側で24 fpsへ設定してください。
+
+H3 Continuum Assemble + SeamはAudio Seam AutoとVideo Seam Autoを既定とし、フレーム削除を行わずに境界の一時的な露出・色変化を補正します。Auto 2は露出ランプ向けの実験的な追加モードです。
 
 ## Legacy V2.1.7 Stable Facade UI
 

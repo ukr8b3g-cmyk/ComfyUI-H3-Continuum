@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.4.0
+
+- Completed the V3.4 runtime path from the public sampler through V3/V2 to `run_sequence()`.
+- Added Driving Audio with absolute-time guide slices while preserving the original source for final output.
+- Added persistent Video Reference conditioning with Efficient 0.4 MP, Balanced 0.6 MP, and Match Output modes.
+- Included Driving Audio and Video Reference identities in Run Storage contracts.
+- Changed malformed or empty prompts to warning-and-fallback behavior instead of stopping generation.
+- Removed independent compatibility, model, and upstream-node restrictions that were stricter than ComfyUI Core.
+- Added V3.4 runtime, driving-audio, and context diagnostics coverage.
+
 ## 3.3.0
 
 - Promoted Timeline Video to a stable public node with chunk-local slicing and a 0.4 MP default.
