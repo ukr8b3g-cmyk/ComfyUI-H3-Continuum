@@ -31,10 +31,6 @@ _MODE_LABELS = {
 def conditioning_mode_from_presence(
     *, has_first: bool, has_last: bool, has_reference: bool
 ) -> str:
-    if has_reference and (has_first or has_last):
-        raise ValueError(
-            "Reference Images cannot be combined with First Frame or Last Frame"
-        )
     if has_reference:
         return CONDITIONING_MODE_REFERENCE
     if has_first and has_last:

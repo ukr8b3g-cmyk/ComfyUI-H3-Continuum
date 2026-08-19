@@ -36,8 +36,10 @@ def normalize_condition_latents(payload):
     keyframes=list(payload.get("keyframes") or ()); refs=list(payload.get("refs") or ())
     video_latents=[item["latent"] for item in keyframes if item.get("latent") is not None]
     video_latents.extend(item["latent"] for item in refs if item.get("latent") is not None)
+    audio_latents=[item["audio_latent"] for item in keyframes if item.get("audio_latent") is not None]
+    audio_latents.extend(item["audio_latent"] for item in refs if item.get("audio_latent") is not None)
     payload["cond_video_latents"]=video_latents
-    payload["cond_audio_latents"]=[item["audio_latent"] for item in refs if item.get("audio_latent") is not None]
+    payload["cond_audio_latents"]=audio_latents
 def _input_device(x):
     device=getattr(x,"device",None)
     if isinstance(device,torch.device): return device
@@ -103,6 +105,24 @@ def _map_refs_to_segments(layout,refs):
         else: raise LayoutCompatibilityError(f"unsupported H3 reference kind: {kind!r}")
         result.append(mapping)
     if cursor!=len(available): raise LayoutCompatibilityError(f"layout contains {len(available)-cursor} unmapped reference segments")
+    return result
+def _map_keyframes_to_segments(layout,keyframes):
+    available=[(int(a),int(b),str(kind)) for a,b,kind in layout.segments if kind in ("cond","cond_audio")]
+    cursor=0; result=[]
+    def consume(expected):
+        nonlocal cursor
+        if cursor>=len(available): raise LayoutCompatibilityError(f"layout ended while mapping keyframe '{expected}'")
+        a,b,kind=available[cursor]; cursor+=1
+        if kind!=expected: raise LayoutCompatibilityError(f"keyframe layout mismatch: expected '{expected}', found '{kind}'")
+        return a,b
+    for keyframe in keyframes:
+        mapping={"audio":None,"video":None}
+        if keyframe.get("latent") is not None: mapping["video"]=consume("cond")
+        if keyframe.get("audio_latent") is not None: mapping["audio"]=consume("cond_audio")
+        if mapping["video"] is None and mapping["audio"] is None:
+            raise LayoutCompatibilityError("H3 keyframe has neither video nor audio latent")
+        result.append(mapping)
+    if cursor!=len(available): raise LayoutCompatibilityError(f"layout contains {len(available)-cursor} unmapped keyframe segments")
     return result
 def _patch_signature(payload,layout):
     return (
@@ -185,22 +205,31 @@ def patch_layout_in_place(payload,*,strict=True,debug=False):
     original_time=getattr(layout,LAYOUT_ORIGINAL_TIME_ATTR)
     if not torch.is_tensor(original_time) or original_time.shape!=position_ids[:,0].shape: raise LayoutCompatibilityError("stored layout baseline is incompatible")
     position_ids[:,0].copy_(original_time)
-    keyframes=list(payload.get("keyframes") or ()); refs=list(payload.get("refs") or ()); cond_segments=[(int(a),int(b)) for a,b,kind in layout.segments if kind=="cond"]
-    if len(cond_segments)!=len(keyframes): raise LayoutCompatibilityError(f"layout has {len(cond_segments)} cond segments for {len(keyframes)} keyframes")
+    keyframes=list(payload.get("keyframes") or ()); refs=list(payload.get("refs") or ()); keyframe_mappings=_map_keyframes_to_segments(layout,keyframes)
     video_start,video_stop=_single_segment(layout,"video"); _single_segment(layout,"audio")
     text_segments=[(int(a),int(b)) for a,b,kind in layout.segments if kind=="text"]
     if len(text_segments)!=1 or text_segments[0][0]!=0: raise LayoutCompatibilityError("unexpected H3 text segment")
     text_len=text_segments[0][1]; latent_t=int(layout.signature[1]); video_rows=video_stop-video_start
     if latent_t<=0 or video_rows%latent_t: raise LayoutCompatibilityError(f"video rows {video_rows} are incompatible with latent T={latent_t}")
-    frame_rows=video_rows//latent_t; target_origin=float(position_ids[video_start,0]); reference_shift=target_origin-float(text_len)
-    patched_video_slots=0
-    for (start,stop),keyframe in zip(cond_segments,keyframes):
-        if stop-start!=frame_rows: raise LayoutCompatibilityError("keyframe rows no longer equal one target slot")
+    frame_rows=video_rows//latent_t; target_origin=float(position_ids[video_start,0])
+    patched_video_slots=0; patched_keyframe_audio=0
+    for keyframe,mapping in zip(keyframes,keyframe_mappings):
+        frame_index=int(keyframe.get("resolved_frame_index",0))
+        if frame_index<0: raise LayoutCompatibilityError(f"negative H3 keyframe index {frame_index}")
+        desired_start=target_origin+FRAME_RESCALE*float(frame_index)
+        video_segment=mapping.get("video")
         if MARK_VIDEO_SLOT in keyframe:
+            if video_segment is None: raise LayoutCompatibilityError("legacy Continuum video slot has no cond rows")
+            start,stop=video_segment
+            if stop-start!=frame_rows: raise LayoutCompatibilityError("keyframe rows no longer equal one target slot")
             slot=int(keyframe[MARK_VIDEO_SLOT])
             if not (0<=slot<latent_t): raise LayoutCompatibilityError(f"context slot {slot} is outside target latent T={latent_t}")
             target_row=video_start+slot*frame_rows; position_ids[start:stop].copy_(position_ids[target_row:target_row+frame_rows]); patched_video_slots+=1
-        elif reference_shift: position_ids[start:stop,0].add_(reference_shift)
+        elif video_segment is not None:
+            start,stop=video_segment; old_start=float(position_ids[start,0]); position_ids[start:stop,0].add_(desired_start-old_start)
+        audio_segment=mapping.get("audio")
+        if audio_segment is not None:
+            start,stop=audio_segment; old_start=float(position_ids[start,0]); position_ids[start:stop,0].add_(desired_start-old_start); patched_keyframe_audio+=1
     ref_mappings=_map_refs_to_segments(layout,refs); patched_video_refs=0; patched_audio=0
     for ref,mapping in zip(refs,ref_mappings):
         if _is_video_context(ref):
@@ -222,5 +251,5 @@ def patch_layout_in_place(payload,*,strict=True,debug=False):
         if strict: raise LayoutCompatibilityError(message)
         LOG.warning(message)
     setattr(layout,LAYOUT_SIGNATURE_ATTR,signature)
-    if debug: LOG.info("Continuum layout: video_refs=%d legacy_slots=%d audio_windows=%d origin=%.6f rows=%d pos_id=%s",patched_video_refs,patched_video_slots,patched_audio,target_origin,position_ids.shape[0],id(position_ids))
-    return {"status":"patched","video_contexts":patched_video,"video_refs":patched_video_refs,"legacy_video_slots":patched_video_slots,"audio_windows":patched_audio,"target_origin":target_origin,"position_ids_id":id(position_ids)}
+    if debug: LOG.info("Continuum layout: video_refs=%d legacy_slots=%d keyframe_audio=%d audio_windows=%d origin=%.6f rows=%d pos_id=%s",patched_video_refs,patched_video_slots,patched_keyframe_audio,patched_audio,target_origin,position_ids.shape[0],id(position_ids))
+    return {"status":"patched","video_contexts":patched_video,"video_refs":patched_video_refs,"legacy_video_slots":patched_video_slots,"keyframe_audio_windows":patched_keyframe_audio,"audio_windows":patched_audio,"target_origin":target_origin,"position_ids_id":id(position_ids)}

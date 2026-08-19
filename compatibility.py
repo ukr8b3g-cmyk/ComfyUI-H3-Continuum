@@ -82,7 +82,6 @@ def check_comfy_h3_runtime() -> list[str]:
                 keywords=(
                     "keyframes",
                     "refs",
-                    "frame_count",
                 ),
             )
             for name in missing:
@@ -171,7 +170,7 @@ def run_native_layout_self_test() -> str:
         MARK_AUDIO_OVERHANG: -1.0 / 3.0,
     }
     layout = h3_model.PackedLayout(
-        3, 7, 2, 2, 10, keyframes=None, refs=[ref], frame_count=22
+        3, 7, 2, 2, 10, keyframes=None, refs=[ref]
     )
     position_id = id(layout.position_ids)
     payload = {"layout": layout, "keyframes": [], "refs": [ref]}
@@ -196,9 +195,6 @@ def ensure_native_h3_base_model(base_model: Any) -> None:
     inner = getattr(base_model, "diffusion_model", None)
     if inner is None:
         raise CompatibilityError("MODEL does not expose diffusion_model")
-    actual = f"{type(inner).__module__}.{type(inner).__name__}"
-    if actual != "comfy.ldm.minimax.model.MiniMaxH3Model":
-        raise CompatibilityError(f"native MiniMaxH3Model required; got {actual}")
     missing = [
         name
         for name in (
@@ -212,8 +208,10 @@ def ensure_native_h3_base_model(base_model: Any) -> None:
         if not hasattr(inner, name)
     ]
     if missing:
+        actual = f"{type(inner).__module__}.{type(inner).__name__}"
         raise CompatibilityError(
-            "MiniMaxH3Model contract changed; missing " + ", ".join(missing)
+            f"MiniMax H3 model contract is unavailable on {actual}; missing "
+            + ", ".join(missing)
         )
 
 

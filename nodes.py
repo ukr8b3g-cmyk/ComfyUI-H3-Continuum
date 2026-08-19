@@ -181,6 +181,7 @@ class H3ContinuumJoin:
             new_frame_count=shape.total_frames,
             first_frame_policy=first_frame_policy,
             preserve_last_frame=bool(preserve_last_frame),
+            source_frame_count=current_frames,
         )
         clip_index = int(state.get("clip_index", 0)) + 1
         plan = make_plan(
@@ -373,12 +374,20 @@ from .v3.nodes import (
 NODE_CLASS_MAPPINGS.update(V3_NODE_CLASS_MAPPINGS)
 NODE_DISPLAY_NAME_MAPPINGS.update(V3_NODE_DISPLAY_NAME_MAPPINGS)
 
+from .v3.driving_nodes import (
+    NODE_CLASS_MAPPINGS as V34_NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as V34_NODE_DISPLAY_NAME_MAPPINGS,
+)
+
+NODE_CLASS_MAPPINGS.update(V34_NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(V34_NODE_DISPLAY_NAME_MAPPINGS)
+
 # The stable facade and its pack helpers are the public workflow surface. Keep
 # every older identifier registered so saved workflows still load, while
 # ComfyUI's native deprecated-node filter hides legacy building blocks.
 _primary_node_ids = {
-    "H3ContinuumSamplerTimelineVideo",
-    "H3ContinuumAssembleSeamExperimental",
+    "H3ContinuumSamplerV34",
+    "H3ContinuumAssembleSeamV34",
     "H3ContinuumClipOverrides",
     "H3ContinuumResult",
 }

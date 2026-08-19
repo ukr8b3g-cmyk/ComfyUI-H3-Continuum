@@ -1,6 +1,6 @@
 """Package version and public schema identifiers."""
 
-PACKAGE_VERSION = "3.3.0"
+PACKAGE_VERSION = "3.4.0"
 STATE_SCHEMA_VERSION = 1
 PLAN_SCHEMA_VERSION = 1
 PUBLIC_API_VERSION = 3

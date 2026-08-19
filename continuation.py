@@ -66,6 +66,7 @@ def prepare_conditioning(
     new_frame_count: int,
     first_frame_policy: str,
     preserve_last_frame: bool,
+    source_frame_count: int | None = None,
 ):
     """Add one native H3 video/video-audio reference as timeline context."""
     if first_frame_policy not in FIRST_FRAME_POLICIES:
@@ -110,6 +111,8 @@ def prepare_conditioning(
     output = clone_conditioning(conditioning)
     for _, metadata in output:
         old_frame_count = metadata.get("minimax_frame_count")
+        if old_frame_count is None:
+            old_frame_count = source_frame_count
         old_keyframes = [dict(item) for item in (metadata.get("minimax_keyframes") or [])]
         kept = []
         for keyframe in old_keyframes:
@@ -130,9 +133,9 @@ def prepare_conditioning(
             elif is_last:
                 continue
             else:
-                raise ValueError(
-                    f"unsupported existing H3 keyframe index {frame_index}; only first/last are safe"
-                )
+                # Core H3 accepts arbitrary guide positions. Preserve them and
+                # let the native keyframe/layout path decide their semantics.
+                kept.append(keyframe)
         if kept:
             metadata["minimax_keyframes"] = kept
         else:

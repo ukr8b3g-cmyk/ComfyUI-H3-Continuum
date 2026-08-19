@@ -1,4 +1,4 @@
-"""Deterministic, fail-closed fingerprints for ComfyUI upstream loader graphs."""
+"""Deterministic fingerprints for arbitrary ComfyUI upstream loader graphs."""
 
 from __future__ import annotations
 
@@ -7,29 +7,7 @@ import json
 from typing import Any
 
 
-GRAPH_CONTRACT_VERSION = 2
-
-# Keep this deliberately explicit. New loader/patch nodes must be audited before
-# their saved chunks can be resumed automatically.
-_KNOWN_MODEL_NODES = {
-    "UNETLoader",
-    "LoraLoader",
-    "LoraLoaderModelOnly",
-    "Power Lora Loader (rgthree)",
-    "PathchSageAttentionKJ",
-    "PatchSageAttentionKJ",
-    "SpectrumApplyMiniMaxH3",
-    "MiniMaxH3MemoryEfficientSageAttention",
-    "MiniMaxH3MemoryEfficientSageAttentionPatch",
-    "MiniMaxH3SigmaShift",
-    "ModelSamplingMiniMaxH3",
-}
-_KNOWN_CLIP_NODES = {"CLIPLoader", "DualCLIPLoader", "TripleCLIPLoader"}
-_KNOWN_VAE_NODES = {"VAELoader"}
-_KNOWN_SHARED_NODES = {
-    "Reroute",
-    "Any Switch (rgthree)",
-}
+GRAPH_CONTRACT_VERSION = 3
 
 CHECKPOINT_REF2VA = "ref2va"
 CHECKPOINT_FL2VA = "fl2va"
@@ -66,15 +44,15 @@ def _literal(value: Any) -> tuple[Any, bool]:
     return {"type": f"{type(value).__module__}.{type(value).__qualname__}"}, False
 
 
-def _node(prompt: dict[str, Any], node_id: str, *, allowed: set[str], stack: set[str]) -> tuple[dict[str, Any], bool, list[str]]:
+def _node(prompt: dict[str, Any], node_id: str, *, stack: set[str]) -> tuple[dict[str, Any], bool, list[str]]:
     if node_id in stack:
         return {"node_id": node_id, "error": "cycle"}, False, [f"upstream graph contains a cycle at node {node_id}"]
     raw = prompt.get(str(node_id))
     if not isinstance(raw, dict):
         return {"node_id": node_id, "error": "missing"}, False, [f"upstream node {node_id} is missing"]
     class_type = str(raw.get("class_type", ""))
-    safe = class_type in allowed or class_type in _KNOWN_SHARED_NODES
-    reasons = [] if safe else [f"unknown upstream node class: {class_type or '<missing>'}"]
+    safe = bool(class_type)
+    reasons = [] if safe else [f"upstream node {node_id} has no class_type"]
     inputs = raw.get("inputs") or {}
     if not isinstance(inputs, dict):
         return {"node_id": node_id, "class_type": class_type, "error": "invalid inputs"}, False, reasons + [f"upstream node {node_id} inputs are invalid"]
@@ -91,7 +69,7 @@ def _node(prompt: dict[str, Any], node_id: str, *, allowed: set[str], stack: set
             and str(value[0]) in prompt
         ):
             child, child_safe, child_reasons = _node(
-                prompt, str(value[0]), allowed=allowed, stack=next_stack
+                prompt, str(value[0]), stack=next_stack
             )
             rendered_inputs[str(name)] = {"output": int(value[1]), "node": child}
             safe = safe and child_safe
@@ -112,6 +90,7 @@ def _node(prompt: dict[str, Any], node_id: str, *, allowed: set[str], stack: set
 def build_upstream_graph_contract(
     prompt: Any, unique_id: Any, *, require_video_vae: bool,
     require_reference_audio_vae: bool = False,
+    require_audio_vae: bool = False,
 ) -> tuple[dict[str, Any], bool, list[str]]:
     """Fingerprint MODEL/CLIP/VAE routes feeding the Continuum sampler."""
     if not isinstance(prompt, dict):
@@ -125,13 +104,15 @@ def build_upstream_graph_contract(
     safe = True
     reasons: list[str] = []
     specs = [
-        ("model", _KNOWN_MODEL_NODES, True),
-        ("clip", _KNOWN_CLIP_NODES, True),
-        ("video_vae", _KNOWN_VAE_NODES, bool(require_video_vae)),
+        ("model", True),
+        ("clip", True),
+        ("video_vae", bool(require_video_vae)),
     ]
     if require_reference_audio_vae:
-        specs.append(("reference_audio_vae", _KNOWN_VAE_NODES, True))
-    for name, allowed, required in specs:
+        specs.append(("reference_audio_vae", True))
+    if require_audio_vae:
+        specs.append(("audio_vae", True))
+    for name, required in specs:
         if not required:
             continue
         link = inputs.get(name)
@@ -146,7 +127,7 @@ def build_upstream_graph_contract(
             reasons.append(f"{name} upstream connection is unavailable")
             continue
         route, route_safe, route_reasons = _node(
-            prompt, str(link[0]), allowed=allowed, stack={node_id}
+            prompt, str(link[0]), stack={node_id}
         )
         routes[name] = {"output": int(link[1]), "node": route}
         safe = safe and route_safe
