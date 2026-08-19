@@ -345,14 +345,20 @@ def test_experimental_seam_analyzer_is_registered_separately():
     assert NODE_CLASS_MAPPINGS["H3ContinuumAssembleV3"] is not H3ContinuumAssembleSeamExperimental
 
 
-def test_experimental_seam_analyzer_is_public_in_root_registration():
+def test_v34_seam_is_public_and_experimental_seam_is_legacy():
     from ComfyUI_H3_Continuum_Join import nodes as root_nodes
 
-    node_class = root_nodes.NODE_CLASS_MAPPINGS["H3ContinuumAssembleSeamExperimental"]
+    legacy_class = root_nodes.NODE_CLASS_MAPPINGS["H3ContinuumAssembleSeamExperimental"]
+    assert getattr(legacy_class, "DEPRECATED", False)
+    assert legacy_class.CATEGORY == "MiniMax H3/Continuum/Legacy"
+    assert root_nodes.NODE_DISPLAY_NAME_MAPPINGS["H3ContinuumAssembleSeamExperimental"] == (
+        "[Legacy] H3 Continuum Assemble + Seam"
+    )
+    node_class = root_nodes.NODE_CLASS_MAPPINGS["H3ContinuumAssembleSeamV34"]
     assert not getattr(node_class, "DEPRECATED", False)
     assert node_class.CATEGORY == "MiniMax H3/Continuum"
-    assert root_nodes.NODE_DISPLAY_NAME_MAPPINGS["H3ContinuumAssembleSeamExperimental"] == (
-        "H3 Continuum Assemble + Seam"
+    assert root_nodes.NODE_DISPLAY_NAME_MAPPINGS["H3ContinuumAssembleSeamV34"] == (
+        "H3 Continuum Assemble + Seam V3.4"
     )
     assert root_nodes.NODE_DISPLAY_NAME_MAPPINGS["H3ContinuumAssembleV3"] == (
         "[Legacy] H3 Continuum Assemble V3.2.4"

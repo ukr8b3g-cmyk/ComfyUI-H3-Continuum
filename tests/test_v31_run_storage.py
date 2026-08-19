@@ -643,14 +643,13 @@ def test_checkpoint_classifier_uses_base_unet_filename():
     assert classify_h3_checkpoint(prompt, "42") == CHECKPOINT_FL2VA
 
 
-def test_unknown_upstream_wrapper_disables_resume():
+def test_unknown_upstream_wrapper_does_not_disable_resume():
     prompt = _prompt_graph()
     prompt["12"]["class_type"] = "UnknownExperimentalWrapper"
-    _, safe, reasons = build_upstream_graph_contract(
+    _, safe, _reasons = build_upstream_graph_contract(
         prompt, "42", require_video_vae=True
     )
-    assert not safe
-    assert any("UnknownExperimentalWrapper" in reason for reason in reasons)
+    assert safe
 
 
 def test_t2va_graph_contract_does_not_require_video_vae_route():

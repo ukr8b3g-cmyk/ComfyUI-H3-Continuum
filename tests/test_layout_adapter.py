@@ -121,7 +121,8 @@ def test_layout_patches_video_audio_ref_in_place_and_is_idempotent():
 
 
 def test_existing_last_keyframe_is_shifted_with_context_ref():
-    layout, _video_ref_span, _target_video_span = _fake_layout(with_last_keyframe=True)
+    layout, _video_ref_span, target_video_span = _fake_layout(with_last_keyframe=True)
+    target_origin = float(layout.position_ids[target_video_span[0], 0])
     image = torch.zeros(1, 24, 1, 2, 2)
     video = torch.zeros(1, 24, 7, 2, 2)
     audio = torch.zeros(1, 32, 2, 37)
@@ -133,8 +134,11 @@ def test_existing_last_keyframe_is_shifted_with_context_ref():
     normalize_condition_latents(payload)
     patch_layout_in_place(payload)
     cond_start = next(a for a, _b, kind in layout.segments if kind == "cond")
-    # Reference cursor shift is 37.
-    assert torch.all(layout.position_ids[cond_start : cond_start + 2, 0] == 75.0)
+    expected = target_origin + 140.0 * 5.0 / 3.0
+    assert torch.allclose(
+        layout.position_ids[cond_start : cond_start + 2, 0],
+        torch.full((2,), expected, dtype=torch.float64),
+    )
     assert payload["cond_video_latents"] == [image, video]
 
 

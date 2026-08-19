@@ -84,7 +84,7 @@ def test_v33_unifies_optional_timeline_video_and_keeps_v324_schema():
     from ComfyUI_H3_Continuum_Join import nodes as root_nodes
 
     assert root_nodes.NODE_DISPLAY_NAME_MAPPINGS["H3ContinuumSamplerTimelineVideo"] == (
-        "H3 Continuum Sampler V3.3"
+        "[Legacy] H3 Continuum Sampler V3.3"
     )
     assert root_nodes.NODE_DISPLAY_NAME_MAPPINGS["H3ContinuumSamplerProduction"] == (
         "[Legacy] H3 Continuum Sampler V3.2.4"

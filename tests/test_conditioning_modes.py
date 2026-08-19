@@ -29,10 +29,9 @@ def test_conditioning_mode_matrix(
     ("has_first", "has_last"),
     [(True, False), (False, True), (True, True)],
 )
-def test_reference_rejects_first_or_last_frame(has_first, has_last):
-    with pytest.raises(ValueError, match="cannot be combined"):
-        conditioning_mode_from_presence(
-            has_first=has_first,
-            has_last=has_last,
-            has_reference=True,
-        )
+def test_reference_takes_precedence_over_first_or_last_frame(has_first, has_last):
+    assert conditioning_mode_from_presence(
+        has_first=has_first,
+        has_last=has_last,
+        has_reference=True,
+    ) == "reference"
