@@ -1,5 +1,7 @@
 # ComfyUI-H3-Continuum 3.4.0
 
+> **V3.4 hotfix notice:** The initial V3.4 repository package was incomplete because `v3/driving_nodes.py` was missing. We apologize for the issue. This has been fixed in commit `84c22ff`. If you installed V3.4 before this fix, run `git pull` or reinstall the node, then restart ComfyUI.
+
 Long-form MiniMax H3 video generation for ComfyUI with restartable chunks, persistent references, Driving Audio, Video Reference, seam correction, and optional Spectrum interoperability.
 
 ![H3 Continuum V3.4 workflow overview](docs/images/v34-workflow-overview.png)
