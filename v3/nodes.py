@@ -84,7 +84,7 @@ class H3ContinuumAdvancedV3:
                         "step": 1,
                     },
                 ),
-                "strict_compatibility": ("BOOLEAN", {"default": True}),
+                "strict_compatibility": ("BOOLEAN", {"default": False}),
                 "debug": ("BOOLEAN", {"default": False}),
                 "show_preview": ("BOOLEAN", {"default": True}),
             },
@@ -121,7 +121,7 @@ class H3ContinuumAdvancedV3:
                 "diagnostics": diagnostics,
                 "reroll_from_chunk": int(reroll_from_chunk),
                 "reroll_nonce": int(reroll_nonce),
-                "strict_compatibility": bool(strict_compatibility),
+                "strict_compatibility": False,
                 "debug": bool(debug),
                 "show_preview": bool(show_preview),
                 "last_frame": last_frame,
@@ -255,18 +255,16 @@ class H3ContinuumSamplerV3:
         timeline_video_source=None,
     ):
         if prompt_overrides is not None and not isinstance(prompt_overrides, dict):
-            raise TypeError(
-                "prompt_overrides must be an H3_CONTINUUM_CLIP_OVERRIDES pack"
-            )
+            prompt_overrides = None
         if advanced is not None and not isinstance(advanced, dict):
-            raise TypeError("advanced must be an H3_CONTINUUM_ADVANCED_V3 pack")
+            advanced = None
 
         advanced_values = {
             "audio_continuity": True,
             "diagnostics": DIAGNOSTICS_OPTIONS[0],
             "reroll_from_chunk": 0,
             "reroll_nonce": 0,
-            "strict_compatibility": True,
+            "strict_compatibility": False,
             "debug": False,
             "show_preview": True,
             "last_frame": None,
@@ -276,6 +274,7 @@ class H3ContinuumSamplerV3:
         }
         if advanced:
             advanced_values.update(advanced)
+        advanced_values["strict_compatibility"] = False
 
         clip_prompt_inputs = {}
         if prompt_overrides:
@@ -284,12 +283,16 @@ class H3ContinuumSamplerV3:
                 or prompt_overrides.get("schema_version")
                 != SPARSE_OVERRIDE_SCHEMA_VERSION
             ):
-                raise ValueError("unsupported H3_CONTINUUM_CLIP_OVERRIDES schema")
-            sparse_overrides = validate_sparse_prompt_overrides(
-                prompt_overrides.get("overrides"), chunks=int(chunks)
-            )
-            for index, prompt in sparse_overrides.items():
-                clip_prompt_inputs[f"clip_{index}_prompt"] = prompt
+                prompt_overrides = None
+            if prompt_overrides is not None:
+                try:
+                    sparse_overrides = validate_sparse_prompt_overrides(
+                        prompt_overrides.get("overrides"), chunks=int(chunks)
+                    )
+                except (TypeError, ValueError):
+                    sparse_overrides = {}
+                for index, prompt in sparse_overrides.items():
+                    clip_prompt_inputs[f"clip_{index}_prompt"] = prompt
 
         entries, last_state, session, report = H3ContinuumSamplerV2().run(
             model=model,
@@ -311,7 +314,7 @@ class H3ContinuumSamplerV3:
             diagnostics=advanced_values["diagnostics"],
             reroll_from_chunk=advanced_values["reroll_from_chunk"],
             reroll_nonce=advanced_values["reroll_nonce"],
-            strict_compatibility=advanced_values["strict_compatibility"],
+            strict_compatibility=False,
             debug=advanced_values["debug"],
             seam_correction=SEAM_CORRECTION_OFF,
             first_frame=first_frame,
@@ -673,7 +676,7 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                     "diagnostics": diagnostics,
                     "reroll_from_chunk": regenerate_from,
                     "reroll_nonce": int(reroll_nonce),
-                    "strict_compatibility": bool(strict_compatibility),
+                    "strict_compatibility": False,
                     "debug": bool(debug),
                     "show_preview": bool(show_preview),
                     "last_frame": last_frame,

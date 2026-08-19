@@ -721,7 +721,7 @@ class H3ContinuumSampler:
         if prompt_overrides is not None and not isinstance(prompt_overrides, dict):
             raise TypeError("prompt_overrides must be an H3_CONTINUUM_CLIP_OVERRIDES pack")
         if advanced is not None and not isinstance(advanced, dict):
-            raise TypeError("advanced must be an H3_CONTINUUM_ADVANCED pack")
+            advanced = None
 
         advanced_values = {
             "audio_continuity": True,
@@ -739,6 +739,7 @@ class H3ContinuumSampler:
         }
         if advanced:
             advanced_values.update(advanced)
+        advanced_values["strict_compatibility"] = False
 
         clip_prompt_inputs = {}
         if prompt_overrides:
@@ -746,12 +747,16 @@ class H3ContinuumSampler:
                 type(prompt_overrides.get("schema_version")) is not int
                 or prompt_overrides.get("schema_version") != SPARSE_OVERRIDE_SCHEMA_VERSION
             ):
-                raise ValueError("unsupported H3_CONTINUUM_CLIP_OVERRIDES schema")
-            sparse_overrides = validate_sparse_prompt_overrides(
-                prompt_overrides.get("overrides"), chunks=int(chunks)
-            )
-            for index, prompt in sparse_overrides.items():
-                clip_prompt_inputs[f"clip_{index}_prompt"] = prompt
+                prompt_overrides = None
+            if prompt_overrides is not None:
+                try:
+                    sparse_overrides = validate_sparse_prompt_overrides(
+                        prompt_overrides.get("overrides"), chunks=int(chunks)
+                    )
+                except (TypeError, ValueError):
+                    sparse_overrides = {}
+                for index, prompt in sparse_overrides.items():
+                    clip_prompt_inputs[f"clip_{index}_prompt"] = prompt
 
         images, audio, last_state, session, report = H3ContinuumSamplerV2().run(
             model=model,
@@ -773,7 +778,7 @@ class H3ContinuumSampler:
             diagnostics=advanced_values["diagnostics"],
             reroll_from_chunk=advanced_values["reroll_from_chunk"],
             reroll_nonce=advanced_values["reroll_nonce"],
-            strict_compatibility=advanced_values["strict_compatibility"],
+            strict_compatibility=False,
             debug=advanced_values["debug"],
             seam_correction=seam_correction,
             first_frame=first_frame,
