@@ -4,7 +4,30 @@ Long-form MiniMax H3 video generation for ComfyUI with restartable chunks, persi
 
 ![H3 Continuum V3.4 workflow overview](docs/images/v34-workflow-overview.png)
 
-> V3.4 is the current release candidate. V3.3 legacy nodes remain available for existing workflows.
+> V3.4 is the current stable release. V3.3 legacy nodes remain available for existing workflows.
+
+## What's new in V3.4
+
+V3.4 focuses on the two reference workflows that are most useful in normal production:
+
+- **Driving Audio**: use an existing audio source as the preserved final audio while it guides the H3 generation across chunks.
+- **Video Reference**: use an existing video as persistent visual reference for appearance, motion, framing, and timing without treating it as a frame-by-frame copy.
+- **Restartable chunks**: reuse completed chunks with Run Storage and regenerate only the selected part when the generation contract remains compatible.
+- **Core compatibility**: remove Continuum-only rejection of unknown upstream/custom nodes and remove the obsolete `strict_compatibility` control.
+- **Spectrum interoperability**: use the official H3 Continuum Interop API v1 when Spectrum is installed; Spectrum remains optional.
+- **Simpler public interface**: Timeline Video and the earlier timeline-audio paths are hidden from the V3.4 public sampler interface rather than being presented as stable production features.
+
+### Direction change: from timeline generation to preserved references
+
+Earlier development explored Timeline Video and timeline-audio conditioning. Those paths can be useful for experiments, but they are not the default production behavior: chunk boundaries can change visual content, and generated audio can diverge from a supplied song, dialogue, or effects track.
+
+V3.4 therefore prioritizes:
+
+1. **Driving Audio** for cases where the supplied audio should remain the final audio stream.
+2. **Video Reference** for cases where the supplied video should guide the generated result without requiring exact frame reproduction.
+3. **Chunked generation and Run Storage** for practical retries and long-form work.
+
+This is a usability and reliability decision, not a claim that the experimental timeline paths are impossible. They are hidden from the stable interface while the public workflow stays focused on predictable user-controlled inputs.
 
 ## Example workflows
 
@@ -60,9 +83,20 @@ The public nodes focus on normal production controls. Developer diagnostics and 
 
 ### Timeline paths
 
-Experimental Timeline Video and earlier reference/timeline audio paths are no longer public V3.4 inputs. They are hidden rather than destructively removed. Existing V3.3 workflows can continue through legacy nodes.
+Experimental Timeline Video and earlier timeline-audio paths are no longer public V3.4 inputs. They are hidden rather than destructively removed. Existing V3.3 workflows can continue through legacy nodes, but new stable workflows should use Driving Audio and Video Reference.
 
 ## Installation
+
+### Updating an existing installation
+
+For a Git checkout, run the update from the custom-node directory:
+
+```powershell
+cd ComfyUI/custom_nodes/ComfyUI-H3-Continuum
+git pull --ff-only origin main
+```
+
+Restart ComfyUI after the update. If the node was installed with ComfyUI Manager, use its **Update** action instead of running `git pull` manually. Do not mix Manager updates and a separate Git checkout for the same installation.
 
 Search for H3 Continuum or Continuum in ComfyUI Manager, or install manually:
 
@@ -186,17 +220,15 @@ V3.4 follows the current Core H3 layout contract and no longer requires the lega
 
 See [Issue #4](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/issues/4).
 
-### Pull request #1
+### Pull request #1 and #2
 
-Relevant current-Core compatibility ideas are selectively adapted to V3.4 rather than copying the pull request wholesale. The pull request itself is not described as merged.
+These older partial pull requests were superseded by the consolidated [Pull request #5](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/pull/5). V3.4 selectively includes the compatibility direction needed for the current Core H3 contract, while the broader upstream synchronization and release-automation scope remains a separate upstream review.
 
-See [Pull request #1](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/pull/1).
+The older pull requests are not represented as merged V3.4 changes.
 
-### Pull request #2
+### Pull request #5
 
-The proposed eight-reference expansion and additional high-resolution assembly RAM changes are not included in this update. They remain a separate review item.
-
-See [Pull request #2](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/pull/2).
+PR #5 is the consolidated upstream-to-fork proposal covering current H3 compatibility, reference-input handling, assembly memory behavior, exact-duration handling, continuation-reference interoperability, and CI/release automation. V3.4 already contains the user-facing stability decisions described above; the PR remains an upstream review item and is not claimed as merged here.
 
 ## Current validation status
 
