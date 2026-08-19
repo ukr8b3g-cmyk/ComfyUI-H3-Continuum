@@ -297,7 +297,7 @@ app.registerExtension({
                         : "Basic";
                     apiNode.inputs.debug = Boolean(settingValue(SETTINGS.developerDiagnostics, false));
                     apiNode.inputs.show_preview = Boolean(settingValue(SETTINGS.samplingPreview, true));
-                    apiNode.inputs.strict_compatibility = true;
+        apiNode.inputs.strict_compatibility = false;
                 } else if (node.comfyClass === ASSEMBLE_SEAM_NODE_CLASS) {
                     apiNode.inputs.diagnostics = settingValue(SETTINGS.detailedReport, false)
                         ? "Detailed Report"

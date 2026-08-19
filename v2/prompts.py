@@ -24,20 +24,18 @@ def _prompt_error(code,reason,*,line_number=None,source=None,suggested_fix):
     raise PromptPlanError("\n".join(lines))
 def prompt_hash(prompt:str)->str: return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
 def _normalize_prompt(value:str,*,label:str)->str:
-    text=str(value).strip()
-    if not text: _prompt_error("H3C-P005",f"{label} is empty",suggested_fix="provide non-empty prompt text")
-    return text
+    return "" if value is None else str(value)
 def _parse_json_list(script:str):
     stripped=script.lstrip()
     if not stripped.startswith("["): return None
     try: value=json.loads(script)
     except json.JSONDecodeError: return None
-    if not isinstance(value,list) or not all(isinstance(item,str) for item in value): raise PromptPlanError("JSON prompt list must be an array of strings")
+    if not isinstance(value,list) or not all(isinstance(item,str) for item in value): return None
     return [_normalize_prompt(item,label=f"prompt {index+1}") for index,item in enumerate(value)]
 def _parse_list(script,chunks):
     values=_parse_json_list(script)
     if values is None: values=[_normalize_prompt(part,label=f"prompt {index+1}") for index,part in enumerate(_LIST_SEPARATOR.split(script)) if part.strip()]
-    if not values: raise PromptPlanError("prompt list contains no prompts")
+    if not values: values=[str(script)]
     notes=[]
     if len(values)<chunks: notes.append(f"repeated the last prompt for {chunks-len(values)} chunk(s)"); values.extend([values[-1]]*(chunks-len(values)))
     elif len(values)>chunks: notes.append(f"ignored {len(values)-chunks} extra prompt(s)"); values=values[:chunks]
@@ -145,7 +143,7 @@ def detect_prompt_mode(script):
     text=str(script)
     for line in text.splitlines():
         if _TIMELINE_HEADER.match(line) or _CHUNK_HEADER.match(line): return PROMPT_MODE_TIMELINE
-        if _TIMELINE_LIKE_HEADER.match(line): _prompt_error("H3C-P001","invalid timeline header",source=line.strip(),suggested_fix="use [0-5s] or [Chunk 1]")
+        if _TIMELINE_LIKE_HEADER.match(line): return PROMPT_MODE_FIXED
     if _parse_json_list(text) is not None or _LIST_SEPARATOR.search(text): return PROMPT_MODE_LIST
     return PROMPT_MODE_FIXED
 def resolve_prompt_mode(mode,script):
@@ -153,20 +151,26 @@ def resolve_prompt_mode(mode,script):
     if mode==PROMPT_FORMAT_AUTO: return detect_prompt_mode(script)
     if mode in explicit: return explicit[mode]
     if mode in (PROMPT_MODE_FIXED,PROMPT_MODE_LIST,PROMPT_MODE_TIMELINE): return mode
-    raise PromptPlanError(f"unknown prompt format: {mode!r}")
+    return PROMPT_MODE_FIXED
 def make_prompt_plan(*,mode,script,chunks,chunk_seconds):
     chunks=int(chunks); chunk_seconds=float(chunk_seconds)
     if not 1<=chunks<=16: raise PromptPlanError("chunks must be between 1 and 16")
     if not 4.0<=chunk_seconds<=15.0: raise PromptPlanError("chunk_seconds must be between 4.0 and 15.0 for native H3")
-    resolved_mode=resolve_prompt_mode(mode,script); notes=[]
-    if mode==PROMPT_FORMAT_AUTO:
-        detected={PROMPT_MODE_FIXED:PROMPT_FORMAT_FIXED,PROMPT_MODE_LIST:PROMPT_FORMAT_LIST,PROMPT_MODE_TIMELINE:PROMPT_FORMAT_TIMELINE}[resolved_mode]; notes.append(f"Auto detected {detected}")
-    if resolved_mode==PROMPT_MODE_FIXED: prompt=_normalize_prompt(script,label="fixed prompt"); prompts=[prompt]*chunks
-    elif resolved_mode==PROMPT_MODE_LIST: prompts,parse_notes=_parse_list(script,chunks); notes.extend(parse_notes)
-    elif resolved_mode==PROMPT_MODE_TIMELINE: prompts,parse_notes,diagnostics=_parse_timeline(script,chunks,chunk_seconds); notes.extend(parse_notes)
-    else: raise PromptPlanError(f"unknown prompt mode: {resolved_mode!r}")
+    notes=[]; diagnostics=[]
+    try:
+        resolved_mode=resolve_prompt_mode(mode,script)
+        if mode==PROMPT_FORMAT_AUTO:
+            detected={PROMPT_MODE_FIXED:PROMPT_FORMAT_FIXED,PROMPT_MODE_LIST:PROMPT_FORMAT_LIST,PROMPT_MODE_TIMELINE:PROMPT_FORMAT_TIMELINE}[resolved_mode]; notes.append(f"Auto detected {detected}")
+        if resolved_mode==PROMPT_MODE_FIXED: prompt=_normalize_prompt(script,label="fixed prompt"); prompts=[prompt]*chunks
+        elif resolved_mode==PROMPT_MODE_LIST: prompts,parse_notes=_parse_list(script,chunks); notes.extend(parse_notes)
+        elif resolved_mode==PROMPT_MODE_TIMELINE: prompts,parse_notes,diagnostics=_parse_timeline(script,chunks,chunk_seconds); notes.extend(parse_notes)
+        else: raise PromptPlanError(f"unknown prompt mode: {resolved_mode!r}")
+    except (PromptPlanError,TypeError,ValueError) as exc:
+        resolved_mode=PROMPT_MODE_FIXED; prompts=[_normalize_prompt(script,label="fixed prompt")]*chunks
+        notes.append("Prompt syntax was not recognized; used Fixed prompt fallback")
+        diagnostics=[{"level":"warning","code":"H3C-P100","message":str(exc)}]
     result={"magic":PROMPT_PLAN_MAGIC,"schema_version":PROMPT_PLAN_SCHEMA_VERSION,"mode":resolved_mode,"chunks":chunks,"chunk_seconds":chunk_seconds,"prompts":prompts,"hashes":[prompt_hash(p) for p in prompts],"notes":notes}
-    if resolved_mode==PROMPT_MODE_TIMELINE: result["diagnostics"]=diagnostics
+    if diagnostics: result["diagnostics"]=diagnostics
     return result
 def validate_prompt_plan(plan):
     if not isinstance(plan,dict) or plan.get("magic")!=PROMPT_PLAN_MAGIC: raise PromptPlanError("invalid H3 Continuum prompt plan")
@@ -186,9 +190,12 @@ def build_sampler_prompt_plan(*,prompt_mode,prompt_script,sequence_prompt,prompt
     if sequence_prompt is not None: return make_prompt_plan(mode=prompt_mode,script=sequence_prompt,chunks=chunks,chunk_seconds=chunk_seconds)
     if prompt_plan is not None:
         plan=validate_prompt_plan(prompt_plan)
-        if int(plan["chunks"])!=chunks: raise PromptPlanError("connected prompt_plan chunks do not match the Sampler chunks widget")
-        if abs(float(plan["chunk_seconds"])-chunk_seconds)>1e-6: raise PromptPlanError("connected prompt_plan chunk_seconds do not match the Sampler widget")
-        return plan
+        prompts=list(plan["prompts"])
+        if len(prompts)<chunks: prompts.extend([prompts[-1] if prompts else ""]*(chunks-len(prompts)))
+        elif len(prompts)>chunks: prompts=prompts[:chunks]
+        result=dict(plan); result["chunks"]=chunks; result["chunk_seconds"]=chunk_seconds; result["prompts"]=prompts; result["hashes"]=[prompt_hash(p) for p in prompts]
+        if int(plan["chunks"])!=chunks or abs(float(plan["chunk_seconds"])-chunk_seconds)>1e-6: result["notes"]=list(plan.get("notes") or [])+["adapted connected prompt plan to Sampler chunk settings"]
+        return validate_prompt_plan(result)
     return make_prompt_plan(mode=prompt_mode,script=prompt_script,chunks=chunks,chunk_seconds=chunk_seconds)
 def apply_prompt_overrides(plan,overrides):
     plan=validate_prompt_plan(plan); prompts=list(plan["prompts"]); replaced=[]

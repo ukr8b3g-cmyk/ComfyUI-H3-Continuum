@@ -71,7 +71,7 @@ class H3ContinuumJoin:
                 "audio_continuity": (
                     "BOOLEAN",
                     {
-                        "default": True,
+                        "default": False,
                         "tooltip": "Carry the previous native audio latent and place it on the new clip timeline.",
                     },
                 ),
@@ -127,9 +127,9 @@ class H3ContinuumJoin:
         previous_state=None,
     ):
         issues = check_comfy_h3_runtime()
-        if issues and strict_compatibility:
-            raise RuntimeError("H3 runtime is incompatible: " + "; ".join(issues))
-        patched_model = patch_model(model, strict=strict_compatibility, debug=debug)
+        if issues and debug:
+            print("H3 runtime compatibility advisory: " + "; ".join(issues))
+        patched_model = patch_model(model, strict=False, debug=debug)
         video, _audio = extract_av_streams(latent)
         current_frames = pixel_frames_for_latent_t(int(video.shape[2]))
         if not is_valid_frame_count(current_frames):
