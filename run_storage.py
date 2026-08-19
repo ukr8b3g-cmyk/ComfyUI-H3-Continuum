@@ -136,6 +136,16 @@ def automatic_project_key(prompt: Any, unique_id: Any) -> str:
                         and str(audio_link[0]) in prompt
                     ):
                         continue
+                if current_id == node_id and name == "audio_vae":
+                    audio_link = inputs.get("driving_audio")
+                    if not (
+                        isinstance(audio_link, (list, tuple))
+                        and len(audio_link) == 2
+                        and isinstance(audio_link[0], (str, int))
+                        and isinstance(audio_link[1], int)
+                        and str(audio_link[0]) in prompt
+                    ):
+                        continue
                 value = inputs[name]
                 if (
                     isinstance(value, (list, tuple))
@@ -557,6 +567,9 @@ def build_sampling_contract(
     upstream_graph_reasons: list[str] | None = None,
     reference_audio_contract: dict[str, Any] | None = None,
     reference_audio_vae: Any = None,
+    driving_audio_contract: dict[str, Any] | None = None,
+    driving_audio_vae: Any = None,
+    reference_video_contract: dict[str, Any] | None = None,
     timeline_video_contract: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], bool, list[str]]:
     model_value, model_safe = _model_signature(model, model_fingerprint_value)
@@ -576,6 +589,7 @@ def build_sampling_contract(
         )
     uses_video_vae = (
         conditioning_mode_uses_video_vae(conditioning_mode)
+        or reference_video_contract is not None
         or timeline_video_contract is not None
     )
     if uses_video_vae:
@@ -589,6 +603,12 @@ def build_sampling_contract(
         audio_vae_value, audio_vae_safe = _audio_vae_signature(reference_audio_vae)
     else:
         audio_vae_value, audio_vae_safe = None, True
+    if driving_audio_contract is not None:
+        driving_audio_vae_value, driving_audio_vae_safe = _audio_vae_signature(
+            driving_audio_vae
+        )
+    else:
+        driving_audio_vae_value, driving_audio_vae_safe = None, True
     if not torch.is_tensor(sigmas) or sigmas.ndim != 1:
         raise RunStorageError("Run Storage requires a one-dimensional SIGMAS tensor")
     chunks = int(prompt_plan["chunks"])
@@ -614,6 +634,11 @@ def build_sampling_contract(
             audio_vae_value = {
                 "runtime": audio_vae_value,
                 "graph_route": routes.get("reference_audio_vae"),
+            }
+        if driving_audio_contract is not None:
+            driving_audio_vae_value = {
+                "runtime": driving_audio_vae_value,
+                "graph_route": routes.get("audio_vae"),
             }
     global_contract = {
         "sampling_contract_version": SAMPLING_CONTRACT_VERSION,
@@ -642,6 +667,11 @@ def build_sampling_contract(
     if reference_audio_contract is not None:
         global_contract["reference_audio"] = dict(reference_audio_contract)
         global_contract["reference_audio_vae"] = audio_vae_value
+    if driving_audio_contract is not None:
+        global_contract["driving_audio"] = dict(driving_audio_contract)
+        global_contract["driving_audio_vae"] = driving_audio_vae_value
+    if reference_video_contract is not None:
+        global_contract["reference_video"] = dict(reference_video_contract)
     timeline_chunk_contracts = []
     if timeline_video_contract is not None:
         timeline_value = dict(timeline_video_contract)
@@ -688,8 +718,10 @@ def build_sampling_contract(
         reasons.append("Video VAE contract is not completely observable")
     if not audio_vae_safe:
         reasons.append("Reference Audio VAE contract is not completely observable")
+    if not driving_audio_vae_safe:
+        reasons.append("Driving Audio VAE contract is not completely observable")
     graph_safe = bool(upstream_graph_safe) if graph_authoritative else True
-    return contract, model_safe and clip_safe and video_vae_safe and audio_vae_safe and sampler_safe and graph_safe, reasons
+    return contract, model_safe and clip_safe and video_vae_safe and audio_vae_safe and driving_audio_vae_safe and sampler_safe and graph_safe, reasons
 
 
 def revision_identity(contract: dict[str, Any]) -> tuple[str, str]:
@@ -963,6 +995,9 @@ class RunStorageController:
         conditioning_mode: str | None = None,
         reference_audio_contract: dict[str, Any] | None = None,
         reference_audio_vae: Any = None,
+        driving_audio_contract: dict[str, Any] | None = None,
+        driving_audio_vae: Any = None,
+        reference_video_contract: dict[str, Any] | None = None,
         timeline_video_contract: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         if existing_session is not None:
@@ -974,9 +1009,11 @@ class RunStorageController:
             self.sampler_node_id,
             require_video_vae=(
                 conditioning_mode_uses_video_vae(str(conditioning_mode))
+                or reference_video_contract is not None
                 or timeline_video_contract is not None
             ),
             require_reference_audio_vae=reference_audio_contract is not None,
+            require_audio_vae=driving_audio_contract is not None,
         )
         contract, safe, reasons = build_sampling_contract(
             model=model, model_fingerprint_value=model_fingerprint_value,
@@ -995,6 +1032,9 @@ class RunStorageController:
             upstream_graph_reasons=graph_reasons,
             reference_audio_contract=reference_audio_contract,
             reference_audio_vae=reference_audio_vae,
+            driving_audio_contract=driving_audio_contract,
+            driving_audio_vae=driving_audio_vae,
+            reference_video_contract=reference_video_contract,
             timeline_video_contract=timeline_video_contract,
         )
         effective_nonce, nonce_decision = self._resolve_effective_nonce(

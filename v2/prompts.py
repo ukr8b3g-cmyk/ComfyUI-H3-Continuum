@@ -24,7 +24,7 @@ def _prompt_error(code,reason,*,line_number=None,source=None,suggested_fix):
     raise PromptPlanError("\n".join(lines))
 def prompt_hash(prompt:str)->str: return hashlib.sha256(prompt.encode("utf-8")).hexdigest()
 def _normalize_prompt(value:str,*,label:str)->str:
-    return "" if value is None else str(value)
+    return "" if value is None else str(value).strip()
 def _parse_json_list(script:str):
     stripped=script.lstrip()
     if not stripped.startswith("["): return None

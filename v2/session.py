@@ -112,8 +112,8 @@ def validate_chunk_entry(entry: dict[str, Any]) -> dict[str, Any]:
     actual_frames = pixel_frames_for_latent_t(int(video.shape[2]))
     if actual_frames != int(plan["total_frames"]):
         raise SessionValidationError("session chunk video length does not match its plan")
-    if not isinstance(entry.get("prompt"), str) or not entry["prompt"].strip():
-        raise SessionValidationError("session chunk prompt is empty")
+    if not isinstance(entry.get("prompt"), str):
+        raise SessionValidationError("session chunk prompt is not a string")
     if not isinstance(entry.get("prompt_hash"), str) or len(entry["prompt_hash"]) != 64:
         raise SessionValidationError("session chunk prompt hash is invalid")
     if int(entry.get("seed", -1)) < 0:

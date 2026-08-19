@@ -65,7 +65,13 @@ def main() -> int:
         print(f"V2 prompt/session core self-test FAILED: {exc}")
         return 1
 
-    expected = {
+    current_required = {
+        "H3ContinuumSamplerV34",
+        "H3ContinuumAssembleSeamV34",
+        "H3ContinuumClipOverrides",
+        "H3ContinuumResult",
+    }
+    legacy_required = {
         "H3ContinuumJoin",
         "H3ContinuumFinish",
         "H3ContinuumAssemble",
@@ -77,18 +83,15 @@ def main() -> int:
         "H3ContinuumLoadSession",
         "H3ContinuumSessionInfo",
         "H3ContinuumSampler",
-        "H3ContinuumClipOverrides",
         "H3ContinuumAdvanced",
-        "H3ContinuumResult",
         "H3ContinuumSamplerProduction",
         "H3ContinuumSamplerTimelineVideo",
         "H3ContinuumSamplerV3",
         "H3ContinuumAdvancedV3",
         "H3ContinuumAssembleV3",
         "H3ContinuumAssembleSeamExperimental",
-        "H3ContinuumSamplerV34",
-        "H3ContinuumAssembleSeamV34",
     }
+    expected = current_required | legacy_required
     actual = set(module.NODE_CLASS_MAPPINGS)
     if actual != expected:
         print(f"Node registration mismatch: expected {sorted(expected)}, got {sorted(actual)}")

@@ -252,6 +252,9 @@ class H3ContinuumSamplerV3:
         reference_assets=None,
         reference_audio_source=None,
         reference_audio_vae=None,
+        driving_audio_source=None,
+        driving_audio_vae=None,
+        reference_video_source=None,
         timeline_video_source=None,
     ):
         if prompt_overrides is not None and not isinstance(prompt_overrides, dict):
@@ -328,6 +331,9 @@ class H3ContinuumSamplerV3:
             reference_assets=reference_assets,
             reference_audio_source=reference_audio_source,
             reference_audio_vae=reference_audio_vae,
+            driving_audio_source=driving_audio_source,
+            driving_audio_vae=driving_audio_vae,
+            reference_video_source=reference_video_source,
             timeline_video_source=timeline_video_source,
             **clip_prompt_inputs,
         )
@@ -620,6 +626,9 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
         reference_image_3=None,
         reference_audio_1=None,
         reference_audio_vae=None,
+        driving_audio_source=None,
+        driving_audio_vae=None,
+        reference_video_source=None,
         timeline_video_source=None,
     ):
         runtime_started_at = time.perf_counter()
@@ -641,10 +650,6 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
             reference_audio_1,
             reference_audio_vae,
         )
-        if reference_assets is not None and (first_frame is not None or last_frame is not None):
-            raise ValueError(
-                "Reference Images cannot be combined with First Frame or Last Frame"
-            )
         def mark_runtime_start(assembly_plan):
             marked = dict(assembly_plan)
             marked["_runtime_started_at"] = runtime_started_at
@@ -670,6 +675,9 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                 reference_assets=reference_assets,
                 reference_audio_source=reference_audio_source,
                 reference_audio_vae=reference_audio_vae,
+                driving_audio_source=driving_audio_source,
+                driving_audio_vae=driving_audio_vae,
+                reference_video_source=reference_video_source,
                 timeline_video_source=timeline_video_source,
                 advanced={
                     "audio_continuity": bool(audio_continuity),

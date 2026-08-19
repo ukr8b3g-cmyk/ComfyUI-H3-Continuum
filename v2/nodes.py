@@ -307,6 +307,9 @@ class H3ContinuumSamplerV2:
         reference_assets=None,
         reference_audio_source=None,
         reference_audio_vae=None,
+        driving_audio_source=None,
+        driving_audio_vae=None,
+        reference_video_source=None,
         timeline_video_source=None,
         **clip_prompt_inputs,
     ):
@@ -376,6 +379,9 @@ class H3ContinuumSamplerV2:
             reference_assets=reference_assets,
             reference_audio_source=reference_audio_source,
             reference_audio_vae=reference_audio_vae,
+            driving_audio_source=driving_audio_source,
+            driving_audio_vae=driving_audio_vae,
+            reference_video_source=reference_video_source,
             timeline_video_source=timeline_video_source,
         )
 

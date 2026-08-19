@@ -127,27 +127,28 @@ def test_timeline_extra_sections_warn_and_are_ignored():
         ("[0-5s]\n", "H3C-P005"),
     ],
 )
-def test_invalid_timeline_reports_actionable_diagnostic(script, code):
-    with pytest.raises(PromptPlanError) as captured:
-        make_prompt_plan(
-            mode=PROMPT_MODE_TIMELINE,
-            script=script,
-            chunks=2,
-            chunk_seconds=5,
-        )
-    message = str(captured.value)
-    assert code in message
-    assert "Suggested fix:" in message
+def test_invalid_timeline_falls_back_with_actionable_diagnostic(script, code):
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_TIMELINE,
+        script=script,
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["mode"] == PROMPT_MODE_FIXED
+    assert plan["prompts"] == [script.strip(), script.strip()]
+    assert plan["diagnostics"][0]["code"] == "H3C-P100"
+    assert code in plan["diagnostics"][0]["message"]
 
 
-def test_duplicate_chunk_section_is_an_error():
-    with pytest.raises(PromptPlanError, match="H3C-P003"):
-        make_prompt_plan(
-            mode=PROMPT_MODE_TIMELINE,
-            script="[Chunk 1]\none\n[Chunk 1]\ntwo",
-            chunks=2,
-            chunk_seconds=5,
-        )
+def test_duplicate_chunk_section_falls_back_without_blocking():
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_TIMELINE,
+        script="[Chunk 1]\none\n[Chunk 1]\ntwo",
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["mode"] == PROMPT_MODE_FIXED
+    assert any("H3C-P003" in item["message"] for item in plan["diagnostics"])
 
 
 def test_prompt_preflight_reports_explicit_chunk_sources():
@@ -183,10 +184,10 @@ def test_external_prompt_with_same_text_keeps_the_same_hash():
     assert apply_prompt_overrides(plan, [None, "same"])["hashes"] == plan["hashes"]
 
 
-def test_external_prompt_rejects_empty_connected_text():
+def test_external_prompt_accepts_empty_connected_text():
     plan = make_prompt_plan(mode=PROMPT_MODE_FIXED, script="fallback", chunks=1, chunk_seconds=5)
-    with pytest.raises(PromptPlanError):
-        apply_prompt_overrides(plan, ["   "])
+    updated = apply_prompt_overrides(plan, ["   "])
+    assert updated["prompts"] == [""]
 
 
 def test_sequence_prompt_precedes_connected_plan_and_legacy_script():
@@ -198,7 +199,7 @@ def test_sequence_prompt_precedes_connected_plan_and_legacy_script():
 def test_connected_plan_precedes_legacy_script_without_sequence_input():
     connected = make_prompt_plan(mode=PROMPT_FORMAT_FIXED, script="connected plan", chunks=2, chunk_seconds=5)
     resolved = build_sampler_prompt_plan(prompt_mode=PROMPT_FORMAT_AUTO, prompt_script="legacy", sequence_prompt=None, prompt_plan=connected, chunks=2, chunk_seconds=5)
-    assert resolved is connected
+    assert resolved == connected
 
 
 def test_sparse_overrides_replace_only_explicit_clips_and_rehash():
