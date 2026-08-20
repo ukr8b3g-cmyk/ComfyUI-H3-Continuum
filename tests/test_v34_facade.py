@@ -3,6 +3,7 @@ import torch
 
 from ComfyUI_H3_Continuum_Join.constants import V2_CONTINUITY_OPTIONS
 from ComfyUI_H3_Continuum_Join.masked_continuation import (
+    CONTINUATION_GUIDE,
     CONTINUATION_METHODS,
     CONTINUATION_NATIVE_MASKED,
     NativeMaskedContinuationError,
@@ -112,7 +113,43 @@ def test_v34_invalid_native_generated_audio_profile_fails_before_parent_sampling
     assert parent_called is False
 
 
-def test_v34_reference_mode_precedence_and_extra_reference_bundle(monkeypatch):
+@pytest.mark.parametrize("continuation_method", [CONTINUATION_NATIVE_MASKED, CONTINUATION_GUIDE])
+@pytest.mark.parametrize(
+    ("first_frame", "last_frame"),
+    [
+        ("first", None),
+        (None, "last"),
+        ("first", "last"),
+    ],
+)
+def test_v34_preserves_hybrid_keyframes_with_reference_for_both_continuation_methods(
+    monkeypatch, continuation_method, first_frame, last_frame
+):
+    captured = {}
+    ref = torch.zeros((1, 8, 8, 3))
+
+    def fake_run(self, **kwargs):
+        captured.update(kwargs)
+        return ["v"], ["a"], {"target_frames": 120}, "status"
+
+    monkeypatch.setattr(H3ContinuumSamplerProduction, "run", fake_run)
+    H3ContinuumSamplerV34().run(
+        chunks=1,
+        chunk_seconds=5.0,
+        width=64,
+        height=64,
+        first_frame=first_frame,
+        last_frame=last_frame,
+        reference_image_1=ref,
+        continuation_method=continuation_method,
+    )
+
+    assert captured["first_frame"] == first_frame
+    assert captured["last_frame"] == last_frame
+    assert captured["reference_image_1"] is ref
+
+
+def test_v34_preserves_hybrid_keyframes_and_bundles_extra_references(monkeypatch):
     captured = {}
     ref3 = torch.zeros((1, 8, 8, 3))
     ref4 = torch.ones((1, 10, 6, 3))
@@ -135,8 +172,8 @@ def test_v34_reference_mode_precedence_and_extra_reference_bundle(monkeypatch):
         reference_image_8=ref8,
     )
 
-    assert captured["first_frame"] is None
-    assert captured["last_frame"] is None
+    assert captured["first_frame"] == "first"
+    assert captured["last_frame"] == "last"
     bundle = captured["reference_image_3"]
     assert isinstance(bundle, ReferenceImageBundle)
     assert bundle.images == (ref3, ref4, ref8)

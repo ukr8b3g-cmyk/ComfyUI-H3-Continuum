@@ -31,14 +31,24 @@ _MODE_LABELS = {
 def conditioning_mode_from_presence(
     *, has_first: bool, has_last: bool, has_reference: bool
 ) -> str:
-    if has_reference:
-        return CONDITIONING_MODE_REFERENCE
+    """Classify the temporal keyframe task while allowing reference augmentation.
+
+    MiniMax H3 reference blocks and first/last keyframes are orthogonal pieces of
+    conditioning. Core can start from Reference-to-Video conditioning and layer
+    keyframe guides on top, so a connected reference must not erase First/Last
+    semantics. Keeping the temporal keyframe mode when keyframes are present also
+    makes Run Storage fingerprint those keyframes while the separate reference
+    contract fingerprints the reference assets.
+    """
+
     if has_first and has_last:
         return CONDITIONING_MODE_FL2VA
     if has_first:
         return CONDITIONING_MODE_I2VA
     if has_last:
         return CONDITIONING_MODE_LAST_ONLY
+    if has_reference:
+        return CONDITIONING_MODE_REFERENCE
     return CONDITIONING_MODE_T2VA
 
 

@@ -87,7 +87,8 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
     CATEGORY = CONTINUUM_CATEGORY
     DESCRIPTION = (
         "H3 Continuum V3.4 with native masked AV continuation by default, optional "
-        "Guide / Motion Context continuation, Driving Audio, and persistent Video Reference."
+        "Guide / Motion Context continuation, hybrid First/Last + Reference Image "
+        "conditioning, Driving Audio, and persistent Video Reference."
     )
     SEARCH_ALIASES = [
         "H3 Continuum Sampler V3.4",
@@ -224,16 +225,11 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
         # historical wire value. Normalize only at this V3.4 facade boundary.
         kwargs["continuity"] = continuity
 
-        active_reference = any(
-            kwargs.get(f"reference_image_{index}") is not None
-            for index in range(1, 9)
-        )
-        if active_reference:
-            # V3.4 follows Core-style mode precedence: Reference mode wins over
-            # connected First/Last inputs rather than rejecting the combination.
-            kwargs["first_frame"] = None
-            kwargs["last_frame"] = None
-
+        # Reference blocks and First/Last keyframes are orthogonal Core H3
+        # conditioning. Do not discard First/Last when references are connected:
+        # the inherited sequence engine encodes ref2va presentation first and
+        # layers keyframe latents on that conditioning, matching Core's
+        # Reference-to-Video + Add Guide composition.
         extra_references = [
             kwargs.pop(f"reference_image_{index}", None)
             for index in range(4, 9)
