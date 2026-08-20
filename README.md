@@ -10,7 +10,7 @@ Long-form MiniMax H3 video generation for ComfyUI with restartable chunks, persi
 
 ## Native masked continuation feature
 
-The current feature branch adds **Native Masked — exact continuation (Recommended)** as the V3.4 default for exact same-shot continuation. It uses the MiniMax H3 per-token denoise-mask implementation merged in ComfyUI PR #15375 (merge commit `ff6c8a8af144fc9e9e7bc436b1b202f9316848d8`) and requires a Core revision exposing that H3 mask API.
+V3.4 now includes **Native Masked — exact continuation (Recommended)** as the default for exact same-shot continuation. It uses the MiniMax H3 per-token denoise-mask implementation merged in ComfyUI PR #15375 (merge commit `ff6c8a8af144fc9e9e7bc436b1b202f9316848d8`) and requires a Core revision exposing that H3 mask API.
 
 For chunk 2 and later, Continuum copies the previous accepted H3 video latent tail directly into the start of the next target latent. With generated Audio Continuity enabled and no Driving Audio, it also copies the exactly aligned previous H3 audio latent tail. Native Core masks mark the copied prefix with `0 = preserve` and the new region with `1 = generate`.
 
