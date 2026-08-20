@@ -1976,7 +1976,7 @@
         "diagnostics": "Detailed Report",
         "reroll_from_chunk": "Auto",
         "reroll_nonce": 0,
-        "strict_compatibility": true,
+        "strict_compatibility": false,
         "debug": true,
         "show_preview": true,
         "run_storage": "Off",
