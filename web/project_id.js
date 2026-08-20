@@ -3,6 +3,8 @@ import { app } from "../../scripts/app.js";
 const PRODUCTION_NODE_CLASS = "H3ContinuumSamplerProduction";
 const TIMELINE_NODE_CLASS = "H3ContinuumSamplerTimelineVideo";
 const ASSEMBLE_SEAM_NODE_CLASS = "H3ContinuumAssembleSeamExperimental";
+const V34_NODE_CLASS = "H3ContinuumSamplerV34";
+const V34_ASSEMBLE_SEAM_NODE_CLASS = "H3ContinuumAssembleSeamV34";
 const PROJECT_WIDGET = "project_id";
 const LEGACY_RUN_NAME_WIDGET = "run_name";
 const CHUNKS_WIDGET = "chunks";
@@ -11,6 +13,7 @@ const REROLL_NONCE_WIDGET = "reroll_nonce";
 const RUN_STORAGE_WIDGET = "run_storage";
 const REFERENCE_SIZE_WIDGET = "reference_size";
 const TIMELINE_SIZE_WIDGET = "timeline_video_size";
+const VIDEO_REFERENCE_SIZE_WIDGET = "video_reference_size";
 const PROMPT_OVERRIDES_INPUT = "prompt_overrides";
 const SETTINGS = {
     detailedReport: "H3Continuum.DetailedReport",
@@ -88,7 +91,7 @@ function applyRuntimeSettings(node) {
     if (diagnosticsWidget) diagnosticsWidget.value = detailed ? "Detailed Report" : "Basic";
     if (debugWidget) debugWidget.value = debug;
     if (previewWidget) previewWidget.value = preview;
-    if (strictWidget) strictWidget.value = true;
+    if (strictWidget) strictWidget.value = false;
 }
 
 function removeUnusedInput(node, name) {
@@ -179,6 +182,10 @@ function configureConditionalWidgets(node) {
             findWidget(node, TIMELINE_SIZE_WIDGET),
             linkedInput(node, ["timeline_video"]),
         );
+        setWidgetVisible(
+            findWidget(node, VIDEO_REFERENCE_SIZE_WIDGET),
+            linkedInput(node, ["reference_video_1"]),
+        );
         node.setDirtyCanvas?.(true, true);
     };
     attachRefresh(storageWidget, "__h3ContinuumStorageCallback", refresh);
@@ -196,7 +203,10 @@ function configureConditionalWidgets(node) {
 }
 
 function configureAssembler(node) {
-    if (node.comfyClass !== ASSEMBLE_SEAM_NODE_CLASS) {
+    if (
+        node.comfyClass !== ASSEMBLE_SEAM_NODE_CLASS
+        && node.comfyClass !== V34_ASSEMBLE_SEAM_NODE_CLASS
+    ) {
         return false;
     }
     const exactDuration = findWidget(node, "exact_total_duration");
@@ -211,12 +221,13 @@ function configureAssembler(node) {
 function configureNode(node) {
     const isProduction = node.comfyClass === PRODUCTION_NODE_CLASS;
     const isTimeline = node.comfyClass === TIMELINE_NODE_CLASS;
-    if (!isProduction && !isTimeline) {
+    const isV34 = node.comfyClass === V34_NODE_CLASS;
+    if (!isProduction && !isTimeline && !isV34) {
         configureAssembler(node);
         return null;
     }
     const projectWidget = findWidget(node, PROJECT_WIDGET);
-    if (isProduction) {
+    if (isProduction || isV34) {
         if (projectWidget && !String(projectWidget.value || "").trim()) {
             projectWidget.value = createProjectId();
         }
@@ -291,14 +302,21 @@ app.registerExtension({
             const projectWidget = configureNode(node);
             const apiNode = prompt.output?.[String(node.id)];
             if (apiNode?.inputs) {
-                if (node.comfyClass === PRODUCTION_NODE_CLASS || node.comfyClass === TIMELINE_NODE_CLASS) {
+                if (
+                    node.comfyClass === PRODUCTION_NODE_CLASS
+                    || node.comfyClass === TIMELINE_NODE_CLASS
+                    || node.comfyClass === V34_NODE_CLASS
+                ) {
                     apiNode.inputs.diagnostics = settingValue(SETTINGS.detailedReport, false)
                         ? "Detailed Report"
                         : "Basic";
                     apiNode.inputs.debug = Boolean(settingValue(SETTINGS.developerDiagnostics, false));
                     apiNode.inputs.show_preview = Boolean(settingValue(SETTINGS.samplingPreview, true));
-        apiNode.inputs.strict_compatibility = false;
-                } else if (node.comfyClass === ASSEMBLE_SEAM_NODE_CLASS) {
+                    apiNode.inputs.strict_compatibility = false;
+                } else if (
+                    node.comfyClass === ASSEMBLE_SEAM_NODE_CLASS
+                    || node.comfyClass === V34_ASSEMBLE_SEAM_NODE_CLASS
+                ) {
                     apiNode.inputs.diagnostics = settingValue(SETTINGS.detailedReport, false)
                         ? "Detailed Report"
                         : "Basic";
