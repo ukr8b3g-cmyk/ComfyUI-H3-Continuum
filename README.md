@@ -8,6 +8,20 @@ Long-form MiniMax H3 video generation for ComfyUI with restartable chunks, persi
 
 > V3.4 is the current stable release. V3.3 legacy nodes remain available for existing workflows.
 
+## Native masked continuation feature
+
+The current feature branch adds **Native Masked — exact continuation (Recommended)** as the V3.4 default for exact same-shot continuation. It uses the MiniMax H3 per-token denoise-mask implementation merged in ComfyUI PR #15375 (merge commit `ff6c8a8af144fc9e9e7bc436b1b202f9316848d8`) and requires a Core revision exposing that H3 mask API.
+
+For chunk 2 and later, Continuum copies the previous accepted H3 video latent tail directly into the start of the next target latent. With generated Audio Continuity enabled and no Driving Audio, it also copies the exactly aligned previous H3 audio latent tail. Native Core masks mark the copied prefix with `0 = preserve` and the new region with `1 = generate`.
+
+This path does not turn the previous chunk into a Continuum `minimax_refs` block and does not use Continuum's `position_ids`/RoPE rewrite for the protected continuation data. The existing **Guide / Motion Context** method remains available for softer contextual influence and shot transitions. Existing V2/V3.3 nodes retain their Guide behavior.
+
+At 24 fps video and 40 Hz H3 audio, the current exact generated-AV profile is **39 video frames = 65 audio latent steps**. New V3.4 Native Masked workflows therefore default to **Strong — 39 frames**. Native video-only continuation can still use 5/22/39 frames. Explicit 5/22-frame Native Masked generated-audio continuation is rejected rather than rounded silently.
+
+Driving Audio remains authoritative source audio: Native Masked protects the video prefix, leaves generated target audio unprotected, applies the existing absolute-time Driving Audio guide slice, and final assembly still selects the preserved source audio.
+
+See [Native Masked AV Continuation](docs/NATIVE_MASKED_CONTINUATION.md) for the data flow, temporal math, Run Storage contract, reference/keyframe rules, Spectrum separation, and runtime validation checklist.
+
 ## What's new in V3.4
 
 V3.4 focuses on the two reference workflows that are most useful in normal production:
@@ -35,6 +49,8 @@ This is a usability and reliability decision, not a claim that the experimental 
 
 - [V3.4 standard](examples/workflows/MiniMax_H3_Continuum_V34.json)
 - [V3.4 Turbo](examples/workflows/MiniMax_H3_Continuum_V34_turbo.json)
+
+New V3.4 nodes and the maintained V3.4 templates default to `Continuation Method = Native Masked — exact continuation (Recommended)`. Saved legacy V3.4 graphs that do not serialize `continuation_method` are migrated on load to `Guide / Motion Context` so reopening them preserves their previous guide/RoPE generation semantics. For new Native Masked workflows with generated Audio Continuity enabled, use `Continuity = Strong — 39 frames` (or Auto, which resolves to the same exact AV boundary).
 
 The templates include optional external nodes such as Spectrum, Video Helper Suite, rgthree, EasyUse, and RTX Video Super Resolution. Install, replace, connect, or bypass them according to your installation. Media and acceleration choices remain under user control.
 
@@ -74,6 +90,7 @@ V3.4 removes or relaxes Continuum-only rejection rules that blocked otherwise ru
 - There is no model allowlist and no automatic model replacement.
 - The obsolete strict_compatibility control is removed from the V3.4 interface.
 - Current Core PackedLayout behavior is supported without requiring the removed legacy frame_count argument.
+- Native Masked continuation performs capability detection against Core's MiniMax H3 mask API and reports an actionable compatibility error when PR #15375-equivalent support is absent.
 
 Hard stops remain only for states that cannot execute safely, including corrupt latent topology, incompatible assembly data, invalid persisted revisions, or unusable mandatory payloads.
 
@@ -118,7 +135,7 @@ Main inputs:
 - model, clip, video_vae, sampler, sigmas
 - Sequence Prompt
 - first_frame, last_frame
-- reference_image_1 through reference_image_3
+- reference_image_1 through reference_image_8
 - Video Reference
 - driving_audio, audio_vae
 
@@ -132,6 +149,7 @@ Visible controls:
 
 - Prompt Format, chunks, chunk_seconds
 - width, height, continuity
+- Continuation Method: Native Masked or Guide / Motion Context
 - base_seed, control after generate
 - audio_continuity
 - Run Storage
@@ -193,6 +211,8 @@ Run Storage preserves completed chunks and can reuse them after restarting Comfy
 
 - Use a fixed seed for reproducible resume.
 - Changing persistent models, LoRAs, references, prompts, resolution, or sampling settings can create a new revision.
+- Native Masked and Guide continuation chunks use different generation contracts. Native mask contract changes also produce a different continuation-chunk fingerprint.
+- Chunk 1 has no continuation prefix and remains reusable when only the continuation method changes; incompatible chunk 2+ state is not silently reused.
 - Unknown upstream node classes no longer cause rejection by themselves; reuse still depends on compatible observable contracts and hashes.
 
 ## Spectrum interoperability
@@ -201,6 +221,7 @@ Spectrum is optional. Current Spectrum releases officially support H3 Continuum 
 
 - Chunk 1 uses the normal initial path.
 - Chunk 2 and later request Actual Prefix 2.
+- Native Masked keeps this request without using Continuum's layout/RoPE rewrite.
 - Successful continuation logs accepted H3 Continuum API v1, actual prefix=2.
 - Unsupported Spectrum versions fall back without a private patch.
 
@@ -262,7 +283,7 @@ Use a 24 fps source for `Video Reference`. `Load Video (Upload)` may accept file
 
 ## Current validation status
 
-V3.4 has been exercised locally with:
+V3.4 stable has been exercised locally with:
 
 - 1, 2, and 3 chunks
 - standard and Turbo paths
@@ -274,11 +295,15 @@ V3.4 has been exercised locally with:
 - Run Storage reuse and selected-chunk regeneration
 - Core VAE Decode and final assembly
 
-No OOM was observed in the cited recent local V3.4 checks, including two-chunk 800 x 800 runs. This is not a universal memory guarantee. Model precision, LoRAs, source resolution, optional nodes, GPU, and RAM affect memory use.
+The Native Masked feature adds automated coverage for exact target-prefix copying, video/audio mask semantics, temporal boundary validation, Guide separation, keyframe/reference coexistence, Run Storage method/version separation, Spectrum Actual Prefix request independence, source immutability, and the existing assembly/duration suite. A real current-Core H3 generation is still required before claiming perceptual/runtime validation of the new mechanism; use the precise checklist in `docs/NATIVE_MASKED_CONTINUATION.md`.
+
+No OOM was observed in the cited recent local V3.4 stable checks, including two-chunk 800 x 800 runs. This is not a universal memory guarantee. Model precision, LoRAs, source resolution, optional nodes, GPU, and RAM affect memory use.
 
 ## Limits
 
-- Continuation does not guarantee frame-perfect identity or motion.
+- Native Masked exact continuation requires ComfyUI Core with PR #15375-equivalent H3 mask support.
+- Generated-audio Native Masked continuation currently uses the 39-frame exact AV profile; explicit 5/22-frame generated-audio requests fail instead of shifting audio timing.
+- Guide / Motion Context remains model conditioning and does not freeze an exact target prefix.
 - Video Reference guides H3; it does not reproduce every source frame.
 - Driving Audio preserves selected audio, but visual lip synchronization remains model-dependent.
 - Match Output can be substantially slower than 0.4 MP or 0.6 MP.

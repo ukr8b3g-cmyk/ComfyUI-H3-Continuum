@@ -105,6 +105,40 @@ def test_apply_model_wrapper_repairs_keyframes_with_audio_reference_without_cont
     assert result["cond_audio_latents"] == [audio]
 
 
+def test_native_masked_ordinary_refs_never_invoke_continuum_layout_rewrite(monkeypatch):
+    import ComfyUI_H3_Continuum_Join.model_patch as model_patch
+
+    first = torch.zeros(1, 24, 1, 1, 1)
+    reference = torch.ones(1, 24, 1, 1, 1)
+    payload = {
+        "keyframes": [{"resolved_frame_index": 4, "latent": first}],
+        "refs": [
+            {
+                "kind": "image",
+                "latent_t": 1,
+                "latent_h": 1,
+                "latent_w": 1,
+                "latent": reference,
+            }
+        ],
+        "layout": SimpleNamespace(position_ids=torch.arange(9).reshape(3, 3).clone()),
+    }
+    position_ids_object = payload["layout"].position_ids
+    position_ids_before = position_ids_object.clone()
+
+    def forbidden_layout_rewrite(*args, **kwargs):
+        raise AssertionError("Native Masked ordinary conditioning must not rewrite H3 position_ids")
+
+    monkeypatch.setattr(model_patch, "patch_layout_in_place", forbidden_layout_rewrite)
+    result = model_patch._wrapper_factory(strict=True, debug=False)(
+        Executor(), torch.zeros(1), minimax_payload=payload
+    )
+
+    assert result["cond_video_latents"] == [first, reference]
+    assert torch.equal(result["layout"].position_ids, position_ids_before)
+    assert result["layout"].position_ids is position_ids_object
+
+
 def test_apply_model_wrapper_fails_when_actual_topology_changes():
     video = torch.zeros(1, 24, 1, 1, 1)
     audio = torch.zeros(1, 32, 2, 1)

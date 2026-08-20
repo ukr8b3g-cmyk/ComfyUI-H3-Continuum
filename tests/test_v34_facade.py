@@ -1,8 +1,17 @@
+import pytest
 import torch
 
+from ComfyUI_H3_Continuum_Join.constants import V2_CONTINUITY_OPTIONS
+from ComfyUI_H3_Continuum_Join.masked_continuation import (
+    CONTINUATION_METHODS,
+    CONTINUATION_NATIVE_MASKED,
+    NativeMaskedContinuationError,
+)
 from ComfyUI_H3_Continuum_Join.nodes import NODE_CLASS_MAPPINGS
 from ComfyUI_H3_Continuum_Join.reference import ReferenceImageBundle
 from ComfyUI_H3_Continuum_Join.v3.driving_nodes import (
+    V34_CONTINUITY_OPTIONS,
+    V34_CONTINUITY_STRONG,
     H3ContinuumAssembleSeamV34,
     H3ContinuumSamplerV34,
 )
@@ -12,6 +21,47 @@ from ComfyUI_H3_Continuum_Join.v3.nodes import H3ContinuumSamplerProduction
 def test_v34_public_nodes_are_registered():
     assert NODE_CLASS_MAPPINGS["H3ContinuumSamplerV34"] is H3ContinuumSamplerV34
     assert NODE_CLASS_MAPPINGS["H3ContinuumAssembleSeamV34"] is H3ContinuumAssembleSeamV34
+
+
+def test_v34_native_masked_is_default_without_changing_v33_contract():
+    v34_required = H3ContinuumSamplerV34.INPUT_TYPES()["required"]
+    legacy_required = H3ContinuumSamplerProduction.INPUT_TYPES()["required"]
+
+    method = v34_required["continuation_method"]
+    assert method[0] == CONTINUATION_METHODS
+    assert method[1]["default"] == CONTINUATION_NATIVE_MASKED
+    assert v34_required["continuity"][0] == V34_CONTINUITY_OPTIONS
+    assert v34_required["continuity"][1]["default"] == V34_CONTINUITY_STRONG
+    assert V34_CONTINUITY_STRONG == "Strong — 39 frames"
+    assert V2_CONTINUITY_OPTIONS[3] in V34_CONTINUITY_OPTIONS
+    assert "continuation_method" not in legacy_required
+    assert legacy_required["continuity"][1]["default"] != V2_CONTINUITY_OPTIONS[3]
+
+
+@pytest.mark.parametrize(
+    "continuity",
+    [V34_CONTINUITY_STRONG, V2_CONTINUITY_OPTIONS[3]],
+)
+def test_v34_strong_values_normalize_before_legacy_sequence_engine(monkeypatch, continuity):
+    captured = {}
+
+    def fake_run(self, **kwargs):
+        captured.update(kwargs)
+        return ["v"], ["a"], {"target_frames": 120}, "status"
+
+    monkeypatch.setattr(H3ContinuumSamplerProduction, "run", fake_run)
+    outputs = H3ContinuumSamplerV34().run(
+        chunks=1,
+        chunk_seconds=5.0,
+        width=64,
+        height=64,
+        continuity=continuity,
+        audio_continuity=True,
+        continuation_method=CONTINUATION_NATIVE_MASKED,
+    )
+
+    assert captured["continuity"] == V2_CONTINUITY_OPTIONS[3]
+    assert outputs == (["v"], ["a"], {"target_frames": 120}, "status", None)
 
 
 def test_v34_sampler_extends_official_contract_to_eight_references_only():
@@ -38,6 +88,28 @@ def test_v34_sampler_extends_official_contract_to_eight_references_only():
         "driving_audio",
     )
     assert H3ContinuumSamplerV34.OUTPUT_IS_LIST == (True, True, False, False, False)
+
+
+def test_v34_invalid_native_generated_audio_profile_fails_before_parent_sampling(monkeypatch):
+    parent_called = False
+
+    def fake_run(self, **kwargs):
+        nonlocal parent_called
+        parent_called = True
+        raise AssertionError("invalid native AV settings must fail before parent sampling")
+
+    monkeypatch.setattr(H3ContinuumSamplerProduction, "run", fake_run)
+    with pytest.raises(NativeMaskedContinuationError, match="22 video frames"):
+        H3ContinuumSamplerV34().run(
+            chunks=2,
+            chunk_seconds=5.0,
+            width=64,
+            height=64,
+            continuity=V2_CONTINUITY_OPTIONS[1],
+            audio_continuity=True,
+            continuation_method=CONTINUATION_NATIVE_MASKED,
+        )
+    assert parent_called is False
 
 
 def test_v34_reference_mode_precedence_and_extra_reference_bundle(monkeypatch):
@@ -72,4 +144,5 @@ def test_v34_reference_mode_precedence_and_extra_reference_bundle(monkeypatch):
     assert "reference_image_8" not in captured
     assert captured["driving_audio_source"] is None
     assert captured["reference_video_source"] is None
+    assert captured["continuity"] == V2_CONTINUITY_OPTIONS[3]
     assert outputs == (["v"], ["a"], {"target_frames": 120}, "status", None)

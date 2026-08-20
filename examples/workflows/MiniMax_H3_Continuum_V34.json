@@ -1947,7 +1947,7 @@
         5,
         1344,
         768,
-        "Balanced — 22 frames",
+        "Strong — 39 frames",
         123456,
         "randomize",
         true,
@@ -1961,7 +1961,8 @@
         "",
         "Match Output",
         "178937a7-0b65-4964-b312-387ca0bdd733",
-        "Balanced - 0.6 MP"
+        "Balanced - 0.6 MP",
+        "Native Masked — exact continuation (Recommended)"
       ],
       "widgets_values_named": {
         "prompt_mode": "Auto",
@@ -1969,7 +1970,7 @@
         "chunk_seconds": 5,
         "width": 1344,
         "height": 768,
-        "continuity": "Balanced — 22 frames",
+        "continuity": "Strong — 39 frames",
         "base_seed": 123456,
         "control_after_generate": "randomize",
         "audio_continuity": true,
@@ -1983,7 +1984,8 @@
         "run_name": "",
         "reference_size": "Match Output",
         "project_id": "178937a7-0b65-4964-b312-387ca0bdd733",
-        "video_reference_size": "Balanced - 0.6 MP"
+        "video_reference_size": "Balanced - 0.6 MP",
+        "continuation_method": "Native Masked — exact continuation (Recommended)"
       },
       "color": "#232",
       "bgcolor": "#353"

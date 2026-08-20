@@ -4,8 +4,14 @@ from __future__ import annotations
 
 import torch
 
-from ..constants import FPS
+from ..constants import FPS, V2_CONTINUITY_OPTIONS
 from ..driving_audio import prepare_driving_audio_source
+from ..masked_continuation import (
+    CONTINUATION_METHODS,
+    CONTINUATION_NATIVE_MASKED,
+    continuation_method_scope,
+    validate_native_masked_request,
+)
 from ..reference import bundle_reference_images
 from ..reference_video import (
     REFERENCE_VIDEO_SIZE_EFFICIENT,
@@ -17,6 +23,29 @@ from .nodes import CATEGORY as CONTINUUM_CATEGORY, H3ContinuumSamplerProduction
 
 
 _DRIVING_AUDIO_PLAN_KEY = "_h3_continuum_driving_audio_v1"
+V34_CONTINUITY_STRONG = "Strong — 39 frames"
+V34_CONTINUITY_OPTIONS = (
+    V2_CONTINUITY_OPTIONS[0],
+    V2_CONTINUITY_OPTIONS[1],
+    V2_CONTINUITY_OPTIONS[2],
+    V34_CONTINUITY_STRONG,
+    V2_CONTINUITY_OPTIONS[3],
+)
+
+
+def _normalize_v34_continuity(value: str) -> str:
+    """Map the V3.4 display value onto the inherited sequence wire contract.
+
+    V2/V3.3 keep the historical ``Strong — 39 frames (Experimental)`` value.
+    V3.4 promotes that exact 39-frame boundary, so its public widget uses the
+    unsuffixed label while still accepting the old serialized value as an API
+    compatibility alias.
+    """
+
+    value = str(value)
+    if value == V34_CONTINUITY_STRONG:
+        return V2_CONTINUITY_OPTIONS[3]
+    return value
 
 
 def _unwrap_single_audio_value(value):
@@ -52,17 +81,18 @@ def _driving_audio_from_plan(args, kwargs):
 
 
 class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
-    """V3.4 sampler with globally encoded, absolute-time Driving Audio."""
+    """V3.4 sampler with native masked continuation and Driving Audio."""
 
     DEPRECATED = False
     CATEGORY = CONTINUUM_CATEGORY
     DESCRIPTION = (
-        "H3 Continuum V3.4 with optional Driving Audio and persistent Video Reference. "
-        "Video Reference uses an IMAGE frame batch and one-chunk reference prefix."
+        "H3 Continuum V3.4 with native masked AV continuation by default, optional "
+        "Guide / Motion Context continuation, Driving Audio, and persistent Video Reference."
     )
     SEARCH_ALIASES = [
         "H3 Continuum Sampler V3.4",
         "MiniMax H3 Driving Audio",
+        "MiniMax H3 masked continuation",
     ]
     RETURN_TYPES = (
         "LATENT",
@@ -84,6 +114,22 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
     def INPUT_TYPES(cls):
         schema = super().INPUT_TYPES()
         required = dict(schema.get("required", {}))
+        # Keep the inherited key position stable for saved workflows while making
+        # the new exact-AV default internally valid. 39 video frames map exactly
+        # to 65 H3 audio-latent steps at 24 fps / 40 Hz. The final legacy value
+        # remains accepted for headless/serialized V3.4 compatibility; v34_ui.js
+        # presents only the canonical unsuffixed V3.4 value.
+        required["continuity"] = (
+            V34_CONTINUITY_OPTIONS,
+            {
+                "default": V34_CONTINUITY_STRONG,
+                "tooltip": (
+                    "Protected previous-chunk context. Native Masked generated-audio "
+                    "continuation requires the exact 39-frame AV boundary; video-only "
+                    "continuation and Guide / Motion Context also support 5 or 22 frames."
+                ),
+            },
+        )
         required["video_reference_size"] = (
             REFERENCE_VIDEO_SIZE_OPTIONS,
             {
@@ -93,6 +139,21 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
                     "Efficient limits Video Reference to about 0.4 MP; Balanced uses "
                     "about 0.6 MP; Match Output uses the output pixel area. Source "
                     "aspect ratio is preserved and smaller sources are not enlarged."
+                ),
+            },
+        )
+        # Appending this widget avoids shifting existing V3.4 serialized widget
+        # positions. New nodes receive the Native default; v34_ui.js migrates
+        # saved graphs without this widget to Guide / Motion Context.
+        required["continuation_method"] = (
+            CONTINUATION_METHODS,
+            {
+                "default": CONTINUATION_NATIVE_MASKED,
+                "display_name": "Continuation Method",
+                "tooltip": (
+                    "Native Masked preserves the previous generated H3 latent directly "
+                    "inside the next target and is recommended for exact same-shot continuation. "
+                    "Guide / Motion Context keeps the previous clip as softer H3 guide context."
                 ),
             },
         )
@@ -139,10 +200,29 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
         audio_vae=None,
         reference_video_1=None,
         video_reference_size=REFERENCE_VIDEO_SIZE_EFFICIENT,
+        continuation_method=CONTINUATION_NATIVE_MASKED,
         **kwargs,
     ):
         from ..reference_video import prepare_reference_video_source
         from ..temporal import align_frame_count_up
+
+        # Validate the cross-modal continuation contract before any VAE/model
+        # preparation. Old or manually edited workflows may still serialize a
+        # 5/22-frame profile alongside Native Masked + generated Audio Continuity;
+        # discovering that only when chunk 2 starts wastes a complete chunk 1.
+        continuity = _normalize_v34_continuity(
+            kwargs.get("continuity", V34_CONTINUITY_STRONG)
+        )
+        validate_native_masked_request(
+            method=continuation_method,
+            continuity=continuity,
+            audio_continuity=bool(kwargs.get("audio_continuity", True)),
+            driving_audio_active=driving_audio is not None,
+            chunks=int(kwargs.get("chunks", 1)),
+        )
+        # The inherited V2/V3.3 sequence engine intentionally keeps its stable
+        # historical wire value. Normalize only at this V3.4 facade boundary.
+        kwargs["continuity"] = continuity
 
         active_reference = any(
             kwargs.get(f"reference_image_{index}") is not None
@@ -182,14 +262,15 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
             output_height=int(kwargs["height"]),
             size_mode=str(video_reference_size),
         )
-        outputs = super().run(
-            reference_audio_1=None,
-            reference_audio_vae=None,
-            driving_audio_source=source,
-            driving_audio_vae=audio_vae,
-            reference_video_source=reference_video_source,
-            **kwargs,
-        )
+        with continuation_method_scope(continuation_method):
+            outputs = super().run(
+                reference_audio_1=None,
+                reference_audio_vae=None,
+                driving_audio_source=source,
+                driving_audio_vae=audio_vae,
+                reference_video_source=reference_video_source,
+                **kwargs,
+            )
         selected_audio = _copy_audio(source.source_audio) if source is not None else None
         if selected_audio is not None and len(outputs) >= 3 and isinstance(outputs[2], dict):
             assembly_plan = dict(outputs[2])

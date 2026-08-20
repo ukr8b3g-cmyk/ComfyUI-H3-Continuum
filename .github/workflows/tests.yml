@@ -82,6 +82,7 @@ jobs:
           required = {
               prefix + "__init__.py",
               prefix + "pyproject.toml",
+              prefix + "masked_continuation.py",
               prefix + "v2/sequence.py",
               prefix + "v2/context_diagnostics.py",
               prefix + "v3/nodes.py",

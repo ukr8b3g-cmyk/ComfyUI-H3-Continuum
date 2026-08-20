@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Added V3.4 **Native Masked — exact continuation** as the recommended/default exact chunk-continuation mechanism using ComfyUI Core MiniMax H3 per-token denoise masks from PR #15375.
+- Preserved **Guide / Motion Context** as a separate softer continuation method and kept V2/V3.3 workflow behavior on the legacy guide/RoPE path.
+- Reused accepted generated H3 video/audio latents directly for protected target prefixes without decode/re-encode, with exact 39-frame/65-audio-step generated-AV boundary validation.
+- Kept Driving Audio authoritative by protecting video only in that mode, retaining absolute source-audio guide slices, and preserving final source-audio assembly behavior.
+- Versioned Native Masked continuation chunk fingerprints/plans so Run Storage never silently reuses Guide chunks as Native Masked while preserving reusable chunk 1 where possible.
+- Kept Spectrum Interop API v1 Actual Prefix 2 independent of the old layout rewrite.
+- Added regression coverage and documentation for native masks, temporal mapping, references/keyframes, restartability, assembly, and compatibility requirements.
+
 ## 3.4.0
 
 - Completed the V3.4 runtime path from the public sampler through V3/V2 to `run_sequence()`.
@@ -16,7 +26,7 @@
 - Added `H3 Continuum Assemble + Seam` with stable Audio Seam Auto and guarded Video Seam Auto defaults.
 - Kept `Auto 2` as an experimental exposure-ramp extension without widening the visible option label.
 - Added native Reference Audio conditioning and retained up to three ordered Reference Images.
-- Preserved stable sampler Node IDs, Run Storage compatibility, Core VAE decode, and Spectrum Interop API v1 Actual Prefix 2 behavior.
+- Preserved stable sampler Node IDs, Run Storage compatibility, Core VAE Decode, and Spectrum Interop API v1 Actual Prefix 2 behavior.
 - Added consolidated runtime validation results and documented known Timeline Video and Auto 2 limitations.
 
 ## 3.2.4
