@@ -72,6 +72,7 @@ You need an hybrid version of MiniMax-H3 to make both I2V and reference images w
 
 https://huggingface.co/smhfacct/Minimax-H3-fl2va-ref2va-hybrid-models
 
+https://www.reddit.com/r/StableDiffusion/comments/1vm62pj/i_tested_out_the_b2049_hybrid_variant_for_r2v/
 
 V3.4 supports First Frame, Last Frame, and persistent Reference Images in the same Continuum run. The public sockets and controls are unchanged: connect the inputs that the selected H3 model supports.
 
