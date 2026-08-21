@@ -574,9 +574,11 @@ def build_sampling_contract(
 ) -> tuple[dict[str, Any], bool, list[str]]:
     model_value, model_safe = _model_signature(model, model_fingerprint_value)
     clip_value, clip_safe = _clip_signature(clip)
+    has_first = str(first_frame_hash).lower() not in {"", "none", "null"}
+    has_last = str(last_frame_hash).lower() not in {"", "none", "null"}
     inferred_mode = conditioning_mode_from_presence(
-        has_first=str(first_frame_hash).lower() not in {"", "none", "null"},
-        has_last=str(last_frame_hash).lower() not in {"", "none", "null"},
+        has_first=has_first,
+        has_last=has_last,
         has_reference=reference_contract is not None,
     )
     conditioning_mode = inferred_mode if conditioning_mode is None else str(conditioning_mode)
@@ -660,10 +662,26 @@ def build_sampling_contract(
         global_contract["upstream_graph"] = dict(upstream_graph_contract)
     if uses_video_vae:
         global_contract["video_vae"] = video_vae_value
-    if conditioning_mode in {"i2va", "fl2va"}:
+    if has_first:
         global_contract["first_frame_hash"] = str(first_frame_hash)
     if reference_contract is not None:
         global_contract["reference"] = dict(reference_contract)
+        if has_first or has_last:
+            from .reference import HYBRID_PRESENTATION_VERSION
+
+            picture_order: list[str] = []
+            if has_first:
+                picture_order.append("first_frame")
+            if has_last:
+                picture_order.append("last_frame")
+            picture_order.extend(
+                f"reference_image_{index}"
+                for index in range(1, int(reference_contract.get("count", 0)) + 1)
+            )
+            global_contract["hybrid_qwen_presentation"] = {
+                "version": HYBRID_PRESENTATION_VERSION,
+                "picture_order": picture_order,
+            }
     if reference_audio_contract is not None:
         global_contract["reference_audio"] = dict(reference_audio_contract)
         global_contract["reference_audio_vae"] = audio_vae_value

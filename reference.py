@@ -18,6 +18,7 @@ import torch
 
 REFERENCE_CONTRACT_VERSION = 1
 REFERENCE_PREPROCESS_VERSION = 1
+HYBRID_PRESENTATION_VERSION = 1
 REFERENCE_SIZE_MATCH_OUTPUT = "Match Output"
 REFERENCE_SIZE_MAX_IDENTITY = "Max Identity"
 REFERENCE_SIZE_OPTIONS = (
@@ -192,7 +193,59 @@ def encode_reference_latents(video_vae: Any, assets: ReferenceAssets) -> Referen
     return replace(assets, latents=latents)
 
 
-def validate_reference_prompts(prompts: list[str], reference_count: int) -> str:
+def build_hybrid_presentation_items(
+    reference_items: list[dict[str, Any]],
+    *,
+    first_image: torch.Tensor | None = None,
+    last_image: torch.Tensor | None = None,
+) -> list[dict[str, Any]]:
+    """Build the Core Qwen Picture list without changing DiT payloads."""
+    items: list[dict[str, Any]] = []
+    if first_image is not None:
+        items.append({"type": "image", "data": first_image})
+    if last_image is not None:
+        items.append({"type": "image", "data": last_image})
+    items.extend(dict(item) for item in reference_items)
+    return items
+
+
+def combine_hybrid_visual_identity(
+    *,
+    keyframe_identity_hash: str,
+    reference_assets: ReferenceAssets | None,
+    has_first: bool,
+    has_last: bool,
+) -> str:
+    """Preserve pure-mode identity and version only the hybrid contract."""
+    if reference_assets is None:
+        return str(keyframe_identity_hash)
+    if not has_first and not has_last:
+        return reference_assets.combined_hash
+    return _canonical_hash(
+        {
+            "hybrid_visual_identity_version": 1,
+            "hybrid_presentation_version": HYBRID_PRESENTATION_VERSION,
+            "keyframe_identity_hash": str(keyframe_identity_hash),
+            "reference_hash": reference_assets.combined_hash,
+        }
+    )
+
+
+def validate_reference_prompts(
+    prompts: list[str],
+    reference_count: int,
+    picture_offset: int = 0,
+) -> str:
+    if picture_offset > 0:
+        def _shift_picture_tag(match: re.Match[str]) -> str:
+            number = int(match.group(1))
+            if number <= picture_offset:
+                return ""
+            return f"<Picture {number - picture_offset}>"
+
+        shifted = [_PICTURE_TAG.sub(_shift_picture_tag, str(prompt)) for prompt in prompts]
+        return validate_reference_prompts(shifted, reference_count)
+
     found: set[int] = set()
     for prompt in prompts:
         found.update(int(value) for value in _PICTURE_TAG.findall(str(prompt)))
@@ -226,6 +279,8 @@ def encode_reference_prompt(
     clip: Any,
     prompt: str,
     assets: ReferenceAssets,
+    first_image: torch.Tensor | None = None,
+    last_image: torch.Tensor | None = None,
     reference_audio_assets=None,
     timeline_video_assets=None,
 ) -> list[list[Any]]:
@@ -241,8 +296,13 @@ def encode_reference_prompt(
         from .reference_audio import reference_audio_item
 
         reference_items.append(reference_audio_item())
+    presentation_items = build_hybrid_presentation_items(
+        reference_items,
+        first_image=first_image,
+        last_image=last_image,
+    )
     try:
-        tokens = clip.tokenize(str(prompt), minimax_ref_items=reference_items)
+        tokens = clip.tokenize(str(prompt), minimax_ref_items=presentation_items)
     except TypeError as exc:
         raise ReferenceConditioningError(
             "This ComfyUI Core/CLIP does not support MiniMax H3 image references"
