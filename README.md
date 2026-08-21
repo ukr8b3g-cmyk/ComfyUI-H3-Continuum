@@ -14,6 +14,7 @@ V3.4 focuses on the two reference workflows that are most useful in normal produ
 
 - **Driving Audio**: use an existing audio source as the preserved final audio while it guides the H3 generation across chunks.
 - **Video Reference**: use an existing video as persistent visual reference for appearance, motion, framing, and timing without treating it as a frame-by-frame copy.
+- **Hybrid FLF + Reference**: use First Frame, Last Frame, and persistent Reference Images together without adding a separate mode or model allowlist.
 - **Restartable chunks**: reuse completed chunks with Run Storage and regenerate only the selected part when the generation contract remains compatible.
 - **Core compatibility**: remove Continuum-only rejection of unknown upstream/custom nodes and remove the obsolete `strict_compatibility` control.
 - **Spectrum interoperability**: use the official H3 Continuum Interop API v1 when Spectrum is installed; Spectrum remains optional.
@@ -64,6 +65,17 @@ Video Reference provides a persistent native H3 video reference across all chunk
 | Efficient - 0.4 MP | Default; lower token cost and faster iteration. |
 | Balanced - 0.6 MP | More detail at a higher compute cost. |
 | Match Output | Largest reference input; potentially much slower and heavier. |
+
+### Hybrid First/Last Frame + Reference Images
+
+V3.4 supports First Frame, Last Frame, and persistent Reference Images in the same Continuum run. The public sockets and controls are unchanged: connect the inputs that the selected H3 model supports.
+
+- Pure FL2VA and pure Ref2VA identity contracts remain unchanged.
+- The combined path receives a distinct hybrid identity so Run Storage does not reuse incompatible chunks.
+- Prompt/reference mismatches produce guidance warnings rather than a Continuum-only execution stop.
+- No model-name allowlist or automatic model replacement is used.
+
+Local checks passed with the B2049 hybrid variant. FL-only models could run, but showed less reliable transitions when FLF and Reference Images were combined; a hybrid-capable model is therefore recommended for this path.
 
 ### Core-first, permissive execution
 
@@ -222,6 +234,14 @@ V3.4 follows the current Core H3 layout contract and no longer requires the lega
 
 See [Issue #4](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/issues/4).
 
+### Issue #7
+
+V3.4 allows First Frame, Last Frame, and Reference Images to be used together without requiring the separate BigStationW node or introducing a model allowlist. Hybrid presentation ordering and Run Storage identity are handled by Continuum while pure FL2VA and pure Ref2VA behavior remain unchanged.
+
+The combined path was exercised locally with the B2049 hybrid variant. FL-only models were less consistent for this specific combination, so the README recommends a hybrid-capable model rather than rejecting other models in code.
+
+See [Issue #7](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/issues/7).
+
 ### Pull request #1 and #2
 
 These older partial pull requests were superseded by the consolidated [Pull request #5](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/pull/5). V3.4 selectively includes the compatibility direction needed for the current Core H3 contract, while the broader upstream synchronization and release-automation scope remains a separate upstream review.
@@ -268,6 +288,7 @@ V3.4 has been exercised locally with:
 - standard and Turbo paths
 - Spectrum enabled and disabled
 - I2VA, Reference, and selected FL2VA configurations
+- Hybrid FLF + Reference with the B2049 hybrid variant
 - Driving Audio with short, exact-length, and longer sources
 - Video Reference with source audio routed separately
 - 0.4 MP and 0.6 MP reference sizing
