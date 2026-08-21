@@ -68,6 +68,9 @@ Video Reference provides a persistent native H3 video reference across all chunk
 
 ### Hybrid First/Last Frame + Reference Images
 
+https://huggingface.co/smhfacct/Minimax-H3-fl2va-ref2va-hybrid-models/tree/main
+
+
 V3.4 supports First Frame, Last Frame, and persistent Reference Images in the same Continuum run. The public sockets and controls are unchanged: connect the inputs that the selected H3 model supports.
 
 - Pure FL2VA and pure Ref2VA identity contracts remain unchanged.
