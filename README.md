@@ -68,7 +68,9 @@ Video Reference provides a persistent native H3 video reference across all chunk
 
 ### Hybrid First/Last Frame + Reference Images
 
-https://huggingface.co/smhfacct/Minimax-H3-fl2va-ref2va-hybrid-models/tree/main
+You need an hybrid version of MiniMax-H3 to make both I2V and reference images work:
+
+https://huggingface.co/smhfacct/Minimax-H3-fl2va-ref2va-hybrid-models
 
 
 V3.4 supports First Frame, Last Frame, and persistent Reference Images in the same Continuum run. The public sockets and controls are unchanged: connect the inputs that the selected H3 model supports.
