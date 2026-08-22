@@ -117,7 +117,6 @@ The public nodes focus on normal production controls. Developer diagnostics and 
 ### Timeline paths
 
 Experimental Timeline Video and earlier timeline-audio paths are no longer public V3.4 inputs. They are hidden rather than destructively removed. Existing V3.3 workflows can continue through legacy nodes, but new stable workflows should use Driving Audio and Video Reference.
-
 ## Installation
 
 ### Updating an existing installation
@@ -206,15 +205,73 @@ The supplied templates use Video Helper Suite for this split. Any compatible IMA
 
 ## Prompt formats
 
-Timeline:
+### Timeline
+
+For **Timeline** mode, each time-range header must be written on its own line. Write the scene description on the following line or lines.
+
+Recommended format:
 
 ~~~text
-[0-5s] First section: action, camera movement, and scene progression.
-[5-10s] Continue from the exact final state of the previous section.
-[10-15s] Continue naturally without resetting the scene.
+[0-5s]
+First section: action, camera movement, and scene progression.
+
+[5-10s]
+Continue from the exact final state of the previous section.
+
+[10-15s]
+Continue naturally without resetting the scene.
 ~~~
 
-List prompts use --- separators. Fixed reuses one prompt for every chunk. Auto detects the available structure. If a timeline cannot be parsed, V3.4 reports a warning and uses an applicable fallback rather than rejecting an otherwise runnable workflow.
+For 10-second chunks:
+
+~~~text
+[0-10s]
+Describe the first scene.
+
+[10-20s]
+Describe the next scene.
+
+[20-30s]
+Continue the sequence.
+
+[30-40s]
+Describe the final section.
+~~~
+
+**Important:** do not place the prompt text on the same line as the time header.
+
+Correct:
+
+~~~text
+[0-5s]
+Describe the scene.
+~~~
+
+Not recommended:
+
+~~~text
+[0-5s] Describe the scene.
+~~~
+
+The second form is not recognized as a Timeline header. When **Prompt Format = Auto**, it may therefore be interpreted as a Fixed prompt instead, causing the complete text to be reused across chunks.
+
+The time ranges should normally match the configured `chunk_seconds`.
+
+- `chunk_seconds = 5` → `[0-5s]`, `[5-10s]`, `[10-15s]` ...
+- `chunk_seconds = 10` → `[0-10s]`, `[10-20s]`, `[20-30s]` ...
+- `chunk_seconds = 15` → `[0-15s]`, `[15-30s]`, `[30-45s]` ...
+
+Each section should describe what should happen during that part of the sequence. Continuum already carries visual/audio context from the previous chunk, so it is usually more useful to describe the next action, camera movement, characters, and scene progression clearly rather than repeatedly instructing the model to preserve the previous chunk.
+
+### Other prompt formats
+
+**List** prompts use `---` separators.
+
+**Fixed** reuses one prompt for every chunk.
+
+**Auto** detects Timeline, List, or Fixed formatting from the supplied text.
+
+If Timeline syntax cannot be parsed, V3.4 reports a warning and falls back to an applicable prompt mode rather than rejecting an otherwise runnable workflow.
 
 ## Run Storage
 
@@ -238,7 +295,6 @@ Spectrum is optional. Current Spectrum releases officially support H3 Continuum 
 See [Spectrum v0.2.15 H3 Continuum interoperability](https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3#v0215-h3-continuum-interoperability).
 
 Turbo LoRA and Spectrum are not mutually exclusive. Quality and speed remain workflow-dependent.
-
 ## Issue and pull-request response
 
 ### Issue #3
