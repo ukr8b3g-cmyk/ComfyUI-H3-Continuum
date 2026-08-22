@@ -117,6 +117,7 @@ The public nodes focus on normal production controls. Developer diagnostics and 
 ### Timeline paths
 
 Experimental Timeline Video and earlier timeline-audio paths are no longer public V3.4 inputs. They are hidden rather than destructively removed. Existing V3.3 workflows can continue through legacy nodes, but new stable workflows should use Driving Audio and Video Reference.
+
 ## Installation
 
 ### Updating an existing installation
@@ -295,6 +296,7 @@ Spectrum is optional. Current Spectrum releases officially support H3 Continuum 
 See [Spectrum v0.2.15 H3 Continuum interoperability](https://github.com/xmarre/ComfyUI-Spectrum-MiniMax-H3#v0215-h3-continuum-interoperability).
 
 Turbo LoRA and Spectrum are not mutually exclusive. Quality and speed remain workflow-dependent.
+
 ## Issue and pull-request response
 
 ### Issue #3
