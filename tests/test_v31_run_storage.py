@@ -283,6 +283,7 @@ def _sampling_contract(
     last_frame_hash="", reference_contract=None,
     upstream_graph_contract=None, upstream_graph_safe=None,
     upstream_graph_reasons=None,
+    execution_semantics=None,
 ):
     return build_sampling_contract(
         model=model or _Model(),
@@ -312,7 +313,67 @@ def _sampling_contract(
         upstream_graph_contract=upstream_graph_contract,
         upstream_graph_safe=upstream_graph_safe,
         upstream_graph_reasons=upstream_graph_reasons,
+        execution_semantics=execution_semantics,
     )
+
+
+def test_terminal_seed_v2_revision_is_scoped_and_distinct():
+    old_contract, old_safe, old_reasons = _sampling_contract(
+        conditioning_mode="fl2va",
+        first_frame_hash="a" * 64,
+        last_frame_hash="b" * 64,
+    )
+    new_contract, new_safe, new_reasons = _sampling_contract(
+        conditioning_mode="fl2va",
+        first_frame_hash="a" * 64,
+        last_frame_hash="b" * 64,
+        execution_semantics={
+            "flf_execution": "terminal_merged_10s_seed_v2",
+            "terminal_seed_policy": "physical_window_seed_v2",
+        },
+    )
+    assert old_safe, old_reasons
+    assert new_safe, new_reasons
+    assert "execution_semantics" not in old_contract["global"]
+    assert new_contract["global"]["execution_semantics"] == {
+        "flf_execution": "terminal_merged_10s_seed_v2",
+        "terminal_seed_policy": "physical_window_seed_v2",
+    }
+    assert revision_identity(old_contract) != revision_identity(new_contract)
+
+
+def test_terminal_seed_v2_revision_identity_is_deterministic():
+    semantics = {
+        "flf_execution": "terminal_merged_10s_seed_v2",
+        "terminal_seed_policy": "physical_window_seed_v2",
+    }
+    model = _Model()
+    clip = _Clip()
+    video_vae = _VideoVAE()
+    sampler = _Sampler()
+    first, first_safe, first_reasons = _sampling_contract(
+        model=model,
+        clip=clip,
+        video_vae=video_vae,
+        sampler=sampler,
+        conditioning_mode="fl2va",
+        first_frame_hash="a" * 64,
+        last_frame_hash="b" * 64,
+        execution_semantics=semantics,
+    )
+    second, second_safe, second_reasons = _sampling_contract(
+        model=model,
+        clip=clip,
+        video_vae=video_vae,
+        sampler=sampler,
+        conditioning_mode="fl2va",
+        first_frame_hash="a" * 64,
+        last_frame_hash="b" * 64,
+        execution_semantics=semantics,
+    )
+    assert first_safe, first_reasons
+    assert second_safe, second_reasons
+    assert revision_identity(first) == revision_identity(second)
 
 
 def test_v322_golden_reference_contract_preserves_revision_identity():

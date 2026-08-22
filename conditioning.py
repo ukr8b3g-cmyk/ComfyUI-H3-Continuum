@@ -59,6 +59,46 @@ def conditioning_mode_label(mode: str) -> str:
         raise ValueError(f"unknown conditioning mode: {mode!r}") from exc
 
 
+def conditioning_display_label(
+    *,
+    has_first: bool,
+    has_last: bool,
+    has_reference: bool,
+) -> str:
+    """Return a user-facing label without changing the runtime mode contract."""
+    if has_reference:
+        if has_first and has_last:
+            return "Hybrid FL2VA + Reference + Continuation"
+        if has_first:
+            return "Hybrid I2VA + Reference + Continuation"
+        if has_last:
+            return "Hybrid L2VA + Reference + Continuation"
+        return "Reference + Continuation"
+    mode = conditioning_mode_from_presence(
+        has_first=has_first,
+        has_last=has_last,
+        has_reference=False,
+    )
+    return conditioning_mode_label(mode)
+
+
+def conditioning_mode_display_label(
+    mode: str,
+    *,
+    has_first: bool = False,
+    has_last: bool = False,
+    has_reference: bool = False,
+) -> str:
+    """Legacy display helper retained for existing callers and tests."""
+    if has_first or has_last or has_reference:
+        return conditioning_display_label(
+            has_first=has_first,
+            has_last=has_last,
+            has_reference=has_reference,
+        )
+    return conditioning_mode_label(mode)
+
+
 def conditioning_mode_uses_video_vae(mode: str) -> bool:
     if mode not in CONDITIONING_MODES:
         raise ValueError(f"unknown conditioning mode: {mode!r}")

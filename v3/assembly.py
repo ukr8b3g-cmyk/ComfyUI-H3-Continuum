@@ -71,7 +71,9 @@ def assemble_decoded_chunks(
     if audio_seam not in AUDIO_SEAM_OPTIONS:
         raise ValueError(f"unknown Audio Seam mode: {audio_seam!r}")
 
-    chunk_plans = list(plan["chunks"])
+    chunk_plans = list(
+        plan["decode_groups"] if "decode_groups" in plan else plan["chunks"]
+    )
     if len(images) != len(chunk_plans) or len(audio) != len(chunk_plans):
         raise ValueError(
             "decoded chunk count does not match the V3 assembly plan: "

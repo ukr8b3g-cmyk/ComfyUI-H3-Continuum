@@ -338,13 +338,33 @@ class H3ContinuumSamplerV3:
             **clip_prompt_inputs,
         )
 
-        assembly_plan = make_assembly_plan(
+        from ..v2.sequence import _terminal_flf_merge_enabled
+        from .plan import prepare_physical_decode_entries
+
+        terminal_merged = _terminal_flf_merge_enabled(
+            multi_chunk_flf=(
+                first_frame is not None
+                and advanced_values["last_frame"] is not None
+                and len(entries) > 1
+            ),
+            chunks=len(entries),
+            chunk_seconds=float(chunk_seconds),
+            prompt_hashes=[str(entry["prompt_hash"]) for entry in entries],
+            timeline_video_source=timeline_video_source,
+        )
+        decode_entries, assembly_plan = prepare_physical_decode_entries(
             entries,
             chunk_seconds=float(chunk_seconds),
             preserve_final_frame=advanced_values["last_frame"] is not None,
+            terminal_merged=terminal_merged,
         )
-        video_latents = [{"samples": entry["video"]} for entry in entries]
-        audio_latents = [{"samples": entry["audio"]} for entry in entries]
+        video_latents = [{"samples": entry["video"]} for entry in decode_entries]
+        audio_latents = [{"samples": entry["audio"]} for entry in decode_entries]
+        if terminal_merged:
+            report = str(report).rstrip() + (
+                "\nDecode: terminal merged latent retained as one physical external "
+                "Core VAE decode group; logical Run Storage entries are unchanged."
+            )
         result = {
             "last_state": last_state,
             "session": session,

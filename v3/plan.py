@@ -141,3 +141,151 @@ def make_assembly_plan(*args, **kwargs):
     _enrich_assembly_plan(plan)
     validate_assembly_plan(plan)
     return plan
+
+
+def _recombine_terminal_tensor(
+    first,
+    second,
+    *,
+    slices,
+    time_dim: int,
+    name: str,
+):
+    """Invert the terminal logical split without changing any tensor value."""
+
+    import torch
+
+    if not torch.is_tensor(first) or not torch.is_tensor(second):
+        raise ValueError(f"terminal {name} entries must be tensors")
+    if first.ndim != second.ndim:
+        raise ValueError(f"terminal {name} tensor ranks differ")
+    dim = int(time_dim)
+    if dim < 0:
+        dim += first.ndim
+    if dim < 0 or dim >= first.ndim:
+        raise ValueError(f"terminal {name} time dimension is invalid")
+    for axis, (left, right) in enumerate(zip(first.shape, second.shape)):
+        if axis != dim and int(left) != int(right):
+            raise ValueError(f"terminal {name} tensor geometry differs")
+
+    (first_start, first_stop), (second_start, second_stop) = slices
+    first_start = int(first_start)
+    first_stop = int(first_stop)
+    second_start = int(second_start)
+    second_stop = int(second_stop)
+    if first_start != 0 or second_start > first_stop or second_stop <= first_stop:
+        raise ValueError(f"terminal {name} split ranges do not form one physical unit")
+    if int(first.shape[dim]) != first_stop - first_start:
+        raise ValueError(f"terminal {name} first slice length is inconsistent")
+    if int(second.shape[dim]) != second_stop - second_start:
+        raise ValueError(f"terminal {name} second slice length is inconsistent")
+
+    overlap_start = max(first_start, second_start)
+    overlap_stop = min(first_stop, second_stop)
+    overlap_length = max(0, overlap_stop - overlap_start)
+    if overlap_length:
+        first_overlap = first.narrow(dim, overlap_start - first_start, overlap_length)
+        second_overlap = second.narrow(dim, overlap_start - second_start, overlap_length)
+        if not torch.equal(first_overlap, second_overlap):
+            raise ValueError(
+                f"terminal {name} overlap differs; refusing lossy physical reconstruction"
+            )
+
+    output_shape = list(first.shape)
+    output_shape[dim] = second_stop
+    output = first.new_empty(output_shape)
+    output.narrow(dim, first_start, first_stop - first_start).copy_(first)
+    output.narrow(dim, second_start, second_stop - second_start).copy_(second)
+    return output.contiguous()
+
+
+def prepare_physical_decode_entries(
+    entries,
+    *,
+    chunk_seconds: float,
+    preserve_final_frame: bool,
+    terminal_merged: bool,
+):
+    """Return external-VAE decode units while preserving logical plan metadata."""
+
+    logical_entries = list(entries)
+    plan = make_assembly_plan(
+        logical_entries,
+        chunk_seconds=float(chunk_seconds),
+        preserve_final_frame=bool(preserve_final_frame),
+    )
+    if not terminal_merged:
+        return logical_entries, plan
+    if len(logical_entries) < 2:
+        raise ValueError("terminal physical decode requires two logical entries")
+
+    from ..v2.sequence import _terminal_pair_contract
+
+    initial_pair = len(logical_entries) == 2
+    contract = _terminal_pair_contract(
+        initial_pair=initial_pair,
+        chunk_seconds=float(chunk_seconds),
+    )
+    first_entry = logical_entries[-2]
+    second_entry = logical_entries[-1]
+    physical_video = _recombine_terminal_tensor(
+        first_entry["video"],
+        second_entry["video"],
+        slices=contract["video_slices"],
+        time_dim=2,
+        name="video",
+    )
+    physical_audio = _recombine_terminal_tensor(
+        first_entry["audio"],
+        second_entry["audio"],
+        slices=contract["audio_slices"],
+        time_dim=-1,
+        name="audio",
+    )
+
+    physical_entry = dict(first_entry)
+    physical_entry["video"] = physical_video
+    physical_entry["audio"] = physical_audio
+    decode_entries = [*logical_entries[:-2], physical_entry]
+
+    logical_chunks = list(plan["chunks"])
+    decode_groups = []
+    for chunk in logical_chunks[:-2]:
+        group = dict(chunk)
+        group["logical_chunk_indices"] = [int(chunk["chunk_index"])]
+        group["terminal_merged"] = False
+        decode_groups.append(group)
+
+    first_chunk = logical_chunks[-2]
+    second_chunk = logical_chunks[-1]
+    frame_start = int(first_chunk.get("frame_start", 0))
+    net_frames = int(contract["physical_frames"]) - int(
+        contract["physical_context_frames"]
+    )
+    terminal_group = dict(first_chunk)
+    terminal_group.update(
+        {
+            "total_frames": int(contract["physical_frames"]),
+            "trim_frames": int(contract["physical_context_frames"]),
+            "net_frames": net_frames,
+            "context_frames": int(contract["physical_context_frames"]),
+            "expected_video_latent_t": int(physical_video.shape[2]),
+            "expected_audio_latent_t": int(physical_audio.shape[-1]),
+            "frame_start": frame_start,
+            "frame_stop": frame_start + net_frames,
+            "logical_chunk_indices": [
+                int(first_chunk["chunk_index"]),
+                int(second_chunk["chunk_index"]),
+            ],
+            "terminal_merged": True,
+        }
+    )
+    decode_groups.append(terminal_group)
+
+    plan = dict(plan)
+    plan["decode_group_version"] = 1
+    plan["logical_chunk_count"] = len(logical_chunks)
+    plan["physical_decode_group_count"] = len(decode_groups)
+    plan["decode_groups"] = decode_groups
+    validate_assembly_plan(plan)
+    return decode_entries, plan

@@ -571,6 +571,7 @@ def build_sampling_contract(
     driving_audio_vae: Any = None,
     reference_video_contract: dict[str, Any] | None = None,
     timeline_video_contract: dict[str, Any] | None = None,
+    execution_semantics: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], bool, list[str]]:
     model_value, model_safe = _model_signature(model, model_fingerprint_value)
     clip_value, clip_safe = _clip_signature(clip)
@@ -660,6 +661,8 @@ def build_sampling_contract(
     }
     if graph_authoritative:
         global_contract["upstream_graph"] = dict(upstream_graph_contract)
+    if execution_semantics is not None:
+        global_contract["execution_semantics"] = dict(execution_semantics)
     if uses_video_vae:
         global_contract["video_vae"] = video_vae_value
     if has_first:
@@ -1017,6 +1020,7 @@ class RunStorageController:
         driving_audio_vae: Any = None,
         reference_video_contract: dict[str, Any] | None = None,
         timeline_video_contract: dict[str, Any] | None = None,
+        execution_semantics: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         if existing_session is not None:
             raise RunStorageError("Run Storage cannot be combined with an explicit Session")
@@ -1054,6 +1058,7 @@ class RunStorageController:
             driving_audio_vae=driving_audio_vae,
             reference_video_contract=reference_video_contract,
             timeline_video_contract=timeline_video_contract,
+            execution_semantics=execution_semantics,
         )
         effective_nonce, nonce_decision = self._resolve_effective_nonce(
             contract, requested_nonce=int(reroll_nonce), resume_safe=safe

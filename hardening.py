@@ -21,6 +21,15 @@ def _strict_int(name: str, value: Any, minimum: int | None = None) -> int:
     return value
 
 
+def _assembly_decode_units(plan: Mapping[str, Any]) -> list[Any]:
+    if "decode_groups" not in plan:
+        return plan["chunks"]
+    groups = plan["decode_groups"]
+    if not isinstance(groups, list) or not groups:
+        raise ValueError("assembly_plan.decode_groups must be a non-empty list")
+    return groups
+
+
 def enrich_assembly_plan(plan: dict[str, Any]) -> dict[str, Any]:
     """Add redundant metadata without correcting any existing value."""
     chunks = plan.get("chunks")
@@ -184,6 +193,117 @@ def validate_assembly_plan_contract(plan: Mapping[str, Any]) -> None:
                 "sum(chunk.net_frames) does not match assembly_plan.natural_frames"
             )
 
+    if "decode_groups" in plan:
+        decode_groups = _assembly_decode_units(plan)
+        if "physical_decode_group_count" in plan:
+            group_count = _strict_int(
+                "assembly_plan.physical_decode_group_count",
+                plan["physical_decode_group_count"],
+                1,
+            )
+            if group_count != len(decode_groups):
+                raise ValueError(
+                    "assembly_plan.physical_decode_group_count does not match decode_groups"
+                )
+        expected_logical_indices = [int(chunk["chunk_index"]) for chunk in chunks]
+        covered_logical_indices: list[int] = []
+        decode_natural_frames = 0
+        for position, group in enumerate(decode_groups, start=1):
+            if not isinstance(group, Mapping):
+                raise ValueError(
+                    f"assembly_plan decode group {position} must be a mapping"
+                )
+            total_frames = _strict_int(
+                f"assembly_plan decode group {position}.total_frames",
+                group.get("total_frames"),
+                5,
+            )
+            trim_frames = _strict_int(
+                f"assembly_plan decode group {position}.trim_frames",
+                group.get("trim_frames"),
+                0,
+            )
+            net_frames = _strict_int(
+                f"assembly_plan decode group {position}.net_frames",
+                group.get("net_frames"),
+                1,
+            )
+            context_frames = _strict_int(
+                f"assembly_plan decode group {position}.context_frames",
+                group.get("context_frames"),
+                0,
+            )
+            _strict_int(
+                f"assembly_plan decode group {position}.expected_video_latent_t",
+                group.get("expected_video_latent_t"),
+                1,
+            )
+            _strict_int(
+                f"assembly_plan decode group {position}.expected_audio_latent_t",
+                group.get("expected_audio_latent_t"),
+                1,
+            )
+            if (total_frames - 5) % 17 != 0:
+                raise ValueError(
+                    f"assembly_plan decode group {position}.total_frames is not on "
+                    "the H3 17k+5 grid"
+                )
+            if total_frames - trim_frames != net_frames:
+                raise ValueError(
+                    f"assembly_plan decode group {position}: "
+                    "total_frames - trim_frames != net_frames"
+                )
+            if trim_frames > 0 and context_frames != trim_frames:
+                raise ValueError(
+                    f"assembly_plan decode group {position}: "
+                    "continuation context and trim differ"
+                )
+            logical_indices = group.get("logical_chunk_indices")
+            if not isinstance(logical_indices, list) or not logical_indices:
+                raise ValueError(
+                    f"assembly_plan decode group {position}.logical_chunk_indices "
+                    "must be a non-empty list"
+                )
+            covered_logical_indices.extend(
+                _strict_int(
+                    f"assembly_plan decode group {position}.logical_chunk_indices",
+                    value,
+                    1,
+                )
+                for value in logical_indices
+            )
+            if "terminal_merged" in group and type(group["terminal_merged"]) is not bool:
+                raise ValueError(
+                    f"assembly_plan decode group {position}.terminal_merged must be boolean"
+                )
+            frame_start = _strict_int(
+                f"assembly_plan decode group {position}.frame_start",
+                group.get("frame_start"),
+                0,
+            )
+            frame_stop = _strict_int(
+                f"assembly_plan decode group {position}.frame_stop",
+                group.get("frame_stop"),
+                1,
+            )
+            if (
+                frame_start != decode_natural_frames
+                or frame_stop != decode_natural_frames + net_frames
+            ):
+                raise ValueError(
+                    f"assembly_plan decode group {position}: natural frame boundary "
+                    "is discontinuous"
+                )
+            decode_natural_frames += net_frames
+        if covered_logical_indices != expected_logical_indices:
+            raise ValueError(
+                "assembly_plan.decode_groups do not cover logical chunks exactly once"
+            )
+        if decode_natural_frames != natural_frames:
+            raise ValueError(
+                "sum(decode_group.net_frames) does not match logical natural frames"
+            )
+
 
 def preflight_decoded_chunks(
     images: Any,
@@ -192,7 +312,7 @@ def preflight_decoded_chunks(
 ) -> None:
     """Validate all decoded chunks before the assembler allocates output buffers."""
     validate_assembly_plan_contract(plan)
-    chunks = plan["chunks"]
+    chunks = _assembly_decode_units(plan)
 
     if not isinstance(images, (list, tuple)):
         raise ValueError("decoded images must be a chunk list")
@@ -518,7 +638,9 @@ def assemble_with_hardening(base: Any, args: tuple[Any, ...], kwargs: dict[str, 
     lines: list[str] = []
     if diagnostics_is_full(diagnostics):
         lines.append(format_memory_snapshot("assemble preflight", images, audio))
-        natural_frames = sum(int(chunk["net_frames"]) for chunk in plan["chunks"])
+        natural_frames = sum(
+            int(chunk["net_frames"]) for chunk in _assembly_decode_units(plan)
+        )
         target_frames = int(plan["target_frames"])
         correction = target_frames - natural_frames
         if abs(correction) > 2:

@@ -15,6 +15,7 @@ V3.4 focuses on the two reference workflows that are most useful in normal produ
 - **Driving Audio**: use an existing audio source as the preserved final audio while it guides the H3 generation across chunks.
 - **Video Reference**: use an existing video as persistent visual reference for appearance, motion, framing, and timing without treating it as a frame-by-frame copy.
 - **Hybrid FLF + Reference**: use First Frame, Last Frame, and persistent Reference Images together without adding a separate mode or model allowlist.
+- **FL2VA Terminal Merge**: keep the final two 5-second FL2VA chunks as one physical 10-second sampling and decode unit for Core-equivalent Last Frame handling.
 - **Restartable chunks**: reuse completed chunks with Run Storage and regenerate only the selected part when the generation contract remains compatible.
 - **Core compatibility**: remove Continuum-only rejection of unknown upstream/custom nodes and remove the obsolete `strict_compatibility` control.
 - **Spectrum interoperability**: use the official H3 Continuum Interop API v1 when Spectrum is installed; Spectrum remains optional.
@@ -82,6 +83,18 @@ V3.4 supports First Frame, Last Frame, and persistent Reference Images in the sa
 - No model-name allowlist or automatic model replacement is used.
 
 Local checks passed with the B2049 hybrid variant. FL-only models could run, but showed less reliable transitions when FLF and Reference Images were combined; a hybrid-capable model is therefore recommended for this path.
+
+### FL2VA Terminal Merge
+
+For 5-second FL2VA workflows, Continuum keeps the final two logical chunks together as one physical sampling and VAE decode unit.
+
+- `2 x 5s`: one 243-frame physical sample, decoded once, then adjusted to the requested 240-frame output.
+- `3 x 5s` and longer: earlier chunks use normal Continuation; the final two chunks use one 260-frame physical sample containing the 22-frame continuation context.
+- After the terminal physical decode, the 22-frame context prefix is removed. For `3 x 5s`, this gives `124 + 238 = 362` frames before exact-duration adjustment to 360 frames.
+- If the final two prompt sections differ, they are rebased internally to a local `[0-5s]` / `[5-10s]` timeline. Identical prompts retain the accepted shared-prompt path.
+- The terminal pair uses one physical seed and one physical decode while Run Storage continues to preserve normal logical chunk entries.
+
+Local GPU comparison confirmed that `2 x 5s` matches Core 10-second FL2VA sampling and terminal decode behavior. A `3 x 5s` Timeline run also passed with three logical chunks, two physical sampling passes, two physical decode groups, and a 15.000-second output. The short still period near the supplied Last Frame was also present in the equivalent Core result and is treated as normal FL2VA convergence rather than a Continuum-specific failure.
 
 ### Core-first, permissive execution
 
@@ -295,6 +308,8 @@ V3.4 has been exercised locally with:
 - Spectrum enabled and disabled
 - I2VA, Reference, and selected FL2VA configurations
 - Hybrid FLF + Reference with the B2049 hybrid variant
+- Core-equivalent `2 x 5s` FL2VA Terminal Merge
+- `3 x 5s` FL2VA with the final two logical chunks merged into one 260-frame physical sample and decode group
 - Driving Audio with short, exact-length, and longer sources
 - Video Reference with source audio routed separately
 - 0.4 MP and 0.6 MP reference sizing
@@ -308,6 +323,8 @@ No OOM was observed in the cited recent local V3.4 checks, including two-chunk 8
 - Continuation does not guarantee frame-perfect identity or motion.
 - Video Reference guides H3; it does not reproduce every source frame.
 - Driving Audio preserves selected audio, but visual lip synchronization remains model-dependent.
+- FL2VA may settle on the supplied Last Frame before the requested duration ends; equivalent Core runs can show the same behavior.
+- Long, high-resolution sequences may exceed system RAM during final decode and assembly even when chunk sampling succeeds.
 - Match Output can be substantially slower than 0.4 MP or 0.6 MP.
 - Seam correction may keep the native boundary when a proposed correction is not safer.
 - Optional template nodes must be installed, replaced, or bypassed by the user.

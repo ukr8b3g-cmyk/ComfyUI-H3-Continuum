@@ -24,14 +24,21 @@ from ..driving_audio import (
 )
 from ..model_patch import clone_model_for_chunk
 from ..state import assert_context_unchanged, context_fingerprint, make_plan, select_context, validate_state
-from ..temporal import align_frame_count_up, largest_context_capacity, make_extension_shape
+from ..temporal import (
+    align_frame_count_up,
+    audio_latent_t,
+    context_slots,
+    largest_context_capacity,
+    make_extension_shape,
+    video_latent_t,
+)
 from ..version import PACKAGE_VERSION
 from .decoder import decode_sequence, decode_sequence_with_seam, enforce_total_frames
 from .context_diagnostics import ContextDiagnosticsTracker
 from .h3_builder import attach_keyframes, empty_h3_latent, encode_identity_latents, encode_prompt_conditioning, prepare_identity_assets
 from .motion import choose_context_frames
 from .prompts import prompt_plan_report, validate_prompt_plan
-from .sampling import sample_chunk
+from .sampling import latent_from_cpu, latent_to_cpu, sample_chunk
 from .seeds import derive_chunk_seed
 from .session import (
     SessionValidationError, entry_to_state, make_chunk_entry, make_session, model_fingerprint,
@@ -62,7 +69,7 @@ def _check_decode_memory_budget(*,width,height,chunks,chunk_seconds):
 def _clone_entry_for_reuse(entry):
     entry=validate_chunk_entry(entry); result=dict(entry); result["plan"]=copy.deepcopy(entry["plan"]); result["reused"]=True; return result
 
-def _preserved_prefix(*,session,prompt_hashes,chunks,reroll_from_chunk,width,height,chunk_seconds,identity_hash):
+def _preserved_prefix(*,session,prompt_hashes,chunks,reroll_from_chunk,width,height,chunk_seconds,identity_hash,last_frame_hash):
     if session is None: return [],[]
     notes=[]
     try: session=validate_session(session)
@@ -70,6 +77,8 @@ def _preserved_prefix(*,session,prompt_hashes,chunks,reroll_from_chunk,width,hei
     if int(session["width"])!=int(width) or int(session["height"])!=int(height): return [],["saved session resolution differs; generated a fresh run"]
     if abs(float(session["chunk_seconds"])-float(chunk_seconds))>1e-6: return [],["saved session chunk duration differs; generated a fresh run"]
     if str(session.get("identity_hash","none"))!=str(identity_hash): return [],["saved session identity differs; generated a fresh run"]
+    saved_last_frame_hash=(session.get("settings") or {}).get("last_frame_hash")
+    if str(saved_last_frame_hash or "none")!=str(last_frame_hash or "none"): return [],["saved session Last Frame differs; generated a fresh run"]
     if reroll_from_chunk<0 or reroll_from_chunk>chunks: raise SessionValidationError("reroll_from_chunk must be 0 or a valid one-based chunk index")
     limit=min(len(session["chunks"]),chunks)
     if reroll_from_chunk>0: limit=min(limit,reroll_from_chunk-1)
@@ -103,12 +112,202 @@ def _conditioning_cache(*,clip,prompts,assets,final_has_last_frame,reference_ass
     return cache
 
 
-FLF_STRATEGY = "context_bound_terminal_v1"
+FLF_STRATEGY = "terminal_merged_10s_seed_v2"
+TERMINAL_SEED_POLICY = "physical_window_seed_v2"
+TERMINAL_MERGE_CHUNK_SECONDS = 5.0
+TERMINAL_MERGE_CONTEXT_FRAMES = 22
+TERMINAL_PROMPT_POLICY_SHARED = "shared_prompt_v1"
+TERMINAL_PROMPT_POLICY_TIMELINE = "paired_timeline_v1"
 
 
 def _flf_contract_identity(base_hash: str) -> str:
     payload = f"{base_hash}|flf_strategy={FLF_STRATEGY}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _terminal_flf_merge_enabled(
+    *,
+    multi_chunk_flf: bool,
+    chunks: int,
+    chunk_seconds: float,
+    prompt_hashes: list[str],
+    timeline_video_source,
+) -> bool:
+    return bool(
+        multi_chunk_flf
+        and int(chunks) >= 2
+        and abs(float(chunk_seconds) - TERMINAL_MERGE_CHUNK_SECONDS) <= 1e-6
+        and timeline_video_source is None
+        and len(prompt_hashes) >= 2
+    )
+
+
+def _terminal_pair_prompt(
+    prompts: list[str],
+    *,
+    pair_start: int,
+    chunk_seconds: float,
+) -> tuple[str, str]:
+    """Build one physical prompt without changing either logical prompt."""
+
+    first = str(prompts[int(pair_start)])
+    second = str(prompts[int(pair_start) + 1])
+    if first == second:
+        return first, TERMINAL_PROMPT_POLICY_SHARED
+    split = f"{float(chunk_seconds):g}"
+    stop = f"{float(chunk_seconds) * 2.0:g}"
+    return (
+        f"[0-{split}s]\n{first}\n\n[{split}-{stop}s]\n{second}",
+        TERMINAL_PROMPT_POLICY_TIMELINE,
+    )
+
+
+def _atomic_terminal_prefix(
+    preserved: list[dict[str, Any]],
+    *,
+    chunks: int,
+    reroll_from_chunk: int,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Never reuse only one logical half of a shared terminal sample."""
+    pair_start = int(chunks) - 2
+    reroll_hits_pair = int(reroll_from_chunk) in (int(chunks) - 1, int(chunks))
+    partial_pair = pair_start < len(preserved) < int(chunks)
+    if (reroll_hits_pair or partial_pair) and len(preserved) > pair_start:
+        return preserved[:pair_start], True
+    return preserved, False
+
+
+def _terminal_sampling_plan(
+    *,
+    chunks: int,
+    completed: int,
+    merge_enabled: bool,
+) -> tuple[tuple[int, ...], bool]:
+    if completed >= int(chunks):
+        return (), False
+    if not merge_enabled:
+        return tuple(range(completed, int(chunks))), False
+    pair_start = int(chunks) - 2
+    if completed > pair_start:
+        raise SequenceRuntimeError("terminal merged pair cannot resume from only one logical half")
+    return tuple(range(completed, pair_start)), True
+
+
+def _terminal_physical_seed_plan(
+    *,
+    base_seed: int,
+    physical_window_start_index: int,
+    reroll_nonce: int,
+) -> dict[str, Any]:
+    """Return the one physical seed and the matching logical-entry metadata."""
+    start_index = int(physical_window_start_index)
+    nonce = int(reroll_nonce)
+    if start_index < 0:
+        raise ValueError("physical_window_start_index must be non-negative")
+    if nonce < 0:
+        raise ValueError("reroll_nonce must be non-negative")
+    if start_index == 0 and nonce == 0:
+        physical_seed = int(base_seed)
+    else:
+        physical_seed = derive_chunk_seed(base_seed, start_index, nonce)
+    return {
+        "physical_seed": physical_seed,
+        "logical_entry_seeds": (physical_seed, physical_seed),
+    }
+
+
+def _terminal_execution_semantics(
+    *,
+    merge_enabled: bool,
+    prompt_policy: str | None = None,
+) -> dict[str, str] | None:
+    if not merge_enabled:
+        return None
+    semantics = {
+        "flf_execution": FLF_STRATEGY,
+        "terminal_seed_policy": TERMINAL_SEED_POLICY,
+    }
+    if prompt_policy:
+        semantics["terminal_prompt_policy"] = str(prompt_policy)
+    return semantics
+
+
+def _terminal_pair_contract(*, initial_pair: bool, chunk_seconds: float) -> dict[str, Any]:
+    """Derive physical and logical AV ranges without fixed latent indices."""
+    if abs(float(chunk_seconds) - TERMINAL_MERGE_CHUNK_SECONDS) > 1e-6:
+        raise SequenceRuntimeError("terminal merged sampling currently requires 5-second logical chunks")
+    initial_frames = align_frame_count_up(int(round(float(chunk_seconds) * FPS)))
+    extension = make_extension_shape(
+        TERMINAL_MERGE_CONTEXT_FRAMES,
+        float(chunk_seconds),
+    )
+    if initial_pair:
+        physical_frames = align_frame_count_up(int(round(2.0 * float(chunk_seconds) * FPS)))
+        logical_frames = (initial_frames, extension.total_frames)
+        logical_trims = (0, TERMINAL_MERGE_CONTEXT_FRAMES)
+        first_video_stop = video_latent_t(initial_frames)
+        first_audio_stop = audio_latent_t(initial_frames)
+    else:
+        physical_frames = make_extension_shape(
+            TERMINAL_MERGE_CONTEXT_FRAMES,
+            2.0 * float(chunk_seconds),
+        ).total_frames
+        logical_frames = (extension.total_frames, extension.total_frames)
+        logical_trims = (
+            TERMINAL_MERGE_CONTEXT_FRAMES,
+            TERMINAL_MERGE_CONTEXT_FRAMES,
+        )
+        first_video_stop = video_latent_t(extension.total_frames)
+        first_audio_stop = audio_latent_t(extension.total_frames)
+    physical_video_stop = video_latent_t(physical_frames)
+    physical_audio_stop = audio_latent_t(physical_frames)
+    video_overlap = context_slots(TERMINAL_MERGE_CONTEXT_FRAMES)
+    audio_overlap = audio_latent_t(TERMINAL_MERGE_CONTEXT_FRAMES)
+    video_slices = (
+        (0, first_video_stop),
+        (first_video_stop - video_overlap, physical_video_stop),
+    )
+    audio_slices = (
+        (0, first_audio_stop),
+        (first_audio_stop - audio_overlap, physical_audio_stop),
+    )
+    for index in range(2):
+        expected_video = video_latent_t(logical_frames[index])
+        expected_audio = audio_latent_t(logical_frames[index])
+        if video_slices[index][1] - video_slices[index][0] != expected_video:
+            raise SequenceRuntimeError("derived terminal video split does not match its logical frame count")
+        if audio_slices[index][1] - audio_slices[index][0] != expected_audio:
+            raise SequenceRuntimeError("derived terminal audio split does not match its logical frame count")
+    return {
+        "initial_pair": bool(initial_pair),
+        "physical_frames": int(physical_frames),
+        "physical_context_frames": 0 if initial_pair else TERMINAL_MERGE_CONTEXT_FRAMES,
+        "logical_frames": logical_frames,
+        "logical_trims": logical_trims,
+        "video_slices": video_slices,
+        "audio_slices": audio_slices,
+    }
+
+
+def _split_terminal_merged_latents(
+    video: torch.Tensor,
+    audio: torch.Tensor,
+    contract: dict[str, Any],
+) -> tuple[tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]]:
+    expected_video = video_latent_t(int(contract["physical_frames"]))
+    expected_audio = audio_latent_t(int(contract["physical_frames"]))
+    if int(video.shape[2]) != expected_video or int(audio.shape[-1]) != expected_audio:
+        raise SequenceRuntimeError(
+            "terminal merged sampler output does not match the derived physical AV grid: "
+            f"video T={video.shape[2]} (expected {expected_video}), "
+            f"audio T={audio.shape[-1]} (expected {expected_audio})"
+        )
+    parts=[]
+    for video_range,audio_range in zip(contract["video_slices"],contract["audio_slices"]):
+        video_part=video[:,:,video_range[0]:video_range[1],...].contiguous()
+        audio_part=audio[...,audio_range[0]:audio_range[1]].contiguous()
+        parts.append((video_part,audio_part))
+    return parts[0],parts[1]
 
 
 def _attach_terminal_flf_keyframes(
@@ -141,7 +340,7 @@ def _attach_terminal_flf_keyframes(
     return conditioning
 
 def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,sigmas:torch.Tensor,first_frame:torch.Tensor|None,last_frame:torch.Tensor|None,prompt_plan:dict[str,Any],width:int,height:int,continuity:str,base_seed:int,audio_continuity:bool,exact_total_duration:bool,diagnostics_mode:str,reroll_from_chunk:int,reroll_nonce:int,strict_compatibility:bool,debug:bool,seam_correction:str=SEAM_CORRECTION_OFF,enable_preview:bool=True,session:dict[str,Any]|None=None,initial_state:dict[str,Any]|None=None,latent_only:bool=False,reference_assets=None,reference_audio_source=None,reference_audio_vae=None,driving_audio_source=None,driving_audio_vae=None,reference_video_source=None,timeline_video_source=None):
-    from ..conditioning import detect_conditioning_mode, conditioning_mode_label
+    from ..conditioning import detect_conditioning_mode, conditioning_display_label
     from ..run_storage import get_active_run_storage
     storage_controller=get_active_run_storage()
     diagnostics_mode=normalize_diagnostics_mode(diagnostics_mode); plan=validate_prompt_plan(prompt_plan); chunks=int(plan["chunks"]); chunk_seconds=float(plan["chunk_seconds"]); prompts=list(plan["prompts"]); prompt_hashes=list(plan["hashes"]); width,height=int(width),int(height)
@@ -157,6 +356,7 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
     if initial_state is not None and int(reroll_from_chunk) not in (0,1): raise SequenceRuntimeError("with initial_state, reroll_from_chunk can only be 0 or 1")
     try: conditioning_mode=detect_conditioning_mode(first_frame=first_frame,last_frame=last_frame,reference_assets=reference_assets)
     except ValueError as exc: raise SequenceRuntimeError(str(exc)) from exc
+    conditioning_display=conditioning_display_label(has_first=first_frame is not None,has_last=last_frame is not None,has_reference=reference_assets is not None)
     reference_warning=""
     if reference_assets is not None:
         from ..reference import validate_reference_prompts
@@ -181,6 +381,11 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
     issues=check_comfy_h3_runtime()
     assets=prepare_identity_assets(video_vae,width=width,height=height,first_frame=first_frame,last_frame=last_frame,encode_latents=False)
     multi_chunk_flf=bool(chunks>=2 and first_frame is not None and last_frame is not None)
+    terminal_merge_enabled=_terminal_flf_merge_enabled(multi_chunk_flf=multi_chunk_flf,chunks=chunks,chunk_seconds=chunk_seconds,prompt_hashes=prompt_hashes,timeline_video_source=timeline_video_source)
+    terminal_prompt=None
+    terminal_prompt_policy=None
+    if terminal_merge_enabled:
+        terminal_prompt,terminal_prompt_policy=_terminal_pair_prompt(prompts,pair_start=chunks-2,chunk_seconds=chunk_seconds)
     from ..reference import combine_hybrid_visual_identity
     visual_identity_hash=combine_hybrid_visual_identity(keyframe_identity_hash=assets.identity_hash,reference_assets=reference_assets,has_first=first_frame is not None,has_last=last_frame is not None)
     sequence_identity_hash=combine_reference_audio_identity(visual_identity_hash,reference_audio_source)
@@ -191,20 +396,27 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
         sequence_identity_hash=_flf_contract_identity(sequence_identity_hash)
     current_model_fingerprint=model_fingerprint(model,extra_wrapper_keys=("h3_continuum_join.apply_model.v1",))
     if storage_controller is not None:
-        stored_session=storage_controller.prepare(model=model,model_fingerprint_value=current_model_fingerprint,clip=clip,video_vae=video_vae,sampler=sampler,sigmas=sigmas,prompt_plan=plan,width=width,height=height,chunk_seconds=chunk_seconds,continuity=continuity,audio_continuity=audio_continuity,base_seed=base_seed,reroll_from_chunk=reroll_from_chunk,reroll_nonce=reroll_nonce,first_frame_hash=assets.first_frame_hash,last_frame_hash=assets.last_frame_hash,identity_hash=sequence_identity_hash,strict_compatibility=strict_compatibility,existing_session=session,reference_contract=reference_assets.contract if reference_assets is not None else None,conditioning_mode=conditioning_mode,reference_audio_contract=reference_audio_source.contract if reference_audio_source is not None else None,reference_audio_vae=reference_audio_vae,driving_audio_contract=driving_audio_source.contract if driving_audio_source is not None else None,driving_audio_vae=driving_audio_vae,reference_video_contract=reference_video_source.contract if reference_video_source is not None else None,timeline_video_contract=timeline_video_source.contract if timeline_video_source is not None else None)
+        stored_session=storage_controller.prepare(model=model,model_fingerprint_value=current_model_fingerprint,clip=clip,video_vae=video_vae,sampler=sampler,sigmas=sigmas,prompt_plan=plan,width=width,height=height,chunk_seconds=chunk_seconds,continuity=continuity,audio_continuity=audio_continuity,base_seed=base_seed,reroll_from_chunk=reroll_from_chunk,reroll_nonce=reroll_nonce,first_frame_hash=assets.first_frame_hash,last_frame_hash=assets.last_frame_hash,identity_hash=sequence_identity_hash,strict_compatibility=strict_compatibility,existing_session=session,reference_contract=reference_assets.contract if reference_assets is not None else None,conditioning_mode=conditioning_mode,reference_audio_contract=reference_audio_source.contract if reference_audio_source is not None else None,reference_audio_vae=reference_audio_vae,driving_audio_contract=driving_audio_source.contract if driving_audio_source is not None else None,driving_audio_vae=driving_audio_vae,reference_video_contract=reference_video_source.contract if reference_video_source is not None else None,timeline_video_contract=timeline_video_source.contract if timeline_video_source is not None else None,execution_semantics=_terminal_execution_semantics(merge_enabled=terminal_merge_enabled,prompt_policy=terminal_prompt_policy))
         reroll_nonce=storage_controller.effective_reroll_nonce
         if stored_session is not None: session=stored_session
     accelerators=accelerator_summary(model)
     if "Continuum APPLY_MODEL wrapper installed" not in accelerators: accelerators+="; Continuum APPLY_MODEL wrapper installed"
     effective_reroll_from_chunk=0 if storage_controller is not None and session is not None and bool((session.get("settings") or {}).get("run_storage_validated_prefix")) else int(reroll_from_chunk)
-    preserved,reuse_notes=_preserved_prefix(session=session,prompt_hashes=prompt_hashes,chunks=chunks,reroll_from_chunk=effective_reroll_from_chunk,width=width,height=height,chunk_seconds=chunk_seconds,identity_hash=sequence_identity_hash)
+    preserved,reuse_notes=_preserved_prefix(session=session,prompt_hashes=prompt_hashes,chunks=chunks,reroll_from_chunk=effective_reroll_from_chunk,width=width,height=height,chunk_seconds=chunk_seconds,identity_hash=sequence_identity_hash,last_frame_hash=assets.last_frame_hash)
     if multi_chunk_flf and session is not None:
         saved_strategy=str((session.get("settings") or {}).get("flf_execution", ""))
         if saved_strategy!=FLF_STRATEGY:
             preserved=[]
             reuse_notes.append("FLF chunk contract changed; regenerated the requested FLF sequence.")
+    if terminal_merge_enabled:
+        preserved,atomic_reset=_atomic_terminal_prefix(preserved,chunks=chunks,reroll_from_chunk=int(reroll_from_chunk))
+        if atomic_reset:
+            reuse_notes.append("terminal merged pair is atomic; regenerated both final logical chunks")
     if multi_chunk_flf:
-        reuse_notes.insert(0,"FLF execution: context-bound terminal v1; one sampling pass per chunk; the final chunk is anchored from the continuation-context tail to the supplied Last Frame.")
+        if terminal_merge_enabled:
+            reuse_notes.insert(0,"FLF execution: terminal merged 10s seed v2; the final two 5-second logical chunks share one physical sample and are split back into normal chunk entries.")
+        else:
+            reuse_notes.insert(0,"FLF execution: terminal merge unavailable for this request; retained one sampling pass per logical chunk.")
     if reference_assets is not None:
         reuse_notes.insert(0,f"Reference conditioning: {reference_assets.count} image(s), size={reference_assets.size_mode}; persistent across all chunks.")
         if reference_warning: reuse_notes.append(reference_warning)
@@ -239,6 +451,10 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
             reference_video_assets=encode_reference_video(video_vae,reference_video_source)
         if timeline_video_source is None:
             cache=_conditioning_cache(clip=clip,prompts=prompts,assets=assets,final_has_last_frame=last_frame is not None,reference_assets=reference_assets,reference_audio_assets=reference_audio_assets,timeline_video_assets=reference_video_assets)
+            if terminal_merge_enabled and terminal_prompt is not None:
+                terminal_key=_conditioning_cache_key(terminal_prompt,include_last=True,reference_assets=reference_assets)
+                if terminal_key not in cache:
+                    cache.update(_conditioning_cache(clip=clip,prompts=[terminal_prompt],assets=assets,final_has_last_frame=True,reference_assets=reference_assets,reference_audio_assets=reference_audio_assets,timeline_video_assets=reference_video_assets))
     entries=preserved[:]; previous_state=None
     if entries:
         try: previous_state=entry_to_state(entries[-1])
@@ -261,7 +477,8 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
                 _record_context_diagnostics(tracker=context_diagnostics,reports=sampling_reports,state=entry_to_state(reused_entry),continuity=continuity,reused=True)
         elif previous_state is not None:
             _record_context_diagnostics(tracker=context_diagnostics,reports=sampling_reports,state=previous_state,continuity=continuity,reused=True)
-    for sequence_index in range(len(entries),chunks):
+    normal_indices,terminal_merge_pending=_terminal_sampling_plan(chunks=chunks,completed=len(entries),merge_enabled=terminal_merge_enabled)
+    for sequence_index in normal_indices:
         prompt=prompts[sequence_index]; prompt_hash_value=prompt_hashes[sequence_index]; is_final=sequence_index==chunks-1; effective_reroll_nonce=int(reroll_nonce) if int(reroll_from_chunk)>0 and sequence_index+1>=int(reroll_from_chunk) else 0; seed=derive_chunk_seed(base_seed,sequence_index,effective_reroll_nonce); motion_score=0.0; video_context=None; audio_context=None; context_before=None
         timeline_video_assets=reference_video_assets
         chunk_cache=cache
@@ -283,8 +500,6 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
             base_conditioning=attach_keyframes(chunk_cache[conditioning_key],frame_count=shape.total_frames,first_latent=chunk_assets.first_latent,last_latent=chunk_assets.last_latent if include_chunk_last else None)
             video_context,audio_context,grid_offset=select_context(previous_state,context_frames,include_audio=bool(audio_continuity)); context_before=context_fingerprint(video_context,audio_context)
             conditioning=prepare_conditioning(base_conditioning,video_context=video_context,audio_context=audio_context,audio_grid_offset=grid_offset,context_frames=context_frames,new_frame_count=shape.total_frames,first_frame_policy=POLICY_REPLACE,preserve_last_frame=True)
-            if multi_chunk_flf and is_final:
-                conditioning=_attach_terminal_flf_keyframes(conditioning,video_context=video_context,context_frames=context_frames,frame_count=shape.total_frames,last_latent=assets.last_latent)
             clip_index=int(previous_state["clip_index"])+1; chunk_plan=make_plan(continuation=True,clip_index=clip_index,total_frames=shape.total_frames,trim_frames=context_frames,width=width,height=height,context_frames=context_frames,state_capacity_frames=largest_context_capacity(shape.net_new_frames),requested_extend_seconds=chunk_seconds,debug=debug)
         driving_audio_latent=slice_driving_audio_latent(driving_audio_assets,cumulative_retained_before=retained_frames,total_frames=int(chunk_plan["total_frames"]),trim_frames=int(chunk_plan["trim_frames"]),fps=FPS)
         conditioning=attach_driving_audio(conditioning,driving_audio_latent)
@@ -298,6 +513,62 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
         sampling_reports.append(f"chunk {sequence_index+1}/{chunks}: seed={seed}, frames={chunk_plan['total_frames']}, trim={chunk_plan['trim_frames']}, retained_total={retained_frames}, context={context_frames} ({reason}), motion={motion_score:.6f}, "+(f"interop=emitted actual_prefix={CONTINUUM_ACTUAL_PREFIX_STEPS} consumer=not_observable" if context_before is not None else "interop=not_emitted"))
         del sampled,latent,conditioning,chunk_model,chunk_cache
         if timeline_video_source is not None and timeline_video_assets is not None: del timeline_video_assets
+    if terminal_merge_pending:
+        pair_start=chunks-2
+        if len(entries)!=pair_start:
+            raise SequenceRuntimeError(f"terminal merged pair expected {pair_start} completed chunks, got {len(entries)}")
+        prompt=terminal_prompt
+        seed_nonce=int(reroll_nonce) if int(reroll_from_chunk)>0 else 0
+        terminal_seed_plan=_terminal_physical_seed_plan(base_seed=base_seed,physical_window_start_index=pair_start,reroll_nonce=seed_nonce)
+        physical_seed=int(terminal_seed_plan["physical_seed"])
+        initial_pair=previous_state is None
+        contract=_terminal_pair_contract(initial_pair=initial_pair,chunk_seconds=chunk_seconds)
+        physical_frames=int(contract["physical_frames"])
+        physical_context_frames=int(contract["physical_context_frames"])
+        latent=empty_h3_latent(width,height,physical_frames)
+        conditioning_key=_conditioning_cache_key(prompt,include_last=True,reference_assets=reference_assets)
+        base_conditioning=attach_keyframes(cache[conditioning_key],frame_count=physical_frames,first_latent=assets.first_latent,last_latent=assets.last_latent)
+        video_context=None; audio_context=None; context_before=None; motion_score=0.0
+        if initial_pair:
+            conditioning=base_conditioning
+            physical_clip_index=1
+            reason="terminal merged initial 10-second sample"
+        else:
+            selected_context,motion_score,selected_reason=choose_context_frames(continuity,previous_state)
+            video_context,audio_context,grid_offset=select_context(previous_state,TERMINAL_MERGE_CONTEXT_FRAMES,include_audio=bool(audio_continuity))
+            context_before=context_fingerprint(video_context,audio_context)
+            conditioning=prepare_conditioning(base_conditioning,video_context=video_context,audio_context=audio_context,audio_grid_offset=grid_offset,context_frames=TERMINAL_MERGE_CONTEXT_FRAMES,new_frame_count=physical_frames,first_frame_policy=POLICY_REPLACE,preserve_last_frame=True)
+            physical_clip_index=int(previous_state["clip_index"])+1
+            reason=f"terminal merged 10-second sample with 22-frame context; continuity selection was {selected_context} ({selected_reason})"
+        driving_audio_latent=slice_driving_audio_latent(driving_audio_assets,cumulative_retained_before=retained_frames,total_frames=physical_frames,trim_frames=physical_context_frames,fps=FPS)
+        conditioning=attach_driving_audio(conditioning,driving_audio_latent)
+        chunk_model=clone_model_for_chunk(model,strict=bool(strict_compatibility),debug=bool(debug),chunk_index=physical_clip_index,context_frames=physical_context_frames if not initial_pair else None)
+        sampled=sample_chunk(model=chunk_model,conditioning=conditioning,latent=latent,sampler=sampler,sigmas=sigmas,seed=physical_seed,enable_preview=bool(enable_preview))
+        if context_before is not None and video_context is not None:
+            assert_context_unchanged(video_context,audio_context,context_before)
+        sampled_video,sampled_audio=latent_to_cpu(sampled)
+        logical_parts=_split_terminal_merged_latents(sampled_video,sampled_audio,contract)
+        sampling_reports.append(f"terminal physical sample: terminal_pair={pair_start+1}-{chunks}, physical_seed={physical_seed}, physical_frames={physical_frames}, sampling_passes=1, shared_physical_sample=true, terminal_prompt_policy={terminal_prompt_policy}, trim={physical_context_frames}, reason={reason}")
+        for offset,(video_part,audio_part) in enumerate(logical_parts):
+            sequence_index=pair_start+offset
+            total_frames=int(contract["logical_frames"][offset])
+            trim_frames=int(contract["logical_trims"][offset])
+            continuation=bool(trim_frames)
+            clip_index=physical_clip_index+offset
+            context_frames=trim_frames if continuation else 5
+            chunk_plan=make_plan(continuation=continuation,clip_index=clip_index,total_frames=total_frames,trim_frames=trim_frames,width=width,height=height,context_frames=context_frames,state_capacity_frames=largest_context_capacity(total_frames-trim_frames),requested_extend_seconds=chunk_seconds,debug=debug)
+            logical_latent=latent_from_cpu(video_part,audio_part)
+            logical_seed=int(terminal_seed_plan["logical_entry_seeds"][offset])
+            entry=make_chunk_entry(latent=logical_latent,plan=chunk_plan,prompt=prompts[sequence_index],prompt_hash=prompt_hashes[sequence_index],seed=logical_seed,context_frames=trim_frames,motion_score=motion_score,reused=False)
+            entries.append(entry)
+            previous_state=entry_to_state(entry)
+            _record_context_diagnostics(tracker=context_diagnostics,reports=sampling_reports,state=previous_state,continuity=continuity,reused=False)
+            if storage_controller is not None:
+                storage_controller.commit_chunk(entry,position=sequence_index)
+            retained_frames+=int(chunk_plan["net_frames"])
+            sampling_reports.append(f"chunk {sequence_index+1}/{chunks}: seed={logical_seed}, frames={total_frames}, trim={trim_frames}, retained_total={retained_frames}, context={trim_frames}, shared_physical_sample=terminal_10s_seed_v2")
+            del logical_latent
+        del sampled,sampled_video,sampled_audio,logical_parts,latent,conditioning,chunk_model
     if len(entries)!=chunks: raise SequenceRuntimeError(f"internal sequence length mismatch: expected {chunks}, got {len(entries)}")
     if latent_only:
         last_state=entry_to_state(entries[-1]); parent_id=session.get("session_id") if session is not None else None
@@ -308,7 +579,7 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
         if reference_video_source is not None: settings["reference_video_contract"]=reference_video_source.contract
         if timeline_video_source is not None: settings["timeline_video_contract"]=timeline_video_source.contract
         new_session=make_session(chunks=entries,width=width,height=height,chunk_seconds=chunk_seconds,identity_hash=sequence_identity_hash,model_fingerprint_value=current_model_fingerprint,parent_session_id=parent_id,reroll_from_chunk=int(reroll_from_chunk),settings=settings)
-        report_lines=[f"H3 Continuum V3 {PACKAGE_VERSION}",f"Conditioning mode: {conditioning_mode_label(conditioning_mode)}.",prompt_plan_report(plan),"Decode: external ComfyUI Core VAE nodes; full raw AV chunks retained.",accelerators,"Execution: conditioning precomputed; single call-local MODEL clone per chunk; no internal VAE decode.",*reuse_notes]
+        report_lines=[f"H3 Continuum V3 {PACKAGE_VERSION}",f"Conditioning mode: {conditioning_display}.",prompt_plan_report(plan),"Decode: external ComfyUI Core VAE nodes; full raw AV chunks retained.",accelerators,"Execution: conditioning precomputed; single call-local MODEL clone per chunk; no internal VAE decode.",*reuse_notes]
         if diagnostics_mode!=DIAGNOSTICS_OFF: report_lines.extend(sampling_reports)
         report_lines.extend([session_summary(new_session),f"Output: {len(entries)} raw AV latent chunk(s); connect Core VAE Decode nodes, then H3 Continuum Assemble V3."])
         return entries,last_state,new_session,"\n".join(report_lines)

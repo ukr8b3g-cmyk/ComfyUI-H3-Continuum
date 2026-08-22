@@ -51,7 +51,8 @@ Static checks do not replace a real GPU generation. Record workflow, prompt, med
 - PASS `MiniMax_H3_Continuum_V31_00032_.mp4`: standard Ref2VA model; visual result accepted.
 - FAIL `MiniMax_H3_Continuum_V31_00034_.mp4`: Hybrid FLF+Reference; visible jumps near 5 s and 9 s.
 - FAIL `MiniMax_H3_Continuum_V31_00035_.mp4`: Ref2VA model plus FL2V Turbo 8-step LoRA; two visible flashes/jumps.
-- Current FLF baseline is `context_bound_terminal_v1`: final-chunk context-tail and Last Frame anchors only.
+- Current FLF candidate is `context_bound_terminal_last_only_v2`: the final chunk keeps its 22-frame continuation context and the single Last Frame anchor retained by `prepare_conditioning()`, without adding a duplicate context-tail boundary keyframe.
+- GPU verification of this candidate is pending; it is not yet a stable baseline.
 - `context_bound_terminal_bridge_v2` is withdrawn because its synthetic intermediate latent correlated with the later terminal flash regression.
 - Preserve Hybrid/Reference support, Run Storage identity, UI, audio paths, and permissive prompt handling when repairing FLF.
 
@@ -78,3 +79,48 @@ Static checks do not replace a real GPU generation. Record workflow, prompt, med
 - The initial rollback after 00038 temporarily returned to bridge v2, but the user clarified that the required target is the exact code state used for PASS 00031.
 - `00031` completed at 2026-08-21 02:32:59; `pre-flf-terminal-bridge-v2-repo-20260821_023553` was captured immediately afterward and before bridge v2 was introduced.
 - Current FLF strategy is restored exactly from that snapshot: `context_bound_terminal_v1`. Bridge v2 is withdrawn and is not active.
+
+## M1 Hybrid diagnostics (2026-08-21)
+
+- Canonical implementation source: ComfyUI_W runtime.
+- Runtime pre-change snapshot: D:\Codex\_snapshots\ComfyUI-H3-Continuum\pre-m1-comfyui-w-canonical-20260821_172324.
+- Added display-only Hybrid conditioning labels; the stored/runtime conditioning mode remains unchanged.
+- Hybrid reference warnings now use the actual global Qwen <Picture N> numbering.
+- Added README numbering guidance and focused CPU-only regression tests.
+- No Sampling, Conditioning payload, Run Storage contract, UI socket, or model-selection behavior changed.
+- Tests were added but not executed in this implementation step.
+
+## Terminal Merge Physical Seed v2 (2026-08-22 00:49:57)
+- Terminal Merge uses one physical seed per merged pair; an initial 2x5s pair uses base_seed directly when reroll is inactive.
+- Later terminal pairs derive once from the zero-based pair-start index; both logical entries store that same physical seed.
+- Run Storage distinguishes the scoped terminal_merged_10s_seed_v2 / physical_window_seed_v2 execution semantics without changing the global schema version.
+
+
+## Terminal Merge diagnostic harness (2026-08-22)
+
+- Production generation semantics remain unchanged; diagnostics live under tests only.
+- Diagnostic stages are ordered A Pre-Sampler, B First MODEL Call, C sampled physical AV, D split/recombine, E decode/assembly.
+- Tensor identity uses shape, dtype, and SHA-256 of contiguous CPU raw bytes; numerical mismatch also records max/mean absolute difference and allclose.
+- Terminal split/recombine requires bit-exact equality.
+- Real Core vs Continuum GPU capture remains pending; this unit-test phase does not load checkpoints.
+
+## GPU Core/Continuum diagnostic runner (2026-08-22)
+- Source: `tools/gpu_diagnostic_node/`
+- Installer: `tools/install_gpu_diagnostic_node.ps1`
+- Runtime: `D:\StabilityMatrix\Data\Packages\ComfyUI_W\custom_nodes\H3_Continuum_GPU_Diagnostics`
+- Node: `H3 Core vs Continuum GPU Diagnostic`
+- Production Continuum files and generation semantics are not modified by this diagnostic plugin.
+- Captures A: pre-sampler, B: first MODEL call, C: physical sampled AV latent, D: terminal split/recombine, E1: decode comparison, E2: common 243-to-240 adjustment.
+- Artifacts: JSON manifest plus safetensors under the configured ComfyUI output diagnostics directory.
+- Pre-change snapshot: `D:\Codex\_snapshots\ComfyUI-H3-Continuum\pre-gpu-core-continuum-diagnostic-runner-20260822_022625` (138/138 files verified).
+- GPU comparison has not yet been executed.
+
+## Long Terminal Merge for distinct timeline sections (2026-08-22)
+
+- For FL2VA with 3 or more 5-second logical chunks, the final two chunks may now share one physical Terminal Merge sample even when their prompt sections differ.
+- Distinct final prompts are rebased to a local physical timeline (`[0-5s]` and `[5-10s]`); identical prompts retain the accepted 2x5 Core-equivalent prompt path unchanged.
+- Expected 3x5 execution: 3 logical chunks, 2 physical sampling passes, and 2 physical VAE decode groups; the terminal group is 260 frames with a 22-frame decoded prefix trim and 238 retained frames.
+- Timeline Video remains excluded from Terminal Merge. UI, public sockets, Conditioning payload construction, Physical Seed v2, Assembly, and Seam semantics are otherwise unchanged.
+- GPU acceptance passed for `MiniMax_H3_Continuum_V31_00008_.mp4`: 3 logical chunks, 2 physical sampling passes, decoded groups of 124 and 238 retained frames, 362-to-360 exact-duration adjustment, and 15.000-second output.
+- Core comparison `MiniMax_H3_00005_.mp4` showed the same short terminal still period. This is accepted as normal FL2VA Last Frame convergence, not a Continuum-specific defect.
+- Long Terminal Merge is formally adopted. Do not retune Conditioning, Physical Seed v2, physical decode grouping, or terminal prompt pairing without new contrary regression evidence.

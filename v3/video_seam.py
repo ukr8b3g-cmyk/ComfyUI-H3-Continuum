@@ -390,7 +390,9 @@ def analyze_decoded_boundaries(
     """Analyze every decoded chunk boundary without changing decoded content."""
 
     plan = validate_assembly_plan(assembly_plan)
-    chunks = list(plan["chunks"])
+    chunks = list(
+        plan["decode_groups"] if "decode_groups" in plan else plan["chunks"]
+    )
     if len(images) != len(chunks):
         raise ValueError("decoded image count does not match the assembly plan")
     analyses: list[VideoBoundaryAnalysis] = []
@@ -428,7 +430,9 @@ def correct_decoded_boundaries(
     """Normalize qualified transient exposure shifts without changing motion."""
 
     plan = validate_assembly_plan(assembly_plan)
-    chunks = list(plan["chunks"])
+    chunks = list(
+        plan["decode_groups"] if "decode_groups" in plan else plan["chunks"]
+    )
     if len(images) != len(chunks):
         raise ValueError("decoded image count does not match the assembly plan")
     corrected = list(images)
