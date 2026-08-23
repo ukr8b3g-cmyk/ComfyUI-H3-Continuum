@@ -262,7 +262,31 @@ The time ranges should normally match the configured `chunk_seconds`.
 - `chunk_seconds = 10` → `[0-10s]`, `[10-20s]`, `[20-30s]` ...
 - `chunk_seconds = 15` → `[0-15s]`, `[15-30s]`, `[30-45s]` ...
 
-Each section should describe what should happen during that part of the sequence. Continuum already carries visual/audio context from the previous chunk, so it is usually more useful to describe the next action, camera movement, characters, and scene progression clearly rather than repeatedly instructing the model to preserve the previous chunk.
+#### Global preamble and per-chunk prompting
+
+Text placed before the first Timeline header is treated as a **global preamble** and is automatically included in every chunk prompt. This is a good place for information that should apply throughout the sequence, such as subject definitions, overall style, persistent environment details, or other global instructions.
+
+However, the Timeline sections do not need to contain only the changing action or scene description. For complex scenes, multiple characters, or longer chunks such as 10–15 seconds, it can be useful to repeat important details about the subjects, appearance, location, camera, and current scene state inside each section. More self-contained chunk prompts may sometimes give H3 stronger continuity and reduce cut-like transitions or drift.
+
+Continuum carries visual/audio context from the previous chunk, but that does not guarantee that H3 will preserve every semantic detail automatically. Instead of relying only on phrases such as "continue from the previous chunk," describe the intended next action and important continuity details explicitly.
+
+For example:
+
+~~~text
+Subject: A woman in a red jacket.
+Style: cinematic nighttime photography.
+
+[0-15s]
+A woman in a red jacket stands at the nightclub bar, speaking with two people beside her. Medium shot, slow handheld camera movement, crowded dance floor visible behind them.
+
+[15-30s]
+The same woman in the same red jacket continues the conversation at the same bar with the same two people. The camera remains close and slowly moves around the group as one person replies.
+
+[30-45s]
+The woman turns toward the dance floor while remaining beside the bar. Keep the same clothing, nightclub environment, nearby characters, and continuous camera style.
+~~~
+
+The global preamble is optional. If fully self-contained prompts inside every Timeline section give better continuity for a particular model or scene, that is also a valid approach.
 
 ### Other prompt formats
 
