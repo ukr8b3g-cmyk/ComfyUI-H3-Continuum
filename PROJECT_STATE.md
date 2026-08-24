@@ -333,3 +333,9 @@ Static checks do not replace a real GPU generation. Record workflow, prompt, med
 - Public GPU limits now distinguish accepted 1x5 576-to-1152 Main and Hybrid/Reference paths from the unaccepted 3x5 2x RTX 5060 Ti 16 GiB condition, which failed at the terminal 77T group's first Second Pass inference after the 37T group completed.
 - Final source validation is `430 passed`; all 159 Manifest entries verify by SHA-256; `git diff --check` passes. ComfyUI_W runtime verifier passes package 3.5.0 registration, native PackedLayout, and Fixed 3x5 planning. Nine changed public documentation/assets match the snapshotted runtime by SHA-256.
 - Verified pre-release snapshots are `pre-v35-formal-readme-release-source-verified-20260824_141358` (431 files) and `pre-v35-formal-readme-release-runtime-w-verified-20260824_141359` (334 files), excluding `.git` and the pre-existing inaccessible `.pytest_cache`.
+
+## Issue #11 documentation clarification (2026-08-25)
+
+- `Reference Size` and `Video Guide Size` are existing V3.5 controls, not missing inputs. Compact UI reveals them only after a corresponding Reference Image or Video Guide Frames connection.
+- `Video Guide Size` is the V3.5.1 display name for the earlier `Video Reference Size`; the backend key and saved-workflow compatibility are unchanged.
+- Reference Images and Video Guide Frames are resized internally before VAE encoding. External resize remains optional for deliberate crop, forced source upscaling, or a custom algorithm; loader-side decoding and frame-rate conversion remain unchanged.

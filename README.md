@@ -218,6 +218,15 @@ Driving Audio is the primary V3.4 audio path.
 | Balanced - 0.6 MP | More detail at a higher compute cost. |
 | Match Output | Largest reference input; potentially much slower and heavier. |
 
+#### Conditional size controls and internal resize
+
+The compact V3.5 UI shows each size control only when its corresponding input is connected:
+
+- Connect any of `reference_image_1` through `reference_image_3` to reveal `Reference Size`.
+- Connect `Video Guide Frames` to reveal `Video Guide Size`. Earlier workflows and reports may call this control `Video Reference Size`; V3.5.1 uses the clearer display name `Video Guide Size` while preserving the existing backend key and saved-workflow compatibility.
+
+These controls are therefore not missing from a newly created node; they are hidden until relevant. Reference Images and Video Guide Frames are resized internally before VAE encoding. Video Guide Frames preserve their aspect ratio, align to the H3 canvas, and use Lanczos when reduction is needed. Smaller sources are not enlarged automatically. An external resize node is normally unnecessary, but remains useful for deliberate cropping, forced upscaling of a small source, or a custom resize/upscale algorithm. Video decoding and frame-rate conversion remain the loader's responsibility.
+
 ### Hybrid First/Last Frame + Reference Images
 
 You need an hybrid version of MiniMax-H3 to make both I2V and reference images work:

@@ -396,3 +396,10 @@ D:\Codex\_snapshots\ComfyUI-H3-Continuum\pre-rollback-after-00038-fail-20260821_
 - Final release checks: canonical ComfyUI_W-root pytest `450 passed` with only the known `pynvml` warning; JavaScript syntax and `git diff --check` pass; all 172 Manifest entries and README image/workflow references verify.
 - Added the user-supplied LBH + Conditioning Bridge workflow as a separate public connection example and a lightweight SVG flow chart to both README editions. The recommended template remains unchanged, and Core nodes retain their standard display titles.
 - Synchronized only the relevant implementation/tests to ComfyUI_W and verified per-file SHA-256 equality. No ComfyUI process was started or stopped. Commit/push not performed.
+
+## 2026-08-25 - Issue #11 conditional size-control documentation
+
+- Confirmed that Issue #11 reports a discoverability/documentation gap rather than missing V3.5.1 inputs: Compact UI hides `Reference Size` and `Video Guide Size` until their matching image inputs are connected.
+- Added matching English/Japanese README guidance covering the conditional display, the `Video Reference Size` to `Video Guide Size` display-name clarification, internal aspect-preserving resize before VAE encoding, the no-automatic-upscale behavior, and the limited cases where external resize is useful.
+- No node schema, backend key, workflow, runtime implementation, Sampling, Conditioning, Terminal Merge, Assembly, Seam, or Run Storage behavior changed.
+- Pre-change snapshot: `pre-issue11-readme-clarification-source-accepted-20260825_001938` (478 files), excluding `.git` and the known ACL-inaccessible `.pytest_cache` after the standard snapshot script encountered that existing ACL condition.
