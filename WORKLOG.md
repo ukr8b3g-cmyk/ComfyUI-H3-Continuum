@@ -1,5 +1,13 @@
 # Work Log
 
+## 2026-08-24 - V3.5 recommended template workflow
+
+- Added `examples/workflows/MiniMax_H3_Continuum_V35.json` as the recommended V3.5 template while retaining every V3.4 template.
+- Verified the V3.5 Sampler -> optional Hi-Res Fix -> Core Video/Audio Decode -> Assemble + Seam V3.5 route, including `refine_context`, Video VAE, Reference Images 1-3, and Video Reference socket placement.
+- The template defaults Hi-Res Fix to OFF and Assemble to Auto. First/Last/Reference still images share one 0.3 MP control; VHS Video Reference sizing remains independent.
+- Updated English/Japanese README, Changelog, project state, and distribution Manifest. No Production Python or runtime file was changed.
+- Validation: JSON parse and semantic route audit PASS; all Manifest hashes PASS; full pytest `430 passed`; ComfyUI_W runtime registration, native PackedLayout, and Fixed 3x5 prompt-plan verification PASS; `git diff --check` PASS.
+
 ## 2026-08-22 - E2-8A / E2-8B1 implementation
 
 - Added additive physical-group Second Pass metadata to V3.4 Assembly Plan output.

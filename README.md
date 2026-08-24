@@ -122,10 +122,13 @@ This is a usability and reliability decision, not a claim that the experimental 
 
 ## Example workflows
 
+- [V3.5 recommended template](examples/workflows/MiniMax_H3_Continuum_V35.json)
 - [V3.4 standard](examples/workflows/MiniMax_H3_Continuum_V34.json)
 - [V3.4 Turbo](examples/workflows/MiniMax_H3_Continuum_V34_turbo.json)
 
-The V3.4 templates remain valid in V3.5. A release-grade V3.5 UI workflow JSON is not bundled yet; use the connection guide above rather than older diagnostic workflows.
+The V3.5 template is the recommended starting point. Hi-Res Fix is disabled by default, the V3.5 Assemble backend is set to Auto, and First Frame, Last Frame, and Reference Images 1-3 share one megapixel control. Video Reference sizing remains controlled by the VHS loader. Advanced users can bypass or rearrange the optional sections as needed.
+
+The V3.4 templates remain valid for saved-workflow compatibility.
 
 The templates include optional external nodes such as Spectrum, Video Helper Suite, rgthree, EasyUse, and RTX Video Super Resolution. Install, replace, connect, or bypass them according to your installation. Media and acceleration choices remain under user control.
 

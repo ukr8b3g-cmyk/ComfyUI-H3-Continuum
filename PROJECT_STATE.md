@@ -12,6 +12,14 @@
 
 Updated: 2026-08-24
 
+## V3.5 recommended template workflow (2026-08-24)
+
+- `examples/workflows/MiniMax_H3_Continuum_V35.json` is the recommended V3.5 starting workflow.
+- Hi-Res Fix is disabled by default and `H3 Continuum Assemble + Seam V3.5` uses Auto backend selection.
+- First Frame, Last Frame, and Reference Images 1-3 share one 0.3 MP control. Video Reference remains independently sized by the VHS loader.
+- Reference Images 1-3 and Video Reference are routed to their matching V3.5 sampler sockets; `refine_context` and `video_vae` are connected to the integrated Hi-Res Fix path.
+- V3.4 standard and Turbo templates remain available for saved-workflow compatibility.
+
 ## Baseline
 
 - Current public baseline: V3.4.0
