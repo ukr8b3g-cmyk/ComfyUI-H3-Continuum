@@ -70,6 +70,12 @@ Hi-Res Fixを接続しなければV3.4 Sampling経路は変わりません。強
 
 詳しいsocket接続・OFF時のpassthrough・既知の制限は[英語版V3.5接続ガイド](docs/V35_HIRES_FIX.md)を参照してください。
 
+## 推奨テンプレートワークフロー
+
+- [V3.5推奨テンプレート](examples/workflows/MiniMax_H3_Continuum_V35.json)
+
+V3.5テンプレートはHi-Res Fixが初期OFF、AssembleのBuffer BackendがAutoです。First Frame、Last Frame、Reference Image 1～3は1つのmegapixel設定を共有し、Video Referenceの解像度はVHS Load Video側で調整します。用途に応じて不要な補助経路を外したり、Advanced Second Pass経路へ組み替えたりできます。
+
 ## V3.4互換
 
 V3.4ノードは保存済みワークフローを壊さないため残しています。Node ID、公開socket、Sampling、Conditioning、Terminal Merge、Assembly、Seam、Run StorageをV3.5へ置換していません。Second PassやDisk-backed Assembleを必要としない場合は、従来どおりV3.4を使用できます。
