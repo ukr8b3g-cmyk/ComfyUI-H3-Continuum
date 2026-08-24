@@ -1,18 +1,25 @@
-ComfyUI-H3-Continuum V3.4.0 Stable
+ComfyUI-H3-Continuum V3.5.0
 
 MiniMax H3の5秒ChunkをAV latent contextで継続し、長尺映像として組み立てるComfyUIカスタムノードです。
 
-V3.4.0:
-- 元音声を維持するDriving Audio
-- 全Chunkで継続使用するVideo Reference
-- Video Reference Size: 0.4 MP / 0.6 MP / Match Output
-- Audio Seam Autoを既定化
-- Video Seam Autoによるguarded transient / micro-flash補正
-- Auto 2による実験的なexposure-ramp補正
-- Reference Image 1-3
-- Run Storage / Auto Resume
-- 空欄や不完全なプロンプトを警告とfallbackで処理
-- 独自の互換性・モデル・上流ノード制限を撤廃
-- Spectrum Interop API v1 / Actual Prefix 2を維持
+V3.5.0:
+- 外部加工したH3 latentをphysical group構造のまま再SamplingするSecond Pass
+- Pixel/VAE round tripを使うHi-Res Fix（Experimental）
+- Latent Resize utility（高倍率の直接latent補間はMain経路非推奨）
+- RAM / Disk-backed / Autoを選べるAssemble + Seam V3.5
+- Exact Duration、Seam、Terminal Merge、元音声passthroughを維持
+- V3.4ノードと保存済みワークフローの互換性を維持
+
+安定範囲:
+- Advanced Second Pass Bridge
+- Assemble + Seam V3.5のRAM / Disk-backed / Auto
+
+Experimental:
+- Main Hi-Res Fix V3.5
+- Main Hi-Res Fix 3x5 2x（RTX 5060 Ti 16 GiBではTerminal 77TでCUDA OOM）
+
+GPU受入済み:
+- Main Hi-Res Fix 1x5、576から1152
+- Hybrid FL2VA + Reference 1x5の統合Hi-Res FixとAdvanced Second Pass
 
 詳細: README.md および docs/VALIDATION_RESULTS.md

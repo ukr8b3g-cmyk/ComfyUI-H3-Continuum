@@ -1,6 +1,6 @@
-ComfyUI-H3-Continuum V3.4.0 package validation
+ComfyUI-H3-Continuum V3.5.0 package validation
 
-Status: Stable release candidate validated for publication.
+Status: V3.5.0 release. Stable V3.5 paths are validated; integrated Hi-Res Fix remains Experimental.
 
 Required automated checks:
 - python -m compileall -q .
@@ -8,6 +8,14 @@ Required automated checks:
 - python tools/verify_runtime.py --comfy-root <runtime-path>
 
 Validated runtime paths include:
+- V3.5 refine-context contract and Advanced Second Pass Bridge
+- 1x5 T2VA, 3x5 T2VA, and 3x5 FL2VA Long Terminal Merge Second Pass GPU acceptance
+- First-pass audio LATENT object passthrough through Second Pass
+- H3 Continuum Assemble + Seam V3.5 RAM / Disk-backed output equivalence
+- Auto backend selection with RAM and 9.49 GiB disk-backed real-runtime cases
+- Exact Duration and Video Seam direct-write behavior
+- Experimental 1x5 FL2VA Pixel/VAE Hi-Res Fix GPU acceptance at 576 to 1152
+- Hybrid FL2VA + Reference 1x5 GPU acceptance through integrated 2x Hi-Res Fix and direct Advanced Second Pass
 - Production sampler and Core VAE Decode assembly
 - Reference Image 1-3
 - Driving Audio absolute-time guide conditioning with original-source final output
@@ -20,9 +28,8 @@ Validated runtime paths include:
 - Audio Seam Auto
 - Video Seam Auto guarded transient and micro-flash correction
 
-Latest verified automated result: 192 passed.
-Automated verification does not execute GPU checkpoint generation.
+Latest verified automated result: 430 passed.
 
-Auto 2 remains experimental. It is an optional fallback for exposure-ramp boundaries and is not the default.
+Hi-Res Fix and Auto 2 remain experimental. Main 3x5 2x is not accepted on the tested RTX 5060 Ti 16 GiB because the terminal 77T Second Pass group exceeded VRAM; longer Reference/Hybrid acceptance remains pending.
 
 Detailed evidence: docs/VALIDATION_RESULTS.md

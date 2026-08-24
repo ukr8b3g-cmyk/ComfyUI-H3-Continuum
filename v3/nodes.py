@@ -256,6 +256,8 @@ class H3ContinuumSamplerV3:
         driving_audio_vae=None,
         reference_video_source=None,
         timeline_video_source=None,
+        capture_refine_context=False,
+        memory_attribution=False,
     ):
         if prompt_overrides is not None and not isinstance(prompt_overrides, dict):
             prompt_overrides = None
@@ -297,7 +299,7 @@ class H3ContinuumSamplerV3:
                 for index, prompt in sparse_overrides.items():
                     clip_prompt_inputs[f"clip_{index}_prompt"] = prompt
 
-        entries, last_state, session, report = H3ContinuumSamplerV2().run(
+        sequence_outputs = H3ContinuumSamplerV2().run(
             model=model,
             clip=clip,
             video_vae=video_vae,
@@ -335,8 +337,14 @@ class H3ContinuumSamplerV3:
             driving_audio_vae=driving_audio_vae,
             reference_video_source=reference_video_source,
             timeline_video_source=timeline_video_source,
+            capture_refine_context=bool(capture_refine_context),
+            memory_attribution=bool(memory_attribution),
             **clip_prompt_inputs,
         )
+        if bool(capture_refine_context):
+            entries, last_state, session, report, refine_context = sequence_outputs
+        else:
+            entries, last_state, session, report = sequence_outputs
 
         from ..v2.sequence import _terminal_flf_merge_enabled
         from .plan import prepare_physical_decode_entries
@@ -370,7 +378,10 @@ class H3ContinuumSamplerV3:
             "session": session,
             "report": report,
         }
-        return video_latents, audio_latents, assembly_plan, result
+        outputs = (video_latents, audio_latents, assembly_plan, result)
+        if bool(capture_refine_context):
+            return (*outputs, refine_context)
+        return outputs
 
 
 class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
@@ -650,6 +661,8 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
         driving_audio_vae=None,
         reference_video_source=None,
         timeline_video_source=None,
+        capture_refine_context=False,
+        memory_attribution=False,
     ):
         runtime_started_at = time.perf_counter()
         from ..reference import prepare_reference_assets
@@ -699,6 +712,8 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                 driving_audio_vae=driving_audio_vae,
                 reference_video_source=reference_video_source,
                 timeline_video_source=timeline_video_source,
+                capture_refine_context=bool(capture_refine_context),
+                memory_attribution=bool(memory_attribution),
                 advanced={
                     "audio_continuity": bool(audio_continuity),
                     "diagnostics": diagnostics,
@@ -713,13 +728,20 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
 
         if run_storage == "Off":
             _validate_regenerate_storage(run_storage, regenerate_from)
-            video_latents, audio_latents, assembly_plan, result = execute()
-            return (
+            execute_outputs = execute()
+            if bool(capture_refine_context):
+                video_latents, audio_latents, assembly_plan, result, refine_context = execute_outputs
+            else:
+                video_latents, audio_latents, assembly_plan, result = execute_outputs
+            outputs = (
                 video_latents,
                 audio_latents,
                 mark_runtime_start(assembly_plan),
                 str(result["report"]),
             )
+            if bool(capture_refine_context):
+                return (*outputs, refine_context)
+            return outputs
         if run_storage != "Save + Auto Resume":
             raise ValueError(f"unknown Run Storage mode: {run_storage!r}")
         from ..run_storage import (
@@ -735,14 +757,26 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
         with run_storage_scope(
             storage_name, prompt=prompt, unique_id=unique_id
         ) as storage:
-            video_latents, audio_latents, assembly_plan, result = execute()
+            execute_outputs = execute()
+            if bool(capture_refine_context):
+                video_latents, audio_latents, assembly_plan, result, refine_context = execute_outputs
+            else:
+                video_latents, audio_latents, assembly_plan, result = execute_outputs
             result = dict(result)
             report = str(result["report"]) + "\n" + storage.summary(
                 detailed=diagnostics == DIAGNOSTICS_FULL
             )
             result["report"] = report
             storage.finalize(session=result["session"], report=report)
-            return video_latents, audio_latents, mark_runtime_start(assembly_plan), report
+            outputs = (
+                video_latents,
+                audio_latents,
+                mark_runtime_start(assembly_plan),
+                report,
+            )
+            if bool(capture_refine_context):
+                return (*outputs, refine_context)
+            return outputs
 
 
 class H3ContinuumSamplerTimelineVideo(H3ContinuumSamplerProduction):

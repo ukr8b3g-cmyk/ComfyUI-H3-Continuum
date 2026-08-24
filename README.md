@@ -1,14 +1,101 @@
-# ComfyUI-H3-Continuum 3.4.0
+# ComfyUI-H3-Continuum 3.5.0
 
-> **V3.4 hotfix notice:** The initial V3.4 repository package was incomplete. Although the public V3.4 nodes were present after the first hotfix, their parent sampler and sequence runtime did not yet accept the new Driving Audio and Video Reference contracts. We apologize for the incomplete release. The complete V3.4 runtime has now been synchronized. If you installed V3.4 earlier, run `git pull` or reinstall the node, then restart ComfyUI.
+Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pass refinement, optional Hi-Res Fix, low-memory disk-backed assembly, restartable chunks, persistent references, and optional Spectrum interoperability.
 
-Long-form MiniMax H3 video generation for ComfyUI with restartable chunks, persistent references, Driving Audio, Video Reference, seam correction, and optional Spectrum interoperability.
+> **V3.5.0 is the current release.** All V3.4 node IDs remain registered intentionally for saved-workflow compatibility. Existing V3.4 workflows continue unchanged; new workflows can opt into the independent V3.5 nodes.
+
+## What's new in V3.5
+
+V3.5 has two major additions:
+
+1. **Continuum-aware Second Pass / Hi-Res Fix** — refine externally processed H3 latents or use the integrated pixel/VAE 2x path without changing V3.4 sampling.
+2. **Low-memory Assemble + Seam** — write the final video IMAGE directly to RAM or a Windows-safe mapped file while preserving Exact Duration, Seam, Terminal Merge order, and audio behavior.
+
+### 1. Second Pass and Hi-Res Fix
+
+**H3 Continuum Hi-Res Fix V3.5** is the one-node Main path. It performs Video VAE Decode, bounded pixel resize, Video VAE Encode, and one low-denoise Second Pass. The integrated Main path remains **Experimental** because long 2x runs can exceed GPU memory.
+
+![H3 Continuum Hi-Res Fix V3.5 node](docs/images/v35-hires-fix-node.png)
+
+Normal Hi-Res Fix wiring:
+
+```text
+H3 Continuum Sampler V3.5
+  -> H3 Continuum Hi-Res Fix V3.5
+  -> Core Video / Audio VAE Decode
+  -> H3 Continuum Assemble + Seam V3.5
+```
+
+**H3 Continuum Second Pass V3.5** is the stable Advanced bridge requested in Issue #8. It accepts an externally processed H3 video latent and samples each Continuum physical group once while preserving prompt policy, seed reporting, group order, and the original first-pass audio LATENT object.
+
+![H3 Continuum Second Pass V3.5 node](docs/images/v35-second-pass-node.png)
+
+External latent processor wiring, such as LBH:
+
+```text
+H3 Continuum Sampler V3.5.video_latents
+  -> external H3 latent processor
+  -> H3 Continuum Second Pass V3.5
+  -> Core Video / Audio VAE Decode
+  -> H3 Continuum Assemble + Seam V3.5
+```
+
+Connect the original `audio_latents`, `assembly_plan`, and `refine_context` from Sampler V3.5 to the Hi-Res Fix or Second Pass node. Use the same final MODEL and CLIP, plus a separate sampler and workflow-side SIGMAS for the refinement pass. The nodes do not contain an internal denoise value.
+
+The `BasicScheduler` is deliberately omitted from the screenshots. It is still required to create the Second Pass `SIGMAS`. The GPU-tested baseline is:
+
+```text
+sampler:   res_multistep
+scheduler: simple
+steps:     10
+denoise:   0.35
+```
+
+Do not chain Hi-Res Fix and another Second Pass in the standard path: Hi-Res Fix already performs one Second Pass internally. `H3 Continuum Latent Resize V3.5` is an advanced utility, not the recommended Main 2x path; direct high-ratio interpolation of the 24-channel H3 latent produced persistent artifacts in testing.
+
+If Hi-Res Fix is not connected, V3.4 sampling remains on its original path. V3.5 does not add a forced CPU-offload or low-VRAM sampler mode. `Hi-Res Fix enabled=false` is a lazy exact passthrough and does not evaluate its resize, VAE, or Second Pass dependencies.
+
+See [V3.5 Hi-Res Fix and Second Pass workflow guide](docs/V35_HIRES_FIX.md) for exact sockets, bypass behavior, external-upscaler wiring, and limits.
+
+### 2. Low-memory Assemble + Seam
+
+**H3 Continuum Assemble + Seam V3.5** adds manual RAM / Disk-backed selection and a conservative Auto policy. Disk-backed mode writes the final video IMAGE directly to a mapped file instead of rebuilding the entire completed video in anonymous RAM. Audio remains in RAM.
+
+| Backend | Behavior |
+|---|---|
+| Auto | Uses RAM only when the final IMAGE is at most 4 GiB and physical-memory reserve is sufficient; otherwise selects Disk-backed. Missing memory counters fail safely to Disk-backed. |
+| RAM | Existing in-memory output behavior. |
+| Disk-backed | Maps the final video IMAGE to a temporary file; video only. Audio remains in RAM. |
+
+Disk-backed mode preserves the backing file while ComfyUI still references the returned Tensor. Downstream nodes can still allocate a full RAM copy, so Continuum's low-memory guarantee applies to its own assembly stage, not arbitrary downstream implementations.
+
+#### Measured memory reduction
+
+The validated stress case assembled a deterministic `1536 x 1536`, 360-frame float32 IMAGE with a final size of `9.49 GiB`. RAM and Disk-backed outputs were video/audio hash-identical.
+
+| Windows process metric | RAM backend | Disk-backed | Reduction |
+|---|---:|---:|---:|
+| Private memory | 12.41 GiB | 2.91 GiB | **9.50 GiB** |
+| USS | 10.29 GiB | 0.80 GiB | **9.49 GiB** |
+
+This is a **system-RAM/private-commitment** reduction during Continuum Assembly, not a claim that sampler GPU VRAM is reduced. Windows RSS includes resident mapped-file pages and was therefore similar between the two backends; private memory and USS are the relevant measurements. Disk-backed I/O can make final assembly slower, but it does not slow the preceding model sampling path.
+
+### GPU acceptance at a glance
+
+| Path | Tested condition | Result |
+|---|---|---|
+| Main Hi-Res Fix | FL2VA 1 x 5s, 576 -> 1152 | PASS |
+| Main Hi-Res Fix | Hybrid FL2VA + Reference 1 x 5s, 576 -> 1152 | PASS |
+| Advanced Second Pass | Hybrid/Reference 1 x 5s, 576 x 576 | PASS |
+| Main Hi-Res Fix | FL2VA 3 x 5s, 576 -> 1152, RTX 5060 Ti 16 GiB | **CUDA OOM at terminal 77T group** |
+
+For the failed 3 x 5s case, First Pass and the 37T Second Pass group completed. The final logical chunks `[2,3]` remained one 77T Long Terminal Merge physical group and exceeded the tested 16 GiB GPU at its first 1152x1152 Second Pass inference. This is a documented resource limit; the Continuum grouping contract did not change.
+
+## V3.4 compatibility baseline
+
+V3.4 nodes are retained specifically so saved workflows do not break. Their Node IDs, public sockets, Sampling, Conditioning, Terminal Merge, Assembly, Seam, and Run Storage behavior were not replaced by V3.5. Users who do not need Second Pass or disk-backed assembly can continue using V3.4 normally.
 
 ![H3 Continuum V3.4 workflow overview](docs/images/v34-workflow-overview.png)
-
-> V3.4 is the current stable release. V3.3 legacy nodes remain available for existing workflows.
-
-## What's new in V3.4
 
 V3.4 focuses on the two reference workflows that are most useful in normal production:
 
@@ -38,9 +125,11 @@ This is a usability and reliability decision, not a claim that the experimental 
 - [V3.4 standard](examples/workflows/MiniMax_H3_Continuum_V34.json)
 - [V3.4 Turbo](examples/workflows/MiniMax_H3_Continuum_V34_turbo.json)
 
+The V3.4 templates remain valid in V3.5. A release-grade V3.5 UI workflow JSON is not bundled yet; use the connection guide above rather than older diagnostic workflows.
+
 The templates include optional external nodes such as Spectrum, Video Helper Suite, rgthree, EasyUse, and RTX Video Super Resolution. Install, replace, connect, or bypass them according to your installation. Media and acceleration choices remain under user control.
 
-## What's new in V3.4
+## V3.4 feature details
 
 ### Driving Audio
 
@@ -139,6 +228,28 @@ git clone https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum.git
 ~~~
 
 Restart ComfyUI after installation or update.
+
+## V3.5 nodes
+
+### H3 Continuum Sampler V3.5
+
+The V3.5 sampler preserves V3.4 generation behavior and adds `refine_context` as the sixth output. Connect it only to V3.5 Hi-Res Fix or Second Pass paths that need the original conditioning context.
+
+### H3 Continuum Hi-Res Fix V3.5 (Experimental)
+
+Main convenience node. When enabled, it performs the Video VAE pixel-resize round trip and Second Pass internally. When disabled, video/audio LATENT objects and the Assembly Plan pass through unchanged and the sampling/VAE dependencies remain lazy.
+
+### H3 Continuum Second Pass V3.5
+
+Advanced Issue #8 bridge for an externally processed video latent. It samples once per physical group, reads the physical prompt contract from the Assembly Plan, and returns the original first-pass audio LATENT objects.
+
+### H3 Continuum Latent Resize V3.5
+
+Utility that changes only video-latent H/W. It does not sample. Direct 2x interpolation at large square targets is not the accepted Main Hi-Res Fix method.
+
+### H3 Continuum Assemble + Seam V3.5
+
+V3.4-compatible assembly with Auto, RAM, and Disk-backed video-buffer backends. Exact Duration and seam corrections write directly to the selected target buffer.
 
 ## V3.4 nodes
 
@@ -301,7 +412,9 @@ Use a 24 fps source for `Video Reference`. `Load Video (Upload)` may accept file
 
 ## Current validation status
 
-V3.4 has been exercised locally with:
+The V3.5.0 release passes `430` automated tests, source/runtime registration verification, native PackedLayout, Fixed 3x5 prompt planning, and release metadata consistency. Representative GPU revalidation passed with accepted 3x5 FL2VA Long Terminal Merge latents through Core Video/Audio VAE Decode and Assemble V3.5 Auto: 3 logical chunks, 2 physical groups (`37T + 77T`), 640x640, 360 frames, 24 fps, and 15.000 seconds, with the accepted video/audio hashes reproduced exactly.
+
+V3.4 compatibility paths have been exercised locally with:
 
 - 1, 2, and 3 chunks
 - standard and Turbo paths
@@ -316,6 +429,15 @@ V3.4 has been exercised locally with:
 - Run Storage reuse and selected-chunk regeneration
 - Core VAE Decode and final assembly
 
+Additional V3.5 acceptance includes:
+
+- Advanced Second Pass Bridge for 1x5 T2VA, 3x5 T2VA, and 3x5 FL2VA Long Terminal Merge
+- first-pass audio LATENT object passthrough through Second Pass
+- RAM / Disk-backed bit-exact assembly, cache/requeue, Preview, Save, VHS, interrupt, stale cleanup, and a 9.49 GiB mapped IMAGE stress
+- Auto backend selection in both the real 1.65 GiB Long Terminal Merge case and the 9.49 GiB stress case
+- Experimental integrated Main Hi-Res Fix for FL2VA 1x5, 576x576 to 1152x1152
+- Hybrid FL2VA + Reference 1x5 through both the integrated 576-to-1152 Main Hi-Res Fix and the direct 576x576 Advanced Second Pass node
+
 No OOM was observed in the cited recent local V3.4 checks, including two-chunk 800 x 800 runs. This is not a universal memory guarantee. Model precision, LoRAs, source resolution, optional nodes, GPU, and RAM affect memory use.
 
 ## Limits
@@ -325,6 +447,9 @@ No OOM was observed in the cited recent local V3.4 checks, including two-chunk 8
 - Driving Audio preserves selected audio, but visual lip synchronization remains model-dependent.
 - FL2VA may settle on the supplied Last Frame before the requested duration ends; equivalent Core runs can show the same behavior.
 - Long, high-resolution sequences may exceed system RAM during final decode and assembly even when chunk sampling succeeds.
+- Disk-backed assembly lowers anonymous/private memory commitment for the final Continuum IMAGE, but Core Decode and downstream nodes may still allocate large RAM copies.
+- Main Hi-Res Fix 3x5 2x is not accepted on the tested RTX 5060 Ti 16 GiB: the 37T group completed at 1152x1152, but the terminal 77T group failed at its first Second Pass inference with CUDA OOM. Reference/Hybrid-specific 1x5 acceptance passed; longer Hybrid/Reference cases remain unverified.
+- Direct high-ratio interpolation with Latent Resize can create persistent H3 artifacts; use the Pixel/VAE Main path or an appropriate external H3 latent processor.
 - Match Output can be substantially slower than 0.4 MP or 0.6 MP.
 - Seam correction may keep the native boundary when a proposed correction is not safer.
 - Optional template nodes must be installed, replaced, or bypassed by the user.

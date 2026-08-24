@@ -8,6 +8,8 @@ from ComfyUI_H3_Continuum_Join.v3 import plan as plan_module
 
 def _logical_plan():
     return {
+        "width": 1,
+        "height": 1,
         "chunks": [
             {
                 "sequence_index": 0,
@@ -116,6 +118,8 @@ def test_three_logical_chunks_use_two_physical_decode_groups(monkeypatch):
         "audio": torch.zeros((1, 1, 207), dtype=torch.float32),
     }
     logical_plan = {
+        "width": 1,
+        "height": 1,
         "chunks": [
             {"sequence_index": 0, "chunk_index": 1, "total_frames": 124, "trim_frames": 0, "net_frames": 124, "context_frames": 0, "expected_video_latent_t": 37, "expected_audio_latent_t": 207, "frame_start": 0, "frame_stop": 124},
             {"sequence_index": 1, "chunk_index": 2, "total_frames": 141, "trim_frames": 22, "net_frames": 119, "context_frames": 22, "expected_video_latent_t": 42, "expected_audio_latent_t": 235, "frame_start": 124, "frame_stop": 243},
