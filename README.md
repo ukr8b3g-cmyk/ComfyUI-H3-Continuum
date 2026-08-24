@@ -1,10 +1,10 @@
+# ComfyUI-H3-Continuum 3.5.1
+
 ## V3.5.1 Emergency Compatibility Hotfix
 
 Reference Audio sockets are now permanently defined by Python `INPUT_TYPES`. Dynamic socket changes and the UI-only `Hidden / Show` control were removed to prevent workflow save/reload value shifts.
 
 Node IDs, backend keys, Sampling, Conditioning, Seed handling, and other widgets are unchanged.
-
-# ComfyUI-H3-Continuum 3.5.1
 
 Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pass refinement, optional Hi-Res Fix, low-memory disk-backed assembly, restartable chunks, persistent references, and optional Spectrum interoperability.
 
@@ -135,6 +135,16 @@ The validated stress case assembled a deterministic `1536 x 1536`, 360-frame flo
 | USS | 10.29 GiB | 0.80 GiB | **9.49 GiB** |
 
 This is a **system-RAM/private-commitment** reduction during Continuum Assembly, not a claim that sampler GPU VRAM is reduced. Windows RSS includes resident mapped-file pages and was therefore similar between the two backends; private memory and USS are the relevant measurements. Disk-backed I/O can make final assembly slower, but it does not slow the preceding model sampling path.
+
+#### Optional Windows tip: disable pinned memory
+
+For MiniMax H3 on Windows, starting ComfyUI with `--disable-pinned-memory` can substantially reduce host-RAM pressure. In one local RTX 5060 Ti 16 GB / RAM 64 GB check, a `0.4 MP (640 x 640), 2 x 5s` run completed in `5m 23s`, with about `6.1 GB` sampler RSS and `8.6 GB` after assembly, while showing little practical speed difference from normal startup.
+
+```text
+--disable-pinned-memory
+```
+
+This is an environment-specific tip, not a default requirement or a universal crash fix. Compare the same workflow and seed with only this option changed, and keep it only when memory use improves without a meaningful speed or stability regression. It disables ComfyUI's pinned host-memory path; it does not guarantee that Windows Shared GPU Memory will never be used.
 
 ### GPU acceptance at a glance
 
