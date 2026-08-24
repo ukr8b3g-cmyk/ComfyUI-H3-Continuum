@@ -277,6 +277,15 @@ class _VideoVAE:
         self.upscale_ratio = 16
 
 
+class _AudioVAE:
+    def __init__(self):
+        self.first_stage_model = torch.nn.Linear(2, 2)
+        self.patcher = _Patcher(self.first_stage_model)
+        self.vae_dtype = torch.float32
+        self.audio_sample_rate = 32000
+        self.latent_channels = 32
+
+
 def _sampling_contract(
     *, model=None, clip=None, video_vae=None, sampler=None, reroll_nonce=0,
     conditioning_mode="i2va", first_frame_hash="a" * 64,
@@ -284,6 +293,8 @@ def _sampling_contract(
     upstream_graph_contract=None, upstream_graph_safe=None,
     upstream_graph_reasons=None,
     execution_semantics=None,
+    reference_audio_contract=None,
+    reference_audio_vae=None,
 ):
     return build_sampling_contract(
         model=model or _Model(),
@@ -314,7 +325,61 @@ def _sampling_contract(
         upstream_graph_safe=upstream_graph_safe,
         upstream_graph_reasons=upstream_graph_reasons,
         execution_semantics=execution_semantics,
+        reference_audio_contract=reference_audio_contract,
+        reference_audio_vae=reference_audio_vae,
     )
+
+
+def test_reference_audio_revision_separates_changes_and_restores_on_disconnect():
+    model = _Model()
+    clip = _Clip()
+    sampler = _Sampler()
+    audio_vae = _AudioVAE()
+    common = {
+        "model": model,
+        "clip": clip,
+        "sampler": sampler,
+        "conditioning_mode": "t2va",
+        "first_frame_hash": "",
+    }
+    disconnected, safe, reasons = _sampling_contract(
+        **common,
+        reference_audio_vae=audio_vae,
+    )
+    assert safe, reasons
+    assert "reference_audio" not in disconnected["global"]
+    assert "reference_audio_vae" not in disconnected["global"]
+
+    first_contract = {
+        "reference_audio_contract_version": 1,
+        "source_sha256": "a" * 64,
+        "resolved_vae_sample_rate": 32000,
+    }
+    first, safe, reasons = _sampling_contract(
+        **common,
+        reference_audio_contract=first_contract,
+        reference_audio_vae=audio_vae,
+    )
+    assert safe, reasons
+    assert first["global"]["reference_audio"] == first_contract
+    assert "reference_audio_vae" in first["global"]
+
+    changed_contract = dict(first_contract, source_sha256="b" * 64)
+    changed, safe, reasons = _sampling_contract(
+        **common,
+        reference_audio_contract=changed_contract,
+        reference_audio_vae=audio_vae,
+    )
+    assert safe, reasons
+    restored, safe, reasons = _sampling_contract(
+        **common,
+        reference_audio_vae=audio_vae,
+    )
+    assert safe, reasons
+
+    assert revision_identity(disconnected) != revision_identity(first)
+    assert revision_identity(first) != revision_identity(changed)
+    assert revision_identity(restored) == revision_identity(disconnected)
 
 
 def test_terminal_seed_v2_revision_is_scoped_and_distinct():

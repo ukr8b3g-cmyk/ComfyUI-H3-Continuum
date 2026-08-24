@@ -69,6 +69,7 @@ def _capture_sequence(
     monkeypatch,
     *,
     terminal: bool,
+    reference_audio: bool = False,
     session=None,
     diagnostics=DIAGNOSTICS_BASIC,
     memory_attribution=False,
@@ -101,6 +102,27 @@ def _capture_sequence(
         "clone_model_for_chunk",
         lambda model, **_kwargs: model,
     )
+    reference_audio_source = None
+    reference_audio_vae = None
+    if reference_audio:
+        from ComfyUI_H3_Continuum_Join import reference_audio as reference_audio_module
+
+        reference_audio_source = SimpleNamespace(
+            combined_hash="reference-audio-hash",
+            contract={
+                "reference_audio_contract_version": 1,
+                "source_sha256": "a" * 64,
+            },
+        )
+        reference_audio_vae = object()
+        reference_audio_assets = SimpleNamespace(
+            audio_latent=torch.arange(64, dtype=torch.float32).reshape(1, 32, 2, 1)
+        )
+        monkeypatch.setattr(
+            reference_audio_module,
+            "encode_reference_audio",
+            lambda _vae, _source: reference_audio_assets,
+        )
     chunks = 3 if terminal else 2
     mode = PROMPT_MODE_LIST if terminal else PROMPT_MODE_FIXED
     script = "first\n---\nmiddle\n---\nlast" if terminal else "same prompt"
@@ -133,6 +155,8 @@ def _capture_sequence(
         debug=False,
         session=session,
         latent_only=True,
+        reference_audio_source=reference_audio_source,
+        reference_audio_vae=reference_audio_vae,
         capture_refine_context=True,
         memory_attribution=memory_attribution,
     )
@@ -273,6 +297,33 @@ def test_capture_records_terminal_pair_as_one_physical_group(monkeypatch):
         terminal_merged=True,
     )
     assert validate_refine_context(context, assembly_plan) is context
+
+
+def test_reference_audio_is_captured_in_every_normal_physical_group(monkeypatch):
+    outputs = _capture_sequence(
+        monkeypatch,
+        terminal=False,
+        reference_audio=True,
+    )
+    groups = outputs[4]["groups"]
+    assert [group["logical_chunks"] for group in groups] == [(1,), (2,)]
+    for group in groups:
+        refs = group["conditioning"][0][1]["minimax_refs"]
+        assert [ref["kind"] for ref in refs].count("audio") == 1
+
+
+def test_reference_audio_is_captured_in_terminal_physical_group(monkeypatch):
+    outputs = _capture_sequence(
+        monkeypatch,
+        terminal=True,
+        reference_audio=True,
+    )
+    groups = outputs[4]["groups"]
+    assert [group["logical_chunks"] for group in groups] == [(1,), (2, 3)]
+    assert groups[1]["prompt_policy"] == "paired_timeline_v1"
+    for group in groups:
+        refs = group["conditioning"][0][1]["minimax_refs"]
+        assert [ref["kind"] for ref in refs].count("audio") == 1
 
 
 def test_reused_session_returns_incomplete_context_without_stopping(monkeypatch):

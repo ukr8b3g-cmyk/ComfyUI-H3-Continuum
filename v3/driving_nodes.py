@@ -151,6 +151,8 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
         reference_video_1=None,
         video_reference_size=REFERENCE_VIDEO_SIZE_EFFICIENT,
         capture_refine_context=False,
+        reference_audio_1=None,
+        reference_audio_vae=None,
         **kwargs,
     ):
         from ..reference_video import prepare_reference_video_source
@@ -175,8 +177,8 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
             size_mode=str(video_reference_size),
         )
         outputs = super().run(
-            reference_audio_1=None,
-            reference_audio_vae=None,
+            reference_audio_1=reference_audio_1,
+            reference_audio_vae=reference_audio_vae,
             driving_audio_source=source,
             driving_audio_vae=audio_vae,
             reference_video_source=reference_video_source,
@@ -216,6 +218,33 @@ class H3ContinuumSamplerV35(H3ContinuumSamplerV34):
         "refine_context",
     )
     OUTPUT_IS_LIST = (*H3ContinuumSamplerV34.OUTPUT_IS_LIST, False)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        schema = super().INPUT_TYPES()
+        optional = dict(schema.get("optional", {}))
+        optional["reference_audio_1"] = (
+            "AUDIO",
+            {
+                "display_name": "Reference Audio",
+                "tooltip": (
+                    "Optional standalone audio reference for H3 conditioning. "
+                    "Unlike Driving Audio, it does not replace the generated final audio."
+                ),
+            },
+        )
+        optional["reference_audio_vae"] = (
+            "VAE",
+            {
+                "display_name": "Reference Audio VAE",
+                "tooltip": (
+                    "Required only when Reference Audio is connected. It encodes the "
+                    "reference for H3 conditioning; generated audio remains the output."
+                ),
+            },
+        )
+        schema["optional"] = optional
+        return schema
 
     def run(self, *args, **kwargs):
         kwargs.pop("capture_refine_context", None)
