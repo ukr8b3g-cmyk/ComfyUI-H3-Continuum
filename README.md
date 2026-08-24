@@ -1,3 +1,9 @@
+## V3.5.1 Emergency Compatibility Hotfix
+
+Reference Audio sockets are now permanently defined by Python `INPUT_TYPES`. Dynamic socket changes and the UI-only `Hidden / Show` control were removed to prevent workflow save/reload value shifts.
+
+Node IDs, backend keys, Sampling, Conditioning, Seed handling, and other widgets are unchanged.
+
 # ComfyUI-H3-Continuum 3.5.1
 
 Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pass refinement, optional Hi-Res Fix, low-memory disk-backed assembly, restartable chunks, persistent references, and optional Spectrum interoperability.
