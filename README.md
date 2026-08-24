@@ -317,15 +317,97 @@ The supplied templates use Video Helper Suite for this split. Any compatible IMA
 
 ## Prompt formats
 
-Timeline:
+### Timeline
+
+For **Timeline** mode, each time-range header must be written on its own line. Write the scene description on the following line or lines.
+
+Recommended format:
 
 ~~~text
-[0-5s] First section: action, camera movement, and scene progression.
-[5-10s] Continue from the exact final state of the previous section.
-[10-15s] Continue naturally without resetting the scene.
+[0-5s]
+First section: action, camera movement, and scene progression.
+
+[5-10s]
+Continue from the exact final state of the previous section.
+
+[10-15s]
+Continue naturally without resetting the scene.
 ~~~
 
-List prompts use --- separators. Fixed reuses one prompt for every chunk. Auto detects the available structure. If a timeline cannot be parsed, V3.4 reports a warning and uses an applicable fallback rather than rejecting an otherwise runnable workflow.
+For 10-second chunks:
+
+~~~text
+[0-10s]
+Describe the first scene.
+
+[10-20s]
+Describe the next scene.
+
+[20-30s]
+Continue the sequence.
+
+[30-40s]
+Describe the final section.
+~~~
+
+**Important:** do not place the prompt text on the same line as the time header.
+
+Correct:
+
+~~~text
+[0-5s]
+Describe the scene.
+~~~
+
+Not recommended:
+
+~~~text
+[0-5s] Describe the scene.
+~~~
+
+The second form is not recognized as a Timeline header. When **Prompt Format = Auto**, it may therefore be interpreted as a Fixed prompt instead, causing the complete text to be reused across chunks.
+
+The time ranges should normally match the configured `chunk_seconds`.
+
+- `chunk_seconds = 5` → `[0-5s]`, `[5-10s]`, `[10-15s]` ...
+- `chunk_seconds = 10` → `[0-10s]`, `[10-20s]`, `[20-30s]` ...
+- `chunk_seconds = 15` → `[0-15s]`, `[15-30s]`, `[30-45s]` ...
+
+#### Global preamble and per-chunk prompting
+
+Text placed before the first Timeline header is treated as a **global preamble** and is automatically included in every chunk prompt. This is a good place for information that should apply throughout the sequence, such as subject definitions, overall style, persistent environment details, or other global instructions.
+
+However, the Timeline sections do not need to contain only the changing action or scene description. For complex scenes, multiple characters, or longer chunks such as 10–15 seconds, it can be useful to repeat important details about the subjects, appearance, location, camera, and current scene state inside each section. More self-contained chunk prompts may sometimes give H3 stronger continuity and reduce cut-like transitions or drift.
+
+Continuum carries visual/audio context from the previous chunk, but that does not guarantee that H3 will preserve every semantic detail automatically. Instead of relying only on phrases such as "continue from the previous chunk," describe the intended next action and important continuity details explicitly.
+
+For example:
+
+~~~text
+Subject: A woman in a red jacket.
+Style: cinematic nighttime photography.
+
+[0-15s]
+A woman in a red jacket stands at the nightclub bar, speaking with two people beside her. Medium shot, slow handheld camera movement, crowded dance floor visible behind them.
+
+[15-30s]
+The same woman in the same red jacket continues the conversation at the same bar with the same two people. The camera remains close and slowly moves around the group as one person replies.
+
+[30-45s]
+The woman turns toward the dance floor while remaining beside the bar. Keep the same clothing, nightclub environment, nearby characters, and continuous camera style.
+~~~
+
+The global preamble is optional. If fully self-contained prompts inside every Timeline section give better continuity for a particular model or scene, that is also a valid approach.
+
+### Other prompt formats
+
+**List** prompts use `---` separators.
+
+**Fixed** reuses one prompt for every chunk.
+
+**Auto** detects Timeline, List, or Fixed formatting from the supplied text.
+
+If Timeline syntax cannot be parsed, V3.4 reports a warning and falls back to an applicable prompt mode rather than rejecting an otherwise runnable workflow.
 
 ## Run Storage
 
