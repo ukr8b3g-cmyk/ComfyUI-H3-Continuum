@@ -10,18 +10,21 @@ PROJECT_ID_JS = ROOT / "web" / "project_id.js"
 REFERENCE_AUDIO_UI_JS = ROOT / "web" / "reference_audio_ui.js"
 
 
-def test_v35_wires_reference_audio_visibility_after_node_setup():
-    source = PROJECT_ID_JS.read_text(encoding="utf-8")
+def test_v35_keeps_reference_audio_inputs_permanent_after_node_setup():
+    project_source = PROJECT_ID_JS.read_text(encoding="utf-8")
+    reference_source = REFERENCE_AUDIO_UI_JS.read_text(encoding="utf-8")
 
-    assert 'from "./reference_audio_ui.js";' in source
-    assert "if (node.comfyClass === V35_NODE_CLASS)" in source
-    assert "configureReferenceAudioInputs(node);" in source
-    assert "setTimeout(configureDeferred, 0);" in source
-    assert "node.__h3ContinuumLoadedGraphNode = true;" in source
-    assert "node.__h3ContinuumAfterConfigureGraph = true;" in source
+    assert 'import { normalizeReferenceAudioLabels } from "./reference_audio_ui.js";' in project_source
+    assert "normalizeReferenceAudioLabels(node);" in project_source
+    assert "configureReferenceAudioInputs" not in project_source
+    assert "Reference Audio Inputs" not in reference_source
+    assert "addInput" not in reference_source
+    assert "removeInput" not in reference_source
+    assert "addWidget" not in reference_source
+    assert "onSerialize" not in reference_source
 
 
-def test_reference_audio_visibility_with_real_javascript_module(tmp_path):
+def test_reference_audio_labels_do_not_change_inputs_or_widgets(tmp_path):
     node = shutil.which("node")
     assert node is not None, "Node.js is required for frontend behavior validation"
 
@@ -31,126 +34,126 @@ def test_reference_audio_visibility_with_real_javascript_module(tmp_path):
     harness_path.write_text(
         r'''
 import assert from "node:assert/strict";
-import { configureReferenceAudioInputs } from "./reference_audio_ui.mjs";
+import { normalizeReferenceAudioLabels } from "./reference_audio_ui.mjs";
 
-function makeNode({ referenceLink = null, vaeLink = null, includeReferenceInputs = true } = {}) {
-    const widgets = [];
-    const inputs = [
-        { name: "reference_video_1", type: "IMAGE", label: "Video Reference", link: null },
-        { name: "driving_audio", type: "AUDIO", link: null },
-        { name: "audio_vae", type: "VAE", link: null },
-    ];
-    if (includeReferenceInputs) {
-        inputs.push(
-            { name: "reference_audio_1", type: "AUDIO", label: "Reference Audio", shape: 7, link: referenceLink },
-            { name: "reference_audio_vae", type: "VAE", label: "Reference Audio VAE", shape: 7, link: vaeLink },
-        );
-    }
-    inputs.push(
-        { name: "prompt_mode", type: "COMBO", link: null },
-        { name: "chunks", type: "INT", link: null },
-    );
-    let previousConnectionCalls = 0;
-    const node = {
-        inputs,
-        widgets,
-        size: [320, 600],
-        addWidget(type, name, value, callback, options) {
-            const widget = { type, name, value, callback, options };
-            this.widgets.push(widget);
-            return widget;
-        },
-        addInput(name, type, options = {}) {
-            const input = { name, type, link: null, ...options };
-            this.inputs.push(input);
-            return input;
-        },
-        removeInput(index) {
-            assert.ok(this.inputs[index].link === null || this.inputs[index].link === -1);
-            this.inputs.splice(index, 1);
-        },
-        computeSize() {
-            return [320, 400 + this.inputs.length * 10];
-        },
-        setSize(size) {
-            this.size = size;
-        },
-        setDirtyCanvas() {},
-        onConnectionsChange() {
-            previousConnectionCalls += 1;
-        },
-    };
-    return { node, previousConnectionCalls: () => previousConnectionCalls };
-}
+const inputs = [
+    { name: "reference_video_1", type: "IMAGE", label: "Video Reference", link: null },
+    { name: "driving_audio", type: "AUDIO", label: "driving_audio", link: null },
+    { name: "audio_vae", type: "VAE", label: "audio_vae", link: null },
+    { name: "reference_audio_1", type: "AUDIO", label: "Reference Audio", link: null },
+    { name: "reference_audio_vae", type: "VAE", label: "Reference Audio VAE", link: null },
+    { name: "prompt_mode", type: "COMBO", link: null },
+];
+const widgets = [{ name: "prompt_mode", value: "Auto" }];
+const node = { inputs, widgets };
+const originalInputs = [...inputs];
+const originalWidgets = [...widgets];
 
-function widget(node) {
-    return node.widgets.find((item) => item.name === "Reference Audio Inputs");
-}
+assert.equal(normalizeReferenceAudioLabels(node), true);
+assert.deepEqual(node.inputs, originalInputs);
+assert.deepEqual(node.widgets, originalWidgets);
+assert.deepEqual(
+    node.inputs.slice(0, 5).map((input) => input.label),
+    [
+        "Video Guide Frames",
+        "Driving Audio",
+        "Driving Audio VAE",
+        "Reference Audio (Optional)",
+        "Reference Audio VAE (Optional)",
+    ],
+);
+assert.equal(node.inputs[3].name, "reference_audio_1");
+assert.equal(node.inputs[4].name, "reference_audio_vae");
+''',
+        encoding="utf-8",
+    )
 
-function input(node, name) {
-    return node.inputs.find((item) => item.name === name);
-}
+    result = subprocess.run(
+        [node, str(harness_path)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
-{
-    const { node } = makeNode();
-    assert.equal(configureReferenceAudioInputs(node), true);
-    assert.equal(widget(node).value, "Hidden");
-    assert.equal(widget(node).options.serialize, false);
-    assert.equal(widget(node).serializeValue(), undefined);
-    assert.equal(input(node, "reference_audio_1"), undefined);
-    assert.equal(input(node, "reference_audio_vae"), undefined);
-    assert.equal(input(node, "reference_video_1").label, "Video Guide Frames");
-    assert.equal(input(node, "audio_vae").label, "Driving Audio VAE");
-    const serialized = { widgets_values: node.widgets.map((item) => item.value) };
-    node.onSerialize(serialized);
-    assert.deepEqual(serialized.widgets_values, []);
 
-    widget(node).value = "Show";
-    widget(node).callback("Show");
-    assert.deepEqual(
-        node.inputs.slice(3, 5).map((item) => [item.name, item.label]),
-        [
-            ["reference_audio_1", "Reference Audio (Optional)"],
-            ["reference_audio_vae", "Reference Audio VAE (Optional)"],
+def test_workflow_save_reload_preserves_v35_widget_value_alignment(tmp_path):
+    node = shutil.which("node")
+    assert node is not None, "Node.js is required for frontend behavior validation"
+
+    module_path = tmp_path / "reference_audio_ui.mjs"
+    module_path.write_text(REFERENCE_AUDIO_UI_JS.read_text(encoding="utf-8"), encoding="utf-8")
+    harness_path = tmp_path / "workflow_reload_harness.mjs"
+    harness_path.write_text(
+        r'''
+import assert from "node:assert/strict";
+import { normalizeReferenceAudioLabels } from "./reference_audio_ui.mjs";
+
+const widgetValues = {
+    prompt_mode: "Auto",
+    chunks: 3,
+    chunk_seconds: 5.0,
+    width: 1344,
+    height: 768,
+    continuity: "Balanced — 22 frames",
+    base_seed: 123456789,
+    control_after_generate: "randomize",
+    audio_continuity: true,
+    diagnostics: "Detailed Report",
+    reroll_from_chunk: "Auto",
+    reroll_nonce: 7,
+    strict_compatibility: false,
+    debug: false,
+    show_preview: true,
+    run_storage: "Off",
+    run_name: "alignment-test",
+    reference_size: "Match Output",
+    project_id: "workflow-save-reload",
+    video_reference_size: "Efficient - 0.4 MP",
+};
+
+function makeNode(values) {
+    return {
+        inputs: [
+            { name: "reference_video_1", type: "IMAGE", link: null },
+            { name: "driving_audio", type: "AUDIO", link: null },
+            { name: "audio_vae", type: "VAE", link: null },
+            { name: "reference_audio_1", type: "AUDIO", link: null },
+            { name: "reference_audio_vae", type: "VAE", link: null },
         ],
-    );
-
-    input(node, "reference_audio_1").link = 42;
-    widget(node).value = "Hidden";
-    widget(node).callback("Hidden");
-    assert.equal(widget(node).value, "Show");
-    assert.equal(input(node, "reference_audio_1").link, 42);
+        widgets: Object.entries(values).map(([name, value]) => ({ name, value })),
+    };
 }
 
-{
-    const { node, previousConnectionCalls } = makeNode({ referenceLink: 7, vaeLink: 8 });
-    assert.equal(configureReferenceAudioInputs(node), true);
-    assert.equal(widget(node).value, "Show");
-    assert.equal(input(node, "reference_audio_1").link, 7);
-    assert.equal(input(node, "reference_audio_vae").link, 8);
-    node.onConnectionsChange();
-    await new Promise((resolve) => setTimeout(resolve, 1));
-    assert.equal(previousConnectionCalls(), 1);
-    assert.equal(widget(node).value, "Show");
-}
+const original = makeNode(widgetValues);
+normalizeReferenceAudioLabels(original);
+const saved = JSON.parse(JSON.stringify({
+    inputs: original.inputs.map(({ name, type, link }) => ({ name, type, link })),
+    widgets_values: original.widgets
+        .filter((widget) => widget.serialize !== false)
+        .map((widget) => widget.value),
+}));
 
-{
-    const { node } = makeNode({ referenceLink: -1, vaeLink: -1 });
-    assert.equal(configureReferenceAudioInputs(node), true);
-    assert.equal(widget(node).value, "Hidden");
-    assert.equal(input(node, "reference_audio_1"), undefined);
-    assert.equal(input(node, "reference_audio_vae"), undefined);
-}
+assert.equal(saved.inputs[3].name, "reference_audio_1");
+assert.equal(saved.inputs[4].name, "reference_audio_vae");
+assert.equal(saved.widgets_values.length, Object.keys(widgetValues).length);
 
-{
-    const { node } = makeNode({ includeReferenceInputs: false });
-    assert.equal(configureReferenceAudioInputs(node), true);
-    assert.equal(widget(node).value, "Hidden");
-    widget(node).value = "Show";
-    widget(node).callback("Show");
-    assert.equal(input(node, "reference_audio_1").type, "AUDIO");
-    assert.equal(input(node, "reference_audio_vae").type, "VAE");
-}
+const reloaded = makeNode(Object.fromEntries(Object.keys(widgetValues).map((name) => [name, null])));
+saved.widgets_values.forEach((value, index) => {
+    reloaded.widgets[index].value = value;
+});
+normalizeReferenceAudioLabels(reloaded);
+
+assert.deepEqual(
+    Object.fromEntries(reloaded.widgets.map(({ name, value }) => [name, value])),
+    widgetValues,
+);
+assert.equal(reloaded.widgets.some((widget) => widget.name === "Reference Audio Inputs"), false);
+assert.deepEqual(
+    reloaded.inputs.map((input) => input.name),
+    original.inputs.map((input) => input.name),
+);
 ''',
         encoding="utf-8",
     )

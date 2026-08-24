@@ -3,7 +3,7 @@ import {
     captureLastQueuedSeed,
     configureLastQueuedSeedReuse,
 } from "./last_queued_seed.js";
-import { configureReferenceAudioInputs } from "./reference_audio_ui.js";
+import { normalizeReferenceAudioLabels } from "./reference_audio_ui.js";
 
 const PRODUCTION_NODE_CLASS = "H3ContinuumSamplerProduction";
 const TIMELINE_NODE_CLASS = "H3ContinuumSamplerTimelineVideo";
@@ -245,6 +245,7 @@ function configureNode(node) {
     applyRuntimeSettings(node);
     if (isV35) {
         configureLastQueuedSeedReuse(node);
+        normalizeReferenceAudioLabels(node);
     }
     hidePersistentWidget(findWidget(node, "diagnostics"));
     hidePersistentWidget(findWidget(node, "strict_compatibility"));
@@ -259,18 +260,7 @@ function configureNode(node) {
 
 function configureNodeAfterSetup(node) {
     configureNode(node);
-    const configureDeferred = () => {
-        configureNode(node);
-        if (
-            node.comfyClass === V35_NODE_CLASS
-            && (
-                !node.__h3ContinuumLoadedGraphNode
-                || node.__h3ContinuumAfterConfigureGraph
-            )
-        ) {
-            configureReferenceAudioInputs(node);
-        }
-    };
+    const configureDeferred = () => configureNode(node);
     setTimeout(configureDeferred, 0);
     setTimeout(configureDeferred, 100);
 }
@@ -311,13 +301,11 @@ app.registerExtension({
     },
 
     loadedGraphNode(node) {
-        node.__h3ContinuumLoadedGraphNode = true;
         configureNodeAfterSetup(node);
     },
 
     afterConfigureGraph() {
         for (const node of app.graph?._nodes || []) {
-            node.__h3ContinuumAfterConfigureGraph = true;
             configureNodeAfterSetup(node);
         }
     },
