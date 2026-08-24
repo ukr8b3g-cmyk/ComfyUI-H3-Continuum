@@ -8,7 +8,7 @@ MiniMax H3を複数チャンクで連続生成し、直前チャンク末尾の*
 
 V3.5.1では、V3.4のSampling、Conditioning、Terminal Merge、Assembly、Seam、Run Storage契約を変更せず、次の3点を追加します。
 
-1. **Reference Audio（任意）**: 生成音声を置換しない、H3 nativeの音声conditioningです。`Reference Audio Inputs`を`Show`にしたときだけ2つのsocketを表示します。
+1. **Reference Audio（任意）**: 生成音声を置換しない、H3 nativeの音声conditioningです。Workflowの保存・再読込互換を守るため、2つのsocketは常時表示します。
 2. **Conditioning Bridge V3.5**: Continuumのphysical groupごとに、完全なCore互換`MODEL`と`CONDITIONING`を外部Samplerへ公開します。
 3. **Last Queued Seed Reuse**: Randomize生成後にComfyUIが自動更新したseedからFixedへ戻した場合、安全に判定できるときだけ直前Queueで実際に使ったseedを復元します。ComfyUI cache自体は操作しません。
 
@@ -25,19 +25,11 @@ V3.5.1では、V3.4のSampling、Conditioning、Terminal Merge、Assembly、Seam
 
 音声付き動画を使う通常の接続は、loaderの`IMAGE`を`Video Guide Frames`へ、`AUDIO`を`Driving Audio`へ接続します。conditioning専用動作が目的でない限り、動画の音声を`Reference Audio (Optional)`へ接続しないでください。
 
-![Sampler V3.5のVideo Guide Frames、Driving Audio、Reference Image入力](docs/images/v351-video-guide-frames.png)
+![Sampler V3.5の常設Reference Audio、Video Guide Frames、Driving Audio、Reference Image入力](docs/images/v351-video-guide-frames.png)
 
-`Reference Audio Inputs`は表示だけを制御します。
+`Reference Audio (Optional)`と`Reference Audio VAE (Optional)`は、Pythonのinput schemaどおり常時表示します。V3.5.1ではこの2 socketをFrontendで動的に追加・削除せず、UI-onlyの`Hidden`／`Show` widgetも使用しません。これによりWorkflowを保存・再読込した際のwidget値の位置ずれを防ぎます。backend input keyと既存接続は変更しません。
 
-- 未接続時は`Hidden`が既定です。
-- `Show`でReference Audioの2 socketを表示します。
-- 保存workflowでどちらかが接続済みなら自動的に`Show`で開きます。
-- 接続中は`Hidden`へ変更できず、graph linkを削除しません。
-- workflowのwidget値には保存せず、backend input keyと既存接続を変更しません。
-
-| Hidden — 通常の簡潔表示 | Show — 任意conditioning socketを表示 |
-|---|---|
-| ![Reference Audio入力を非表示](docs/images/v351-reference-audio-hidden.png) | ![Reference Audio入力を表示](docs/images/v351-reference-audio-show.png) |
+![常設Reference Audio socketと正常なwidget配置](docs/images/v351-reference-audio-permanent.png)
 
 ### Conditioning Bridge V3.5
 
@@ -230,7 +222,7 @@ ZIPを展開して、`ComfyUI-H3-Continuum`フォルダーを`ComfyUI/custom_nod
 
 ## 検査
 
-V3.5.1正式版は全`450 passed`、source/runtime登録検証、PackedLayout、Fixed 3×5 Prompt Plan、JavaScript UI harnessを通過しています。代表GPU受入にはConditioning Bridge、Reference Audio/Image保持、Second Pass／Hi-Res経路、3×5秒FL2VA Long Terminal MergeからCore Video/Audio VAE Decode、Assemble V3.5 Autoまでを含みます。
+V3.5.1正式版は全`452 passed`、source/runtime登録検証、PackedLayout、Fixed 3×5 Prompt Plan、JavaScript UI harnessを通過しています。代表GPU受入にはConditioning Bridge、Reference Audio/Image保持、Second Pass／Hi-Res経路、3×5秒FL2VA Long Terminal MergeからCore Video/Audio VAE Decode、Assemble V3.5 Autoまでを含みます。
 
 Main Hi-Res Fixの3×5秒2xは、RTX 5060 Ti 16 GiBで37T groupの1152×1152 Second Pass完了後、Terminal Mergeの77T group最初の推論時にCUDA OOMとなり未受入です。Reference/Hybrid固有の1×5秒Second Passは受入済みですが、長尺Reference/Hybridは未確認です。Disk-backedが保証する低メモリ範囲はContinuum Assemblyであり、Core Decodeや下流ノードが別の全量copyを作る可能性は残ります。
 

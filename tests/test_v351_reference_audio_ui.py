@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -8,6 +9,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ID_JS = ROOT / "web" / "project_id.js"
 REFERENCE_AUDIO_UI_JS = ROOT / "web" / "reference_audio_ui.js"
+BRIDGE_WORKFLOW = (
+    ROOT
+    / "examples"
+    / "workflows"
+    / "MiniMax_H3_Continuum_V351_LBH_Conditioning_Bridge.json"
+)
 
 
 def test_v35_keeps_reference_audio_inputs_permanent_after_node_setup():
@@ -166,3 +173,40 @@ assert.deepEqual(
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_bundled_bridge_workflow_has_permanent_sockets_and_aligned_widgets():
+    workflow = json.loads(BRIDGE_WORKFLOW.read_text(encoding="utf-8"))
+    sampler = next(
+        node for node in workflow["nodes"] if node["type"] == "H3ContinuumSamplerV35"
+    )
+    expected = {
+        "prompt_mode": "Auto",
+        "chunks": 1,
+        "chunk_seconds": 5,
+        "width": 1344,
+        "height": 768,
+        "continuity": "Fast — 5 frames",
+        "base_seed": 783839598838387,
+        "control_after_generate": "randomize",
+        "audio_continuity": True,
+        "diagnostics": "Detailed Report",
+        "reroll_from_chunk": "Auto",
+        "reroll_nonce": 0,
+        "strict_compatibility": False,
+        "debug": False,
+        "show_preview": True,
+        "run_storage": "Off",
+        "run_name": "",
+        "reference_size": "Match Output",
+        "project_id": "d1c61168-c72e-44d1-9b78-1c9adb4eba0e",
+        "video_reference_size": "Efficient - 0.4 MP",
+    }
+
+    assert sampler["widgets_values"] == list(expected.values())
+    assert sampler["widgets_values_named"] == expected
+    input_names = [input_["name"] for input_ in sampler["inputs"]]
+    assert input_names[input_names.index("audio_vae") + 1 : input_names.index("width")] == [
+        "reference_audio_1",
+        "reference_audio_vae",
+    ]

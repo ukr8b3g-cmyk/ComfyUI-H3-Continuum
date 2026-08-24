@@ -1425,6 +1425,20 @@
           "link": 295
         },
         {
+          "label": "Reference Audio (Optional)",
+          "name": "reference_audio_1",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": null
+        },
+        {
+          "label": "Reference Audio VAE (Optional)",
+          "name": "reference_audio_vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": null
+        },
+        {
           "name": "width",
           "type": "INT",
           "widget": {
@@ -1491,6 +1505,7 @@
         "Node name for S&R": "H3ContinuumSamplerV35"
       },
       "widgets_values": [
+        "Auto",
         1,
         5,
         1344,
@@ -1500,40 +1515,38 @@
         "randomize",
         true,
         "Detailed Report",
-        "Detailed Report",
         "Auto",
+        0,
         false,
         false,
         true,
-        true,
+        "Off",
         "",
         "Match Output",
         "d1c61168-c72e-44d1-9b78-1c9adb4eba0e",
-        "Efficient - 0.4 MP",
-        "Show"
+        "Efficient - 0.4 MP"
       ],
       "widgets_values_named": {
-        "prompt_mode": 1,
-        "chunks": 5,
-        "chunk_seconds": 1344,
-        "width": 768,
-        "height": "Fast — 5 frames",
-        "continuity": 783839598838387,
-        "base_seed": "randomize",
-        "control_after_generate": true,
-        "audio_continuity": "Detailed Report",
+        "prompt_mode": "Auto",
+        "chunks": 1,
+        "chunk_seconds": 5,
+        "width": 1344,
+        "height": 768,
+        "continuity": "Fast — 5 frames",
+        "base_seed": 783839598838387,
+        "control_after_generate": "randomize",
+        "audio_continuity": true,
         "diagnostics": "Detailed Report",
         "reroll_from_chunk": "Auto",
-        "reroll_nonce": false,
+        "reroll_nonce": 0,
         "strict_compatibility": false,
-        "debug": true,
+        "debug": false,
         "show_preview": true,
-        "run_storage": "",
-        "run_name": "Match Output",
-        "reference_size": "d1c61168-c72e-44d1-9b78-1c9adb4eba0e",
-        "project_id": "Efficient - 0.4 MP",
-        "video_reference_size": "Show",
-        "Reference Audio Inputs": "Hidden"
+        "run_storage": "Off",
+        "run_name": "",
+        "reference_size": "Match Output",
+        "project_id": "d1c61168-c72e-44d1-9b78-1c9adb4eba0e",
+        "video_reference_size": "Efficient - 0.4 MP"
       },
       "color": "#232",
       "bgcolor": "#353"

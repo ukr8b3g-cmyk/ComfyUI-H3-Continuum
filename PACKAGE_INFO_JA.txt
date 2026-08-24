@@ -4,7 +4,7 @@ MiniMax H3の5秒ChunkをAV latent contextで継続し、長尺映像として�
 
 V3.5.1:
 - physical groupごとに完全なMODEL / CONDITIONINGを公開するConditioning Bridge V3.5
-- 生成音声を置換しない任意のReference Audio conditioningとHidden / Show UI
+- 生成音声を置換しない任意のReference Audio conditioningと常設socket
 - RandomizeからFixedへ戻す際のLast Queued Seed Reuse
 - Video loaderのIMAGE frame batchを示すVideo Guide Frames / Video Guide Size表示名
 - backend socket key、既存workflow接続、V3.4 sampling契約を維持

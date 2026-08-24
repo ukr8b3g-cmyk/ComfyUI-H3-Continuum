@@ -14,7 +14,7 @@ Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pa
 
 V3.5.1 completes three focused additions without changing the V3.4 Sampling, Conditioning, Terminal Merge, Assembly, Seam, or Run Storage contracts:
 
-1. **Optional Reference Audio** — native H3 audio conditioning that does not replace the generated final audio. The two additional sockets stay hidden until `Reference Audio Inputs` is set to `Show`.
+1. **Optional Reference Audio** — native H3 audio conditioning that does not replace the generated final audio. Both sockets remain permanently visible to preserve workflow save/reload compatibility.
 2. **Conditioning Bridge V3.5** — exposes one complete Core-compatible `MODEL` and one complete `CONDITIONING` object per Continuum physical group for an external sampler workflow.
 3. **Last queued seed reuse** — when ComfyUI changes a randomized seed after generation, switching the Sampler back to Fixed restores the seed used by the last queued run when it is still safe to do so. Existing ComfyUI cache behavior is not overridden.
 
@@ -31,19 +31,11 @@ The displayed names intentionally describe different jobs. They are not intercha
 
 For the common video-with-sound case, connect the loader's `IMAGE` output to `Video Guide Frames` and its `AUDIO` output to `Driving Audio`. Do not connect that audio to `Reference Audio (Optional)` unless conditioning-only behavior is specifically intended.
 
-![Sampler V3.5 Video Guide Frames, Driving Audio, and Reference Image inputs](docs/images/v351-video-guide-frames.png)
+![Sampler V3.5 permanent Reference Audio, Video Guide Frames, Driving Audio, and Reference Image inputs](docs/images/v351-video-guide-frames.png)
 
-`Reference Audio Inputs` is a UI-only visibility control:
+`Reference Audio (Optional)` and `Reference Audio VAE (Optional)` are always present exactly as defined by the node's Python input schema. V3.5.1 no longer adds or removes these sockets dynamically and has no frontend-only `Hidden`/`Show` widget. This keeps positional widget values aligned when workflows are saved and reloaded; backend input keys and existing workflow links are unchanged.
 
-- `Hidden` is the uncluttered default for unlinked inputs.
-- `Show` displays both optional Reference Audio sockets.
-- A saved workflow with either socket connected opens in `Show` automatically.
-- Connected sockets cannot be hidden, so the UI never removes a graph link.
-- The control is not serialized into workflow widget values; backend input keys and existing workflow links remain unchanged.
-
-| Hidden — normal uncluttered view | Show — optional conditioning sockets visible |
-|---|---|
-| ![Reference Audio inputs hidden](docs/images/v351-reference-audio-hidden.png) | ![Reference Audio inputs shown](docs/images/v351-reference-audio-show.png) |
+![Sampler V3.5.1 with permanent Reference Audio sockets and aligned widgets](docs/images/v351-reference-audio-permanent.png)
 
 ### Conditioning Bridge V3.5
 
@@ -310,7 +302,7 @@ Restart ComfyUI after installation or update.
 
 ### H3 Continuum Sampler V3.5
 
-The V3.5 sampler preserves V3.4 generation behavior and adds `refine_context` as the sixth output. Connect it to V3.5 Hi-Res Fix, Second Pass, or Conditioning Bridge paths that need the original conditioning context. V3.5.1 also provides optional Reference Audio sockets through the `Reference Audio Inputs` visibility control.
+The V3.5 sampler preserves V3.4 generation behavior and adds `refine_context` as the sixth output. Connect it to V3.5 Hi-Res Fix, Second Pass, or Conditioning Bridge paths that need the original conditioning context. V3.5.1 also provides permanently visible optional Reference Audio sockets.
 
 ### H3 Continuum Conditioning Bridge V3.5
 
@@ -575,7 +567,7 @@ Use a 24 fps source for `Video Guide Frames`. `Load Video (Upload)` may accept f
 
 ## Current validation status
 
-The V3.5.1 release passes `450` automated tests, source/runtime registration verification, native PackedLayout, Fixed 3x5 prompt planning, JavaScript UI harnesses, and release metadata consistency. Representative GPU acceptance includes the V3.5 Conditioning Bridge path, Reference Audio/Image retention, Second Pass/Hi-Res paths, and accepted 3x5 FL2VA Long Terminal Merge latents through Core Video/Audio VAE Decode and Assemble V3.5 Auto.
+The V3.5.1 release passes `452` automated tests, source/runtime registration verification, native PackedLayout, Fixed 3x5 prompt planning, JavaScript UI harnesses, and release metadata consistency. Representative GPU acceptance includes the V3.5 Conditioning Bridge path, Reference Audio/Image retention, Second Pass/Hi-Res paths, and accepted 3x5 FL2VA Long Terminal Merge latents through Core Video/Audio VAE Decode and Assemble V3.5 Auto.
 
 V3.4 compatibility paths have been exercised locally with:
 
