@@ -344,4 +344,11 @@ Static checks do not replace a real GPU generation. Record workflow, prompt, med
 
 - Project instructions now identify V3.5.1 as the current public baseline while retaining V3.4 node IDs, public contracts, and saved-workflow compatibility.
 - Last Queued Seed Reuse is classified as automated frontend-validated; real UI/cache acceptance remains pending. Package validation no longer implies completed real UI/cache acceptance.
-- GitHub Issues #9 and #10 received implementation guidance and were closed as completed. Issue #11 received the conditional-UI/internal-resize explanation and remains open until the local README clarification is published.
+- GitHub Issues #9, #10, and #11 received implementation guidance and are closed as completed. Issue #11 was closed after the conditional-UI/internal-resize README clarification reached public `main`.
+
+## GitHub Actions dependency/stub repair (2026-08-25)
+
+- The public V3.5.1 Actions failure was limited to the isolated CI environment: three P25 tests lacked `psutil`, and two Hi-Res Fix tests lacked ComfyUI Core's `comfy_extras.nodes_minimax_h3` module.
+- `psutil` is now an Actions-only test dependency. Runtime `requirements.txt` remains dependency-free.
+- `tests/test_v35_hires_fix.py` provides a file-local `comfy_extras.nodes_minimax_h3` stub containing only Core's `CANVAS_MULTIPLE = 32`. Production Core imports and Hi-Res Fix behavior are unchanged.
+- Focused Hi-Res Fix/P25 validation is `16 passed`; full validation is `450 passed` with only the known `pynvml` FutureWarning. The first full local run encountered only the existing Windows global pytest temp ACL error; the accepted rerun used a dedicated writable `--basetemp`.

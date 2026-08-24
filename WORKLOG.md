@@ -412,3 +412,12 @@ D:\Codex\_snapshots\ComfyUI-H3-Continuum\pre-rollback-after-00038-fail-20260821_
 - No implementation code, node schema, workflow, runtime, Sampling, Conditioning, Terminal Merge, Assembly, Seam, or Run Storage behavior changed.
 - Pre-change snapshot: `pre-v351-public-state-cleanup-source-accepted-20260825_004006` (478 files), excluding `.git` and the known ACL-inaccessible `.pytest_cache` after the standard snapshot script encountered that existing ACL condition.
 - Validation: release metadata `2 passed` with the ComfyUI_W venv, all 172 Manifest entries match SHA-256, and `git diff --check` passes. The system Python lacks pytest; no product-test failure occurred.
+
+## 2026-08-25 - GitHub Actions dependency and Core stub repair
+
+- Kept Production runtime code and `requirements.txt` unchanged. Added `psutil` only to the GitHub Actions test-install command for the P25 probe tests.
+- Added a test-file-local `comfy_extras.nodes_minimax_h3` stub with only `CANVAS_MULTIPLE = 32`, allowing manual Hi-Res canvas tests to exercise the real Production import path without installing ComfyUI Core in CI.
+- Focused Hi-Res Fix/P25 result is `16 passed`; full result is `450 passed` with only the known `pynvml` FutureWarning. The accepted full run used a dedicated writable `--basetemp` after the known global Windows pytest temp ACL caused setup-only errors.
+- No Production runtime contract, Hi-Res Fix algorithm, Node ID, V3.4/V3.5 compatibility path, or runtime dependency changed.
+- Pre-change snapshot: `pre-ci-dependency-stub-fix-source-accepted-20260825_005009` (478 files), excluding `.git` and the known ACL-inaccessible `.pytest_cache` after the standard snapshot script encountered that existing ACL condition.
+- Confirmed the prior README clarification was already on public `main` and closed GitHub Issue #11 as completed. Issues #9, #10, and #11 are now all closed with implementation answers.

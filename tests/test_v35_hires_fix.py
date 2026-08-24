@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+import types
+
 import pytest
 import torch
 
@@ -13,6 +16,21 @@ from ComfyUI_H3_Continuum_Join.v3.hires_fix_nodes import (
     resolve_h3_native_latent_target,
 )
 from ComfyUI_H3_Continuum_Join.v3.second_pass import SecondPassContractError
+
+
+@pytest.fixture(autouse=True)
+def _stub_core_h3_canvas_module(monkeypatch):
+    comfy_extras = types.ModuleType("comfy_extras")
+    comfy_extras.__path__ = []
+    nodes_minimax_h3 = types.ModuleType("comfy_extras.nodes_minimax_h3")
+    nodes_minimax_h3.CANVAS_MULTIPLE = 32
+    comfy_extras.nodes_minimax_h3 = nodes_minimax_h3
+    monkeypatch.setitem(sys.modules, "comfy_extras", comfy_extras)
+    monkeypatch.setitem(
+        sys.modules,
+        "comfy_extras.nodes_minimax_h3",
+        nodes_minimax_h3,
+    )
 
 
 def _video(marker: str, *, height: int = 4, width: int = 4) -> dict:
