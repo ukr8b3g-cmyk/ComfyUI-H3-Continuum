@@ -1,6 +1,6 @@
-ComfyUI-H3-Continuum V3.5.0 package validation
+ComfyUI-H3-Continuum V3.5.1 package validation
 
-Status: V3.5.0 release. Stable V3.5 paths are validated; integrated Hi-Res Fix remains Experimental.
+Status: V3.5.1 release. Stable V3.5 paths, Conditioning Bridge, Reference Audio, and Last Queued Seed Reuse are validated; integrated Hi-Res Fix remains Experimental.
 
 Required automated checks:
 - python -m compileall -q .
@@ -9,6 +9,9 @@ Required automated checks:
 
 Validated runtime paths include:
 - V3.5 refine-context contract and Advanced Second Pass Bridge
+- Conditioning Bridge MODEL / CONDITIONING alignment per physical group without CONDITIONING-entry flattening
+- Optional Reference Audio Hidden / Show UI, saved-link recovery, and conditioning retention
+- Last Queued Seed Reuse with manual seed edits and ComfyUI cache behavior preserved
 - 1x5 T2VA, 3x5 T2VA, and 3x5 FL2VA Long Terminal Merge Second Pass GPU acceptance
 - First-pass audio LATENT object passthrough through Second Pass
 - H3 Continuum Assemble + Seam V3.5 RAM / Disk-backed output equivalence
@@ -19,16 +22,16 @@ Validated runtime paths include:
 - Production sampler and Core VAE Decode assembly
 - Reference Image 1-3
 - Driving Audio absolute-time guide conditioning with original-source final output
-- Persistent Video Reference conditioning
-- Video Reference Size: Efficient 0.4 MP / Balanced 0.6 MP / Match Output
+- Persistent Video Guide Frames conditioning
+- Video Guide Size: Efficient 0.4 MP / Balanced 0.6 MP / Match Output
 - Run Storage save, checksum verification, and complete reuse
-- Run Storage identity coverage for Driving Audio and Video Reference
+- Run Storage identity coverage for Driving Audio and Video Guide Frames
 - Permissive prompt warning/fallback behavior
 - Spectrum Interop API v1 with Actual Prefix 2 on continuation chunks
 - Audio Seam Auto
 - Video Seam Auto guarded transient and micro-flash correction
 
-Latest verified automated result: 430 passed.
+Latest verified automated result: 450 passed.
 
 Hi-Res Fix and Auto 2 remain experimental. Main 3x5 2x is not accepted on the tested RTX 5060 Ti 16 GiB because the terminal 77T Second Pass group exceeded VRAM; longer Reference/Hybrid acceptance remains pending.
 

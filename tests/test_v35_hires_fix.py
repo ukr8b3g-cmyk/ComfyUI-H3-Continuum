@@ -9,6 +9,7 @@ from ComfyUI_H3_Continuum_Join.nodes import (
 )
 from ComfyUI_H3_Continuum_Join.v3.hires_fix_nodes import (
     H3ContinuumHiResFixV35,
+    align_h3_manual_canvas,
     resolve_h3_native_latent_target,
 )
 from ComfyUI_H3_Continuum_Join.v3.second_pass import SecondPassContractError
@@ -171,6 +172,102 @@ def test_enabled_pixel_vae_roundtrip_then_reuses_second_pass_contract(monkeypatc
     assert second_pass["refine_context"] == {"context": True}
     assert second_pass["video_vae"] == "video-vae"
     assert second_pass["conditioning_upscale_method"] == "bilinear"
+
+
+@pytest.mark.parametrize(
+    ("latent_width", "latent_height", "expected_width", "expected_height"),
+    (
+        (36, 36, 704, 704),
+        (64, 36, 1216, 704),
+    ),
+)
+def test_manual_scale_1_2_aligns_to_core_h3_canvas(
+    latent_width,
+    latent_height,
+    expected_width,
+    expected_height,
+):
+    target = align_h3_manual_canvas(
+        latent_width,
+        latent_height,
+        1.2,
+        pixel_scale_width=16,
+        pixel_scale_height=16,
+        canvas_multiple=32,
+    )
+
+    assert target == {
+        "target_width": expected_width,
+        "target_height": expected_height,
+        "target_latent_width": expected_width // 16,
+        "target_latent_height": expected_height // 16,
+    }
+    assert target["target_latent_width"] % 2 == 0
+    assert target["target_latent_height"] % 2 == 0
+
+
+def test_manual_scale_1_2_passes_core_aligned_target_to_pixel_vae(monkeypatch):
+    videos = [_video("first-pass", height=36, width=36)]
+    resized = [_video("reencoded", height=44, width=44)]
+    audios = [_audio("first-pass")]
+    plan = _plan(width=576, height=576, latent_width=36, latent_height=36)
+    calls = []
+
+    def fake_roundtrip(video_latents, assembly_plan, **kwargs):
+        calls.append(("roundtrip", video_latents, assembly_plan, kwargs))
+        return resized
+
+    def fake_second_pass(**kwargs):
+        calls.append(("second_pass", kwargs))
+        return (
+            [_video("refined", height=44, width=44)],
+            audios,
+            {"width": 704, "height": 704},
+            "sampled",
+        )
+
+    monkeypatch.setattr(
+        "ComfyUI_H3_Continuum_Join.v3.hires_fix_nodes.h3_core_native_canvas",
+        lambda *_args, **_kwargs: (768, 768),
+    )
+    monkeypatch.setattr(
+        "ComfyUI_H3_Continuum_Join.v3.hires_fix_nodes.resize_video_latents_via_vae",
+        fake_roundtrip,
+    )
+    monkeypatch.setattr(
+        "ComfyUI_H3_Continuum_Join.v3.hires_fix_nodes.run_second_pass_groups",
+        fake_second_pass,
+    )
+
+    result = H3ContinuumHiResFixV35().apply(
+        ["model"],
+        ["clip"],
+        ["sampler"],
+        [torch.tensor([0.3, 0.0])],
+        videos,
+        audios,
+        [plan],
+        [True],
+        ["lanczos"],
+        [1.2],
+        [17],
+        [{"context": True}],
+        ["video-vae"],
+    )
+
+    assert calls[0] == (
+        "roundtrip",
+        videos,
+        plan,
+        {
+            "video_vae": "video-vae",
+            "target_width": 704,
+            "target_height": 704,
+            "upscale_method": "lanczos",
+        },
+    )
+    assert calls[1][1]["video_latents"] is resized
+    assert "target=704x704" in result[3]
 
 
 def test_native_auto_resizes_to_exact_core_target_then_samples(monkeypatch):

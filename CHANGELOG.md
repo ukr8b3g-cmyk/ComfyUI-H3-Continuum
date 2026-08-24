@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.5.1
+
+- Added `H3 Continuum Conditioning Bridge V3.5`, exposing one complete Core-compatible MODEL and CONDITIONING object per Continuum physical group without flattening CONDITIONING entries.
+- Added optional standalone Reference Audio conditioning to Sampler V3.5. Its sockets default to hidden when unlinked, automatically reopen for connected workflows, and never remove graph links.
+- Added Last Queued Seed Reuse for the V3.5 sampler, restoring the seed used by the previous queue when switching from ComfyUI Randomize to Fixed while respecting manual seed edits and normal cache behavior.
+- Renamed the displayed video-guide inputs to `Video Guide Frames` and `Video Guide Size` to distinguish a video loader's IMAGE frame batch from still Reference Images. Backend input keys and saved-workflow links are unchanged.
+- GPU-accepted Conditioning Bridge generation, Reference Audio/Image retention, and the V3.5 Second Pass/Hi-Res paths while preserving physical-group, Terminal Merge, Run Storage, and audio contracts.
+
 ## 3.5.0
 
 - Added `H3 Continuum Sampler V3.5` with a Continuum-aware refine-context output while preserving the V3.4 sampler path.
@@ -7,7 +15,7 @@
 - Added experimental `H3 Continuum Hi-Res Fix V3.5`, using a bounded pixel/VAE resize round trip before low-denoise Second Pass sampling.
 - Added `H3 Continuum Latent Resize V3.5` as an advanced utility; direct high-ratio latent interpolation is not the recommended main Hi-Res Fix path.
 - Added `H3 Continuum Assemble + Seam V3.5` with Auto, RAM, and Windows-safe disk-backed video buffers while keeping audio in RAM.
-- Added the recommended V3.5 template workflow with optional Hi-Res Fix, Auto assembly, shared still-image megapixel sizing, and separate VHS Video Reference sizing.
+- Added the recommended V3.5 template workflow with optional Hi-Res Fix, Auto assembly, shared still-image megapixel sizing, and separate Video Guide Frames sizing.
 - Preserved Exact Duration, seam behavior, physical decode-group ordering, first-pass audio passthrough, and external Core VAE Decode contracts.
 - Kept V3.4 nodes and saved-workflow compatibility unchanged.
 - Validated a 9.49 GiB final IMAGE with hash-identical RAM/Disk-backed output and approximately 9.50 GiB lower Windows private memory in Disk-backed mode.
@@ -17,8 +25,8 @@
 
 - Completed the V3.4 runtime path from the public sampler through V3/V2 to `run_sequence()`.
 - Added Driving Audio with absolute-time guide slices while preserving the original source for final output.
-- Added persistent Video Reference conditioning with Efficient 0.4 MP, Balanced 0.6 MP, and Match Output modes.
-- Included Driving Audio and Video Reference identities in Run Storage contracts.
+- Added persistent Video Guide Frames conditioning with Efficient 0.4 MP, Balanced 0.6 MP, and Match Output modes.
+- Included Driving Audio and Video Guide Frames identities in Run Storage contracts.
 - Changed malformed or empty prompts to warning-and-fallback behavior instead of stopping generation.
 - Removed independent compatibility, model, and upstream-node restrictions that were stricter than ComfyUI Core.
 - Added V3.4 runtime, driving-audio, and context diagnostics coverage.

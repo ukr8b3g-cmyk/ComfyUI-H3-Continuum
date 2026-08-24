@@ -138,6 +138,14 @@ def test_v34_public_schema_replaces_reference_audio_with_driving_audio():
     schema = H3ContinuumSamplerV34.INPUT_TYPES()
     assert "driving_audio" in schema["optional"]
     assert "audio_vae" in schema["optional"]
+    assert schema["optional"]["reference_video_1"][1]["display_name"] == (
+        "Video Guide Frames"
+    )
+    assert schema["optional"]["driving_audio"][1]["display_name"] == "Driving Audio"
+    assert schema["optional"]["audio_vae"][1]["display_name"] == "Driving Audio VAE"
+    assert schema["required"]["video_reference_size"][1]["display_name"] == (
+        "Video Guide Size"
+    )
     assert "reference_audio_1" not in schema["optional"]
     assert "reference_audio_vae" not in schema["optional"]
 

@@ -101,9 +101,9 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
             REFERENCE_VIDEO_SIZE_OPTIONS,
             {
                 "default": REFERENCE_VIDEO_SIZE_EFFICIENT,
-                "display_name": "Video Reference Size",
+                "display_name": "Video Guide Size",
                 "tooltip": (
-                    "Efficient limits Video Reference to about 0.4 MP; Balanced uses "
+                    "Efficient limits Video Guide Frames to about 0.4 MP; Balanced uses "
                     "about 0.6 MP; Match Output uses the output pixel area. Source "
                     "aspect ratio is preserved and smaller sources are not enlarged."
                 ),
@@ -115,16 +115,20 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
         optional["reference_video_1"] = (
             "IMAGE",
             {
-                "display_name": "Video Reference",
+                "display_name": "Video Guide Frames",
                 "tooltip": (
-                    "Optional persistent video reference. Connect an IMAGE frame batch; "
-                    "frames are interpreted at 24 fps and applied to every chunk."
+                    "Optional video guide. Connect the IMAGE frame batch from a video loader; "
+                    "source-video audio is not included. Frames are interpreted at 24 fps "
+                    "and applied to every chunk. Non-native frame counts are padded by "
+                    "repeating the final frame to the next H3 17k+5 count, up to the "
+                    "one-chunk limit."
                 ),
             },
         )
         optional["driving_audio"] = (
             "AUDIO",
             {
+                "display_name": "Driving Audio",
                 "tooltip": (
                     "Optional original audio timeline. It is used as native H3 guide "
                     "conditioning and selected unchanged for final output."
@@ -134,6 +138,7 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
         optional["audio_vae"] = (
             "VAE",
             {
+                "display_name": "Driving Audio VAE",
                 "tooltip": (
                     "Required only when Driving Audio is connected. Uses the same "
                     "Audio VAE encode path as ComfyUI Core MiniMax H3 Add Guide."
@@ -151,6 +156,8 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
         reference_video_1=None,
         video_reference_size=REFERENCE_VIDEO_SIZE_EFFICIENT,
         capture_refine_context=False,
+        reference_audio_1=None,
+        reference_audio_vae=None,
         **kwargs,
     ):
         from ..reference_video import prepare_reference_video_source
@@ -175,8 +182,8 @@ class H3ContinuumSamplerV34(H3ContinuumSamplerProduction):
             size_mode=str(video_reference_size),
         )
         outputs = super().run(
-            reference_audio_1=None,
-            reference_audio_vae=None,
+            reference_audio_1=reference_audio_1,
+            reference_audio_vae=reference_audio_vae,
             driving_audio_source=source,
             driving_audio_vae=audio_vae,
             reference_video_source=reference_video_source,
@@ -216,6 +223,34 @@ class H3ContinuumSamplerV35(H3ContinuumSamplerV34):
         "refine_context",
     )
     OUTPUT_IS_LIST = (*H3ContinuumSamplerV34.OUTPUT_IS_LIST, False)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        schema = super().INPUT_TYPES()
+        optional = dict(schema.get("optional", {}))
+        optional["reference_audio_1"] = (
+            "AUDIO",
+            {
+                "display_name": "Reference Audio (Optional)",
+                "tooltip": (
+                    "Optional standalone audio reference for H3 conditioning. "
+                    "It is not the audio track of Video Guide Frames. Unlike Driving "
+                    "Audio, it does not replace the generated final audio."
+                ),
+            },
+        )
+        optional["reference_audio_vae"] = (
+            "VAE",
+            {
+                "display_name": "Reference Audio VAE (Optional)",
+                "tooltip": (
+                    "Required only when Reference Audio is connected. It encodes the "
+                    "reference for H3 conditioning; generated audio remains the output."
+                ),
+            },
+        )
+        schema["optional"] = optional
+        return schema
 
     def run(self, *args, **kwargs):
         kwargs.pop("capture_refine_context", None)

@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="820" viewBox="0 0 1400 820" role="img" aria-labelledby="title description">
+  <title id="title">V3.5.1 LBH and Conditioning Bridge external sampling flow</title>
+  <desc id="description">Connection flow from H3 Continuum Sampler through LBH latent upscaling, Conditioning Bridge, Core BasicGuider and SamplerCustomAdvanced, AV separation, Core decode, and Continuum assembly.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#9ca3af"/>
+    </marker>
+    <style>
+      .bg { fill: #0d1117; }
+      .title { fill: #f3f4f6; font: 700 28px Arial, sans-serif; }
+      .subtitle { fill: #9ca3af; font: 16px Arial, sans-serif; }
+      .lane { fill: none; stroke: #30363d; stroke-width: 1.5; stroke-dasharray: 8 7; rx: 16; }
+      .laneLabel { fill: #8b949e; font: 700 14px Arial, sans-serif; letter-spacing: 1px; }
+      .box { fill: #161b22; stroke-width: 2; rx: 12; }
+      .continuum { stroke: #4ade80; }
+      .external { stroke: #fb923c; }
+      .core { stroke: #a78bfa; }
+      .boxTitle { fill: #f9fafb; font: 700 16px Arial, sans-serif; }
+      .boxText { fill: #c9d1d9; font: 13px Arial, sans-serif; }
+      .small { fill: #9ca3af; font: 12px Arial, sans-serif; }
+      .arrow { fill: none; stroke: #9ca3af; stroke-width: 2.2; marker-end: url(#arrow); }
+      .arrowGreen { fill: none; stroke: #4ade80; stroke-width: 2.5; marker-end: url(#arrow); }
+      .arrowOrange { fill: none; stroke: #fb923c; stroke-width: 2.5; marker-end: url(#arrow); }
+      .arrowPurple { fill: none; stroke: #a78bfa; stroke-width: 2.5; marker-end: url(#arrow); }
+      .edgeText { fill: #d1d5db; font: 12px Arial, sans-serif; }
+      .note { fill: #111827; stroke: #374151; stroke-width: 1.5; rx: 10; }
+      .noteTitle { fill: #fbbf24; font: 700 14px Arial, sans-serif; }
+      .noteText { fill: #d1d5db; font: 12px Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1400" height="820"/>
+  <text class="title" x="50" y="48">V3.5.1 — LBH + Conditioning Bridge connection example</text>
+  <text class="subtitle" x="50" y="76">Green: H3 Continuum · Orange: third-party workflow nodes · Purple: ComfyUI Core nodes</text>
+
+  <rect class="lane" x="35" y="95" width="1330" height="205"/>
+  <text class="laneLabel" x="55" y="122">FIRST PASS AND PHYSICAL-GROUP CONDITIONING</text>
+
+  <rect class="box continuum" x="55" y="145" width="255" height="115"/>
+  <text class="boxTitle" x="75" y="174">H3 Continuum Sampler V3.5</text>
+  <text class="boxText" x="75" y="200">video_latents · audio_latents</text>
+  <text class="boxText" x="75" y="221">assembly_plan · refine_context</text>
+  <text class="small" x="75" y="243">First Pass remains the source of truth</text>
+
+  <rect class="box external" x="370" y="145" width="245" height="115"/>
+  <text class="boxTitle" x="390" y="174">LBH H3 Latent Upscaler 3D</text>
+  <text class="boxText" x="390" y="202">Resize video latent geometry only</text>
+  <text class="small" x="390" y="226">Example: 1.2x or 1.5x</text>
+  <text class="small" x="390" y="246">No denoise-strength control</text>
+
+  <rect class="box continuum" x="680" y="135" width="305" height="135"/>
+  <text class="boxTitle" x="700" y="164">Conditioning Bridge V3.5</text>
+  <text class="boxText" x="700" y="191">model + clip + resized video_latents</text>
+  <text class="boxText" x="700" y="212">assembly_plan + refine_context</text>
+  <text class="boxText" x="700" y="233">→ group_models + conditioning</text>
+  <text class="small" x="700" y="253">One complete pair per physical group</text>
+
+  <rect class="box core" x="1050" y="150" width="245" height="105"/>
+  <text class="boxTitle" x="1070" y="180">BasicGuider</text>
+  <text class="boxText" x="1070" y="207">MODEL + CONDITIONING</text>
+  <text class="small" x="1070" y="231">Keep the Core node title unchanged</text>
+
+  <path class="arrowOrange" d="M310 185 H370"/>
+  <text class="edgeText" x="316" y="174">video_latents</text>
+  <path class="arrowGreen" d="M615 185 H680"/>
+  <text class="edgeText" x="624" y="174">resized LATENT</text>
+  <path class="arrowGreen" d="M310 235 C440 292, 565 292, 680 238"/>
+  <text class="edgeText" x="430" y="287">assembly_plan · refine_context · model · clip</text>
+  <path class="arrowPurple" d="M985 202 H1050"/>
+  <text class="edgeText" x="991" y="191">paired lists</text>
+
+  <rect class="lane" x="35" y="325" width="1330" height="225"/>
+  <text class="laneLabel" x="55" y="352">EXTERNAL SAMPLING WORKFLOW RESPONSIBILITY</text>
+
+  <rect class="box external" x="55" y="380" width="285" height="125"/>
+  <text class="boxTitle" x="75" y="409">AV latent preparation</text>
+  <text class="boxText" x="75" y="435">SetLatentNoiseMask</text>
+  <text class="boxText" x="75" y="456">LTXVConcatAVLatent</text>
+  <text class="small" x="75" y="481">resized video + First Pass audio</text>
+
+  <rect class="box external" x="400" y="380" width="245" height="125"/>
+  <text class="boxTitle" x="420" y="409">Sampling controls</text>
+  <text class="boxText" x="420" y="435">RandomNoise · KSamplerSelect</text>
+  <text class="boxText" x="420" y="456">BasicScheduler → SIGMAS</text>
+  <text class="small" x="420" y="481">SIGMAS controls refinement strength</text>
+
+  <rect class="box core" x="720" y="375" width="285" height="135"/>
+  <text class="boxTitle" x="740" y="405">SamplerCustomAdvanced</text>
+  <text class="boxText" x="740" y="432">noise + BasicGuider + sampler</text>
+  <text class="boxText" x="740" y="453">SIGMAS + prepared AV LATENT</text>
+  <text class="small" x="740" y="478">External workflow starts/completes sampling</text>
+  <text class="small" x="740" y="497">Keep the Core node title unchanged</text>
+
+  <rect class="box external" x="1080" y="390" width="230" height="105"/>
+  <text class="boxTitle" x="1100" y="420">LTXVSeparateAVLatent</text>
+  <text class="boxText" x="1100" y="446">sampled video_latent</text>
+  <text class="boxText" x="1100" y="467">sampled audio_latent</text>
+
+  <path class="arrowOrange" d="M492 260 V326 H197 V380"/>
+  <text class="edgeText" x="210" y="343">resized video latent</text>
+  <path class="arrow" d="M182 260 V345 H120 V380"/>
+  <text class="edgeText" x="58" y="331">audio_latents</text>
+  <path class="arrowPurple" d="M1172 255 V335 H900 V375"/>
+  <text class="edgeText" x="1020" y="328">GUIDER</text>
+  <path class="arrowOrange" d="M340 442 H720"/>
+  <text class="edgeText" x="470" y="431">prepared AV LATENT</text>
+  <path class="arrow" d="M645 442 H720"/>
+  <path class="arrowPurple" d="M1005 442 H1080"/>
+
+  <rect class="lane" x="35" y="575" width="1330" height="135"/>
+  <text class="laneLabel" x="55" y="602">CORE DECODE AND CONTINUUM ASSEMBLY</text>
+
+  <rect class="box core" x="180" y="625" width="245" height="65"/>
+  <text class="boxTitle" x="200" y="652">Core Video / Audio VAE Decode</text>
+  <text class="small" x="200" y="675">Decode separated latent outputs</text>
+
+  <rect class="box continuum" x="575" y="620" width="285" height="75"/>
+  <text class="boxTitle" x="595" y="648">Assemble + Seam V3.5</text>
+  <text class="boxText" x="595" y="673">updated plan + decoded IMAGE/AUDIO</text>
+
+  <rect class="box core" x="1015" y="625" width="205" height="65"/>
+  <text class="boxTitle" x="1035" y="652">CreateVideo / SaveVideo</text>
+  <text class="small" x="1035" y="675">Normal downstream output</text>
+
+  <path class="arrowPurple" d="M1195 495 V580 H425 V657"/>
+  <path class="arrowGreen" d="M425 657 H575"/>
+  <path class="arrow" d="M832 270 V590 H718 V620"/>
+  <text class="edgeText" x="742" y="581">updated_assembly_plan</text>
+  <path class="arrowPurple" d="M860 657 H1015"/>
+
+  <rect class="note" x="55" y="740" width="410" height="58"/>
+  <text class="noteTitle" x="75" y="765">LBH</text>
+  <text class="noteText" x="75" y="785">Resize only. Refinement strength belongs to workflow-side SIGMAS.</text>
+
+  <rect class="note" x="495" y="740" width="410" height="58"/>
+  <text class="noteTitle" x="515" y="765">Conditioning Bridge</text>
+  <text class="noteText" x="515" y="785">Publishes MODEL / CONDITIONING; it does not sample or lock audio.</text>
+
+  <rect class="note" x="935" y="740" width="410" height="58"/>
+  <text class="noteTitle" x="955" y="765">External workflow</text>
+  <text class="noteText" x="955" y="785">Owns AV pairing, noise, SIGMAS, sampling, Audio Lock, and passthrough.</text>
+</svg>

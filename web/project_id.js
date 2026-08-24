@@ -1,4 +1,9 @@
 import { app } from "../../scripts/app.js";
+import {
+    captureLastQueuedSeed,
+    configureLastQueuedSeedReuse,
+} from "./last_queued_seed.js";
+import { configureReferenceAudioInputs } from "./reference_audio_ui.js";
 
 const PRODUCTION_NODE_CLASS = "H3ContinuumSamplerProduction";
 const TIMELINE_NODE_CLASS = "H3ContinuumSamplerTimelineVideo";
@@ -238,6 +243,9 @@ function configureNode(node) {
         removeUnusedInput(node, PROMPT_OVERRIDES_INPUT);
     }
     applyRuntimeSettings(node);
+    if (isV35) {
+        configureLastQueuedSeedReuse(node);
+    }
     hidePersistentWidget(findWidget(node, "diagnostics"));
     hidePersistentWidget(findWidget(node, "strict_compatibility"));
     hidePersistentWidget(findWidget(node, "debug"));
@@ -251,8 +259,20 @@ function configureNode(node) {
 
 function configureNodeAfterSetup(node) {
     configureNode(node);
-    setTimeout(() => configureNode(node), 0);
-    setTimeout(() => configureNode(node), 100);
+    const configureDeferred = () => {
+        configureNode(node);
+        if (
+            node.comfyClass === V35_NODE_CLASS
+            && (
+                !node.__h3ContinuumLoadedGraphNode
+                || node.__h3ContinuumAfterConfigureGraph
+            )
+        ) {
+            configureReferenceAudioInputs(node);
+        }
+    };
+    setTimeout(configureDeferred, 0);
+    setTimeout(configureDeferred, 100);
 }
 
 app.registerExtension({
@@ -291,11 +311,13 @@ app.registerExtension({
     },
 
     loadedGraphNode(node) {
+        node.__h3ContinuumLoadedGraphNode = true;
         configureNodeAfterSetup(node);
     },
 
     afterConfigureGraph() {
         for (const node of app.graph?._nodes || []) {
+            node.__h3ContinuumAfterConfigureGraph = true;
             configureNodeAfterSetup(node);
         }
     },
@@ -305,6 +327,9 @@ app.registerExtension({
         for (const node of app.graph?._nodes || []) {
             const projectWidget = configureNode(node);
             const apiNode = prompt.output?.[String(node.id)];
+            if (node.comfyClass === V35_NODE_CLASS) {
+                captureLastQueuedSeed(node, apiNode?.inputs?.base_seed);
+            }
             if (apiNode?.inputs) {
                 if (
                     node.comfyClass === PRODUCTION_NODE_CLASS

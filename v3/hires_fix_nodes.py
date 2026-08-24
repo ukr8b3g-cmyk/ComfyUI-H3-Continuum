@@ -67,6 +67,65 @@ def h3_core_native_canvas(
     return target_width, target_height
 
 
+def align_h3_manual_canvas(
+    current_latent_width: int,
+    current_latent_height: int,
+    scale_by: float,
+    *,
+    pixel_scale_width: int,
+    pixel_scale_height: int,
+    canvas_multiple: int | None = None,
+) -> dict[str, int]:
+    """Scale and align a manual target to ComfyUI Core's H3 canvas grid."""
+
+    if canvas_multiple is None:
+        from comfy_extras.nodes_minimax_h3 import CANVAS_MULTIPLE
+
+        canvas_multiple = int(CANVAS_MULTIPLE)
+    current_latent_width = int(current_latent_width)
+    current_latent_height = int(current_latent_height)
+    pixel_scale_width = int(pixel_scale_width)
+    pixel_scale_height = int(pixel_scale_height)
+    canvas_multiple = int(canvas_multiple)
+    scale_by = float(scale_by)
+    if min(
+        current_latent_width,
+        current_latent_height,
+        pixel_scale_width,
+        pixel_scale_height,
+        canvas_multiple,
+    ) < 1:
+        raise SecondPassContractError("manual H3 canvas geometry is invalid")
+    if (
+        canvas_multiple % pixel_scale_width
+        or canvas_multiple % pixel_scale_height
+    ):
+        raise SecondPassContractError(
+            "ComfyUI Core H3 canvas multiple is not aligned to the latent scale"
+        )
+
+    def aligned_target(current_latent: int, pixel_scale: int) -> int:
+        current_pixels = current_latent * pixel_scale
+        scaled_pixels = current_pixels * scale_by
+        nearest_core_canvas = max(
+            canvas_multiple,
+            round(scaled_pixels / canvas_multiple) * canvas_multiple,
+        )
+        preserved_core_canvas = (
+            (current_pixels + canvas_multiple - 1) // canvas_multiple
+        ) * canvas_multiple
+        return max(nearest_core_canvas, preserved_core_canvas)
+
+    target_width = aligned_target(current_latent_width, pixel_scale_width)
+    target_height = aligned_target(current_latent_height, pixel_scale_height)
+    return {
+        "target_width": target_width,
+        "target_height": target_height,
+        "target_latent_width": target_width // pixel_scale_width,
+        "target_latent_height": target_height // pixel_scale_height,
+    }
+
+
 def resolve_h3_native_latent_target(
     video_latents: Sequence[Mapping[str, Any]],
     assembly_plan: Mapping[str, Any],
@@ -393,14 +452,17 @@ class H3ContinuumHiResFixV35:
             resize_mode = "h3_native_canvas_auto"
         else:
             pixel_scale_width, pixel_scale_height = resolve_pixel_latent_scale(plan)
-            target_latent_width = round(current_geometry[1] * scale)
-            target_latent_height = round(current_geometry[0] * scale)
-            if target_latent_width < 1 or target_latent_height < 1:
-                raise SecondPassContractError(
-                    "scale_by produced a non-positive target geometry"
-                )
-            target_width = target_latent_width * pixel_scale_width
-            target_height = target_latent_height * pixel_scale_height
+            manual_target = align_h3_manual_canvas(
+                current_geometry[1],
+                current_geometry[0],
+                scale,
+                pixel_scale_width=pixel_scale_width,
+                pixel_scale_height=pixel_scale_height,
+            )
+            target_latent_width = int(manual_target["target_latent_width"])
+            target_latent_height = int(manual_target["target_latent_height"])
+            target_width = int(manual_target["target_width"])
+            target_height = int(manual_target["target_height"])
             resize_mode = "manual_scale_by"
 
         if current_geometry == (target_latent_height, target_latent_width):

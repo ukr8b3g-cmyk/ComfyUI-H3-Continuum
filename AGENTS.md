@@ -11,6 +11,7 @@ MiniMax H3 Continuum V3.4 for ComfyUI. Treat the V3.4 sampler and assembler as t
 - Unknown upstream nodes, models, wrappers, or merged models must not be rejected solely because they are unknown.
 - Keep legacy `strict_compatibility` inputs loadable for old workflows, but ignore their value. They must never enable blocking behavior.
 - Before every change, run `tools\snapshot.ps1` against the authoritative source. Preserve the compact V3.4 UI unless the user explicitly approves a UI change.
+- In public templates, connection examples, screenshots, and documentation, keep ComfyUI Core nodes on their standard display titles. Do not assign custom titles to Core nodes, because users must be able to distinguish Core nodes from Continuum and third-party custom nodes immediately.
 - Runtime tests must record the workflow, prompt, media inputs, model/LoRA/sampler/step settings, dimensions, chunk count/duration, elapsed time, and observed result. Inspect embedded workflow metadata when present.
 - Do not globally replace `PackedLayout`, `MiniMaxH3.extra_conds`, or other ComfyUI classes.
 - Keep SageAttention, Sol-Attn, and Spectrum external; integrate through public ComfyUI wrappers and H3 payload contracts.

@@ -1,8 +1,66 @@
-# ComfyUI-H3-Continuum 3.5.0
+# ComfyUI-H3-Continuum 3.5.1
 
 Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pass refinement, optional Hi-Res Fix, low-memory disk-backed assembly, restartable chunks, persistent references, and optional Spectrum interoperability.
 
-> **V3.5.0 is the current release.** All V3.4 node IDs remain registered intentionally for saved-workflow compatibility. Existing V3.4 workflows continue unchanged; new workflows can opt into the independent V3.5 nodes.
+> **V3.5.1 is the current release.** All V3.4 node IDs and backend socket keys remain registered intentionally for saved-workflow compatibility. Existing V3.4/V3.5 workflows continue to load; V3.5.1 clarifies the displayed input names without rewriting saved links.
+
+## What's new in V3.5.1
+
+V3.5.1 completes three focused additions without changing the V3.4 Sampling, Conditioning, Terminal Merge, Assembly, Seam, or Run Storage contracts:
+
+1. **Optional Reference Audio** — native H3 audio conditioning that does not replace the generated final audio. The two additional sockets stay hidden until `Reference Audio Inputs` is set to `Show`.
+2. **Conditioning Bridge V3.5** — exposes one complete Core-compatible `MODEL` and one complete `CONDITIONING` object per Continuum physical group for an external sampler workflow.
+3. **Last queued seed reuse** — when ComfyUI changes a randomized seed after generation, switching the Sampler back to Fixed restores the seed used by the last queued run when it is still safe to do so. Existing ComfyUI cache behavior is not overridden.
+
+### Reference inputs at a glance
+
+The displayed names intentionally describe different jobs. They are not interchangeable pairs:
+
+| Displayed input | Connect from | Purpose | Final audio behavior |
+|---|---|---|---|
+| `reference_image_1`–`reference_image_3` | Still-image `IMAGE` | Persistent identity, subject, or appearance references | No audio |
+| `Video Guide Frames` | Video loader `IMAGE` frame batch | Persistent motion, framing, timing, and appearance guidance across chunks | Does not carry the video's audio |
+| `Driving Audio` + `Driving Audio VAE` | Audio loader, or video loader `AUDIO`, plus the matching audio VAE | Audio guidance whose effective source stream is preserved for final output | Replaces generated final audio with the selected source stream |
+| `Reference Audio (Optional)` + `Reference Audio VAE (Optional)` | Standalone audio plus the matching audio VAE | Native H3 conditioning only | Does not copy or replace the generated final audio |
+
+For the common video-with-sound case, connect the loader's `IMAGE` output to `Video Guide Frames` and its `AUDIO` output to `Driving Audio`. Do not connect that audio to `Reference Audio (Optional)` unless conditioning-only behavior is specifically intended.
+
+![Sampler V3.5 Video Guide Frames, Driving Audio, and Reference Image inputs](docs/images/v351-video-guide-frames.png)
+
+`Reference Audio Inputs` is a UI-only visibility control:
+
+- `Hidden` is the uncluttered default for unlinked inputs.
+- `Show` displays both optional Reference Audio sockets.
+- A saved workflow with either socket connected opens in `Show` automatically.
+- Connected sockets cannot be hidden, so the UI never removes a graph link.
+- The control is not serialized into workflow widget values; backend input keys and existing workflow links remain unchanged.
+
+| Hidden — normal uncluttered view | Show — optional conditioning sockets visible |
+|---|---|
+| ![Reference Audio inputs hidden](docs/images/v351-reference-audio-hidden.png) | ![Reference Audio inputs shown](docs/images/v351-reference-audio-show.png) |
+
+### Conditioning Bridge V3.5
+
+`H3 Continuum Conditioning Bridge V3.5` is the Advanced connection point for external sampling. Connect `model`, `clip`, the externally processed `video_latents`, `assembly_plan`, and `refine_context`; connect `video_vae` only when the selected conditioning path requires it. The node returns parallel `group_models` and `conditioning` lists whose length equals the physical-group count. Each list item remains a complete ComfyUI object—conditioning entries are never flattened into the physical-group list.
+
+```text
+H3 Continuum Sampler V3.5.video_latents
+  -> external H3 latent processor (for example LBH)
+  -> H3 Continuum Conditioning Bridge V3.5
+  -> Core BasicGuider + external sampler
+  -> Core Video / Audio VAE Decode
+  -> H3 Continuum Assemble + Seam V3.5
+```
+
+The external workflow owns AV LATENT pairing, noise, SIGMAS, Audio Lock, sampling, and audio passthrough. The Bridge only exposes the prepared `MODEL` and `CONDITIONING` objects plus the updated Assembly Plan.
+
+![V3.5.1 LBH and Conditioning Bridge external sampling flow](docs/images/v351-lbh-conditioning-bridge-flow.svg)
+
+Download the complete connection example: [V3.5.1 LBH + Conditioning Bridge workflow](examples/workflows/MiniMax_H3_Continuum_V351_LBH_Conditioning_Bridge.json).
+
+The example keeps the standard Core titles `BasicGuider`, `BasicScheduler`, and `SamplerCustomAdvanced`. Public examples do not rename Core nodes, so they remain immediately distinguishable from Continuum and third-party nodes. The workflow also uses external nodes for LBH latent upscaling, AV LATENT concatenation/separation, loading/saving, and optional acceleration; install or replace those nodes according to your ComfyUI environment.
+
+LBH changes latent geometry only. It has no Continuum denoise-strength control: use the external `BasicScheduler` SIGMAS to decide how strongly the resized latent is regenerated. A larger LBH scale such as 1.5x may still be fast, but memory, decode, and sampling costs increase with the target canvas.
 
 ## What's new in V3.5
 
@@ -100,7 +158,7 @@ V3.4 nodes are retained specifically so saved workflows do not break. Their Node
 V3.4 focuses on the two reference workflows that are most useful in normal production:
 
 - **Driving Audio**: use an existing audio source as the preserved final audio while it guides the H3 generation across chunks.
-- **Video Reference**: use an existing video as persistent visual reference for appearance, motion, framing, and timing without treating it as a frame-by-frame copy.
+- **Video Guide Frames**: use a video loader's IMAGE frame batch as persistent guidance for appearance, motion, framing, and timing without treating it as a frame-by-frame copy.
 - **Hybrid FLF + Reference**: use First Frame, Last Frame, and persistent Reference Images together without adding a separate mode or model allowlist.
 - **FL2VA Terminal Merge**: keep the final two 5-second FL2VA chunks as one physical 10-second sampling and decode unit for Core-equivalent Last Frame handling.
 - **Restartable chunks**: reuse completed chunks with Run Storage and regenerate only the selected part when the generation contract remains compatible.
@@ -115,7 +173,7 @@ Earlier development explored Timeline Video and timeline-audio conditioning. Tho
 V3.4 therefore prioritizes:
 
 1. **Driving Audio** for cases where the supplied audio should remain the final audio stream.
-2. **Video Reference** for cases where the supplied video should guide the generated result without requiring exact frame reproduction.
+2. **Video Guide Frames** for cases where a supplied video should guide the generated result without requiring exact frame reproduction.
 3. **Chunked generation and Run Storage** for practical retries and long-form work.
 
 This is a usability and reliability decision, not a claim that the experimental timeline paths are impossible. They are hidden from the stable interface while the public workflow stays focused on predictable user-controlled inputs.
@@ -123,10 +181,11 @@ This is a usability and reliability decision, not a claim that the experimental 
 ## Example workflows
 
 - [V3.5 recommended template](examples/workflows/MiniMax_H3_Continuum_V35.json)
+- [V3.5.1 LBH + Conditioning Bridge connection example](examples/workflows/MiniMax_H3_Continuum_V351_LBH_Conditioning_Bridge.json)
 - [V3.4 standard](examples/workflows/MiniMax_H3_Continuum_V34.json)
 - [V3.4 Turbo](examples/workflows/MiniMax_H3_Continuum_V34_turbo.json)
 
-The V3.5 template is the recommended starting point. Hi-Res Fix is disabled by default, the V3.5 Assemble backend is set to Auto, and First Frame, Last Frame, and Reference Images 1-3 share one megapixel control. Video Reference sizing remains controlled by the VHS loader. Advanced users can bypass or rearrange the optional sections as needed.
+The V3.5 template is the recommended starting point. Hi-Res Fix is disabled by default, the V3.5 Assemble backend is set to Auto, and First Frame, Last Frame, and Reference Images 1-3 share one megapixel control. `Video Guide Size` controls the frame batch used by `Video Guide Frames`; the video loader remains responsible for decoding and frame-rate conversion. Advanced users can bypass or rearrange the optional sections as needed.
 
 The V3.4 templates remain valid for saved-workflow compatibility.
 
@@ -144,16 +203,16 @@ Driving Audio is the primary V3.4 audio path.
 - Audio is not independently rewritten at every chunk boundary.
 - Perfect lip sync is not guaranteed; results still depend on H3, source material, prompts, and sampling.
 
-### Video Reference
+### Video Guide Frames
 
-Video Reference provides a persistent native H3 video reference across all chunks.
+`Video Guide Frames` provides a persistent native H3 video guide across all chunks. Despite its ComfyUI `IMAGE` socket color, it expects the frame batch produced by a video loader rather than one ordinary still-image reference.
 
 - It guides motion, framing, timing, and appearance.
 - It is not a direct pixel-copy or deterministic identity-transfer system.
-- Video and audio are independent. Route a loader's IMAGE output to Video Reference and AUDIO output to Driving Audio.
+- Video and audio are independent. Route a loader's IMAGE output to `Video Guide Frames` and AUDIO output to `Driving Audio`.
 - Source decoding and frame-rate conversion remain loader responsibilities. Continuum does not impose an unnecessary forced 24 fps conversion.
 
-| Video Reference Size | Purpose |
+| Video Guide Size | Purpose |
 |---|---|
 | Efficient - 0.4 MP | Default; lower token cost and faster iteration. |
 | Balanced - 0.6 MP | More detail at a higher compute cost. |
@@ -208,7 +267,7 @@ The public nodes focus on normal production controls. Developer diagnostics and 
 
 ### Timeline paths
 
-Experimental Timeline Video and earlier timeline-audio paths are no longer public V3.4 inputs. They are hidden rather than destructively removed. Existing V3.3 workflows can continue through legacy nodes, but new stable workflows should use Driving Audio and Video Reference.
+Experimental Timeline Video and earlier timeline-audio paths are no longer public V3.4 inputs. They are hidden rather than destructively removed. Existing V3.3 workflows can continue through legacy nodes, but new stable workflows should use `Driving Audio` and `Video Guide Frames`.
 
 ## Installation
 
@@ -236,7 +295,11 @@ Restart ComfyUI after installation or update.
 
 ### H3 Continuum Sampler V3.5
 
-The V3.5 sampler preserves V3.4 generation behavior and adds `refine_context` as the sixth output. Connect it only to V3.5 Hi-Res Fix or Second Pass paths that need the original conditioning context.
+The V3.5 sampler preserves V3.4 generation behavior and adds `refine_context` as the sixth output. Connect it to V3.5 Hi-Res Fix, Second Pass, or Conditioning Bridge paths that need the original conditioning context. V3.5.1 also provides optional Reference Audio sockets through the `Reference Audio Inputs` visibility control.
+
+### H3 Continuum Conditioning Bridge V3.5
+
+Advanced external-sampler bridge. It returns aligned `group_models` and complete `conditioning` objects per physical group together with the updated Assembly Plan. It does not create AV LATENT pairs, noise, SIGMAS, Audio Lock, or external sampling policy.
 
 ### H3 Continuum Hi-Res Fix V3.5 (Experimental)
 
@@ -264,7 +327,7 @@ Main inputs:
 - Sequence Prompt
 - first_frame, last_frame
 - reference_image_1 through reference_image_3
-- Video Reference
+- Video Guide Frames
 - driving_audio, audio_vae
 
 Outputs:
@@ -281,7 +344,7 @@ Visible controls:
 - audio_continuity
 - Run Storage
 - Reference Size
-- Video Reference Size
+- Video Guide Size
 
 ### H3 Continuum Assemble + Seam V3.4
 
@@ -312,7 +375,7 @@ driving_audio -------------------------------------+
 For a source video with sound:
 
 ~~~text
-Video loader IMAGE -> Video Reference
+Video loader IMAGE -> Video Guide Frames
 Video loader AUDIO -> driving_audio
 ~~~
 
@@ -469,35 +532,35 @@ PR #5 is the consolidated upstream-to-fork proposal covering current H3 compatib
 
 ## V3.4 input connection patterns
 
-V3.4 separates the visual reference input from the driving-audio input. Choose the connection pattern that matches your source material.
+V3.4 separates the video-guide frame input from the driving-audio input. Choose the connection pattern that matches your source material.
 
 ### 1. Audio only
 
-Connect `Load Audio` to `driving_audio`. Use this when an existing song, dialogue track, or sound effect should remain the final audio. A `Video Reference` is not required.
+Connect `Load Audio` to `Driving Audio`. Use this when an existing song, dialogue track, or sound effect should remain the final audio. `Video Guide Frames` is not required.
 
 ![Driving Audio connection](docs/images/v34-driving-audio-connection.png)
 
 ### 2. Video with its own audio
 
-Connect `Load Video (Upload)` `IMAGE` to `Video Reference`. If the uploaded video contains the audio you want to preserve, connect its `AUDIO` output to `driving_audio` as well.
+Connect `Load Video (Upload)` `IMAGE` to `Video Guide Frames`. If the uploaded video contains the audio you want to preserve, connect its `AUDIO` output to `Driving Audio` as well.
 
-![Video Reference and embedded audio connection](docs/images/v34-video-reference-with-audio.png)
+![Video Guide Frames and embedded Driving Audio connection](docs/images/v34-video-reference-with-audio.png)
 
 ### 3. Video and audio from separate sources
 
-Connect `Load Video (Upload)` `IMAGE` to `Video Reference`, then connect a separate `Load Audio` node to `driving_audio`. Use this when the visual reference video and the final audio source are different files.
+Connect `Load Video (Upload)` `IMAGE` to `Video Guide Frames`, then connect a separate `Load Audio` node to `Driving Audio`. Use this when the video guide and the final audio source are different files.
 
-![Separate Video Reference and Driving Audio connection](docs/images/v34-video-reference-separate-audio.png)
+![Separate Video Guide Frames and Driving Audio connection](docs/images/v34-video-reference-separate-audio.png)
 
-Both inputs are optional. Connect `Video Reference` when visual guidance is needed, and connect `driving_audio` when the supplied audio should be preserved in the final output.
+Both inputs are optional. Connect `Video Guide Frames` when video guidance is needed, and connect `Driving Audio` when the supplied audio should be preserved in the final output.
 
-### Video Reference frame rate
+### Video Guide Frames frame rate
 
-Use a 24 fps source for `Video Reference`. `Load Video (Upload)` may accept files recorded at 25 fps or another frame rate, but acceptance alone does not guarantee correct temporal alignment with H3. For a non-24 fps source, set `force_rate` to `24` in `Load Video (Upload)`, or convert the file to 24 fps before loading it. If the source is already 24 fps, leave `force_rate` at its default and do not resample it.
+Use a 24 fps source for `Video Guide Frames`. `Load Video (Upload)` may accept files recorded at 25 fps or another frame rate, but acceptance alone does not guarantee correct temporal alignment with H3. For a non-24 fps source, set `force_rate` to `24` in `Load Video (Upload)`, or convert the file to 24 fps before loading it. If the source is already 24 fps, leave `force_rate` at its default and do not resample it.
 
 ## Current validation status
 
-The V3.5.0 release passes `430` automated tests, source/runtime registration verification, native PackedLayout, Fixed 3x5 prompt planning, and release metadata consistency. Representative GPU revalidation passed with accepted 3x5 FL2VA Long Terminal Merge latents through Core Video/Audio VAE Decode and Assemble V3.5 Auto: 3 logical chunks, 2 physical groups (`37T + 77T`), 640x640, 360 frames, 24 fps, and 15.000 seconds, with the accepted video/audio hashes reproduced exactly.
+The V3.5.1 release passes `450` automated tests, source/runtime registration verification, native PackedLayout, Fixed 3x5 prompt planning, JavaScript UI harnesses, and release metadata consistency. Representative GPU acceptance includes the V3.5 Conditioning Bridge path, Reference Audio/Image retention, Second Pass/Hi-Res paths, and accepted 3x5 FL2VA Long Terminal Merge latents through Core Video/Audio VAE Decode and Assemble V3.5 Auto.
 
 V3.4 compatibility paths have been exercised locally with:
 
@@ -509,7 +572,7 @@ V3.4 compatibility paths have been exercised locally with:
 - Core-equivalent `2 x 5s` FL2VA Terminal Merge
 - `3 x 5s` FL2VA with the final two logical chunks merged into one 260-frame physical sample and decode group
 - Driving Audio with short, exact-length, and longer sources
-- Video Reference with source audio routed separately
+- Video Guide Frames with source audio routed separately to Driving Audio
 - 0.4 MP and 0.6 MP reference sizing
 - Run Storage reuse and selected-chunk regeneration
 - Core VAE Decode and final assembly
@@ -528,7 +591,7 @@ No OOM was observed in the cited recent local V3.4 checks, including two-chunk 8
 ## Limits
 
 - Continuation does not guarantee frame-perfect identity or motion.
-- Video Reference guides H3; it does not reproduce every source frame.
+- Video Guide Frames guides H3; it does not reproduce every source frame.
 - Driving Audio preserves selected audio, but visual lip synchronization remains model-dependent.
 - FL2VA may settle on the supplied Last Frame before the requested duration ends; equivalent Core runs can show the same behavior.
 - Long, high-resolution sequences may exceed system RAM during final decode and assembly even when chunk sampling succeeds.

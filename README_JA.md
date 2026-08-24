@@ -1,8 +1,66 @@
-# ComfyUI-H3-Continuum 3.5.0
+# ComfyUI-H3-Continuum 3.5.1
 
-**V3.5.0正式版:** V3.4互換を維持し、Second Pass Bridge、実験的Hi-Res Fix、Disk-backed Assembleを追加します。V3.4のNode IDは保存済みワークフロー互換のため意図的に残しており、既存V3.4ワークフローはそのまま使用できます。
+**V3.5.1正式版:** V3.4互換を維持し、Reference Audio、Conditioning Bridge、Last Queued Seed Reuseを追加します。V3.4のNode IDとbackend socket keyは保存済みワークフロー互換のため意図的に残しており、表示名を変更しても既存V3.4/V3.5ワークフローの接続は維持されます。
 
 MiniMax H3を複数チャンクで連続生成し、直前チャンク末尾の**映像latent / 音声latentを直接**次チャンクへ継承するComfyUIカスタムノードです。チャンク間でVideo/Audio VAEのDecode→Encodeは行いません。
+
+## V3.5.1の追加機能
+
+V3.5.1では、V3.4のSampling、Conditioning、Terminal Merge、Assembly、Seam、Run Storage契約を変更せず、次の3点を追加します。
+
+1. **Reference Audio（任意）**: 生成音声を置換しない、H3 nativeの音声conditioningです。`Reference Audio Inputs`を`Show`にしたときだけ2つのsocketを表示します。
+2. **Conditioning Bridge V3.5**: Continuumのphysical groupごとに、完全なCore互換`MODEL`と`CONDITIONING`を外部Samplerへ公開します。
+3. **Last Queued Seed Reuse**: Randomize生成後にComfyUIが自動更新したseedからFixedへ戻した場合、安全に判定できるときだけ直前Queueで実際に使ったseedを復元します。ComfyUI cache自体は操作しません。
+
+### Reference系入力の違い
+
+表示名は役割の違いを示しています。名前が似ていても同じ組み合わせではありません。
+
+| 表示入力 | 接続元 | 用途 | 最終音声 |
+|---|---|---|---|
+| `reference_image_1`～`reference_image_3` | 静止画`IMAGE` | 人物、被写体、外観などの継続参照 | 音声なし |
+| `Video Guide Frames` | Video loaderの`IMAGE`フレームbatch | 全chunkでmotion、framing、timing、appearanceをガイド | 元動画の音声は含まない |
+| `Driving Audio` + `Driving Audio VAE` | Audio loader、またはVideo loaderの`AUDIO`と対応Audio VAE | 音声で生成をガイドし、入力音声を最終出力へ維持 | 生成音声を選択した元音声へ置換 |
+| `Reference Audio (Optional)` + `Reference Audio VAE (Optional)` | 単独Audioと対応Audio VAE | H3 native conditioning専用 | 生成音声をcopy・置換しない |
+
+音声付き動画を使う通常の接続は、loaderの`IMAGE`を`Video Guide Frames`へ、`AUDIO`を`Driving Audio`へ接続します。conditioning専用動作が目的でない限り、動画の音声を`Reference Audio (Optional)`へ接続しないでください。
+
+![Sampler V3.5のVideo Guide Frames、Driving Audio、Reference Image入力](docs/images/v351-video-guide-frames.png)
+
+`Reference Audio Inputs`は表示だけを制御します。
+
+- 未接続時は`Hidden`が既定です。
+- `Show`でReference Audioの2 socketを表示します。
+- 保存workflowでどちらかが接続済みなら自動的に`Show`で開きます。
+- 接続中は`Hidden`へ変更できず、graph linkを削除しません。
+- workflowのwidget値には保存せず、backend input keyと既存接続を変更しません。
+
+| Hidden — 通常の簡潔表示 | Show — 任意conditioning socketを表示 |
+|---|---|
+| ![Reference Audio入力を非表示](docs/images/v351-reference-audio-hidden.png) | ![Reference Audio入力を表示](docs/images/v351-reference-audio-show.png) |
+
+### Conditioning Bridge V3.5
+
+`H3 Continuum Conditioning Bridge V3.5`は外部sampling用のAdvanced接続点です。`model`、`clip`、外部処理後の`video_latents`、`assembly_plan`、`refine_context`を接続し、選択したconditioning経路で必要な場合だけ`video_vae`を接続します。出力`group_models`と`conditioning`はphysical group数と同数で、各要素は完全なComfyUI objectのままです。CONDITIONING内部entryをphysical-group listへflattenしません。
+
+```text
+H3 Continuum Sampler V3.5.video_latents
+  → LBH等の外部H3 latent処理
+  → H3 Continuum Conditioning Bridge V3.5
+  → Core BasicGuider + 外部Sampler
+  → Core Video / Audio VAE Decode
+  → H3 Continuum Assemble + Seam V3.5
+```
+
+AV LATENTの組、Noise、SIGMAS、Audio Lock、sampling、audio passthroughは外部workflow側の責任です。Bridgeは準備済み`MODEL`と`CONDITIONING`、更新済みAssembly Planだけを公開します。
+
+![V3.5.1 LBH＋Conditioning Bridge外部sampling接続図](docs/images/v351-lbh-conditioning-bridge-flow.svg)
+
+完全な接続例: [V3.5.1 LBH＋Conditioning Bridgeワークフロー](examples/workflows/MiniMax_H3_Continuum_V351_LBH_Conditioning_Bridge.json)
+
+接続例ではCore標準名の`BasicGuider`、`BasicScheduler`、`SamplerCustomAdvanced`を変更していません。公開サンプルではCoreノードを独自タイトルへ変更せず、Continuumノードや外部カスタムノードと直感的に区別できる状態を維持します。LBH latent upscaler、AV LATENTの結合／分離、load／save、任意accelerationは外部ノードなので、各ComfyUI環境に合わせて導入または置換してください。
+
+LBHはlatent geometryだけを変更し、Continuumのdenoise強度は持ちません。拡大後latentをどれだけ再生成するかは外部`BasicScheduler`のSIGMASで調整します。1.5x等へ上げても高速な場合がありますが、target canvasに応じてmemory、decode、sampling負荷は増加します。
 
 ## V3.5の主な追加機能
 
@@ -73,8 +131,9 @@ Hi-Res Fixを接続しなければV3.4 Sampling経路は変わりません。強
 ## 推奨テンプレートワークフロー
 
 - [V3.5推奨テンプレート](examples/workflows/MiniMax_H3_Continuum_V35.json)
+- [V3.5.1 LBH＋Conditioning Bridge接続例](examples/workflows/MiniMax_H3_Continuum_V351_LBH_Conditioning_Bridge.json)
 
-V3.5テンプレートはHi-Res Fixが初期OFF、AssembleのBuffer BackendがAutoです。First Frame、Last Frame、Reference Image 1～3は1つのmegapixel設定を共有し、Video Referenceの解像度はVHS Load Video側で調整します。用途に応じて不要な補助経路を外したり、Advanced Second Pass経路へ組み替えたりできます。
+V3.5テンプレートはHi-Res Fixが初期OFF、AssembleのBuffer BackendがAutoです。First Frame、Last Frame、Reference Image 1～3は1つのmegapixel設定を共有します。`Video Guide Size`は`Video Guide Frames`に使うframe batchを調整し、decodeとframe-rate変換はVideo loader側で行います。用途に応じて不要な補助経路を外したり、Advanced Second Pass経路へ組み替えたりできます。
 
 ## V3.4互換
 
@@ -82,17 +141,17 @@ V3.4ノードは保存済みワークフローを壊さないため残してい�
 
 ## V3.4.0 Stable
 
-V3.4.0は、最大3枚のReference Image、Run Storage、Spectrum Interop、Decode後のAudio / Video Seam補正を維持し、Driving AudioとVideo Referenceを正式な入力として追加します。
+V3.4.0は、最大3枚のReference Image、Run Storage、Spectrum Interop、Decode後のAudio / Video Seam補正を維持し、`Driving Audio`と`Video Guide Frames`を正式な入力として追加します。
 
-Driving Audioは入力音声を絶対時間で各Chunkのガイドに使い、最終出力には元音声を維持します。Video Referenceは参照映像を全Chunkで継続使用し、`Efficient - 0.4 MP`、`Balanced - 0.6 MP`、`Match Output`から処理解像度を選択できます。
+`Driving Audio`は入力音声を絶対時間で各Chunkのガイドに使い、最終出力には元音声を維持します。`Video Guide Frames`はVideo loaderが出力したIMAGE frame batchを全Chunkで継続使用し、`Efficient - 0.4 MP`、`Balanced - 0.6 MP`、`Match Output`から処理解像度を選択できます。青いIMAGE socketですが、通常の1枚の静止画参照ではなく動画フレーム列を接続します。
 
 Reference入力のバイパスされたソケットは無視され、有効な画像だけがPicture 1から連続採番されます。空欄や不完全なプロンプトも停止せず、警告とFixed fallbackで生成を続行します。未知のモデル、ノード、プロンプト形式を独自判断で拒否する制限も撤廃しました。
 
-Run Storageの保存契約にはDriving AudioとVideo Referenceのidentityを含め、入力変更後に古いChunkを誤再利用しないようにしています。
+Run Storageの保存契約にはDriving AudioとVideo Guide Framesのidentityを含め、入力変更後に古いChunkを誤再利用しないようにしています。
 
-## Driving Audio / Video Reference / Seam
+## Driving Audio / Video Guide Frames / Seam
 
-Driving Audioだけを使う、Video Referenceだけを使う、Video Referenceと別音声を組み合わせる、という3通りの接続に対応します。Video Referenceは24 fps入力を基準とし、異なるfpsの素材はLoad Video側で24 fpsへ設定してください。
+Driving Audioだけを使う、Video Guide Framesだけを使う、Video Guide Framesと別音声を組み合わせる、という3通りの接続に対応します。Video Guide Framesは24 fps入力を基準とし、異なるfpsの素材はLoad Video側で24 fpsへ設定してください。
 
 H3 Continuum Assemble + SeamはAudio Seam AutoとVideo Seam Autoを既定とし、フレーム削除を行わずに境界の一時的な露出・色変化を補正します。Auto 2は露出ランプ向けの実験的な追加モードです。
 
@@ -162,7 +221,7 @@ ZIPを展開して、`ComfyUI-H3-Continuum`フォルダーを`ComfyUI/custom_nod
 
 ## 検査
 
-V3.5.0正式版は全`430 passed`、source/runtime登録検証、PackedLayout、Fixed 3×5 Prompt Planを通過しています。代表GPU再検証では3×5秒FL2VA Long Terminal Mergeの受入済みlatentをCore Video/Audio VAE DecodeからAssemble V3.5 Autoへ通し、3 logical / 2 physical groups、640×640、360 frames、24 fps、15.000秒、既存受入済み映像／音声hashとの完全一致を確認しました。
+V3.5.1正式版は全`450 passed`、source/runtime登録検証、PackedLayout、Fixed 3×5 Prompt Plan、JavaScript UI harnessを通過しています。代表GPU受入にはConditioning Bridge、Reference Audio/Image保持、Second Pass／Hi-Res経路、3×5秒FL2VA Long Terminal MergeからCore Video/Audio VAE Decode、Assemble V3.5 Autoまでを含みます。
 
 Main Hi-Res Fixの3×5秒2xは、RTX 5060 Ti 16 GiBで37T groupの1152×1152 Second Pass完了後、Terminal Mergeの77T group最初の推論時にCUDA OOMとなり未受入です。Reference/Hybrid固有の1×5秒Second Passは受入済みですが、長尺Reference/Hybridは未確認です。Disk-backedが保証する低メモリ範囲はContinuum Assemblyであり、Core Decodeや下流ノードが別の全量copyを作る可能性は残ります。
 

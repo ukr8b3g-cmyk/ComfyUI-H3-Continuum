@@ -10,19 +10,59 @@
 - E2-8A Contract, E2-8B1 CPU/static validation, E2-8B2 external LBH GPU PoC, and E2-8C Second Pass GPU acceptance are formally PASS. The E2-8C CPU baseline is `260 passed`.
 - External LATENT nodes may discard custom dictionary metadata. Identically shaped group reordering therefore cannot be cryptographically detected; count, position, T, geometry, and audio-shape checks are enforced.
 
-Updated: 2026-08-24
+Updated: 2026-08-25
+
+## V3.5.1 Issue #9 Conditioning Bridge candidate (2026-08-24)
+
+- Added `H3ContinuumConditioningBridgeV35` / `H3 Continuum Conditioning Bridge V3.5` under `MiniMax H3/Continuum/Advanced`.
+- The Bridge accepts externally processed physical-group video LATENTs plus the matching Assembly Plan and required V3.5 refine context. It returns one paired MODEL and one complete ComfyUI CONDITIONING object per physical group, plus a target-geometry Assembly Plan and status.
+- The fixed list contract is `OUTPUT_IS_LIST = (True, True, False, False)` and `len(group_models) == len(conditioning) == physical group count`. CONDITIONING entries are appended as one inner object and are never flattened into the outer physical-group list.
+- Second Pass and Bridge share the same context validation, target adaptation, prompt fallback, MODEL clone, and geometry update helper. Built-in Second Pass still samples groups sequentially and retains responsibility for Nested AV, video noise, Audio Lock, and audio passthrough; the Bridge deliberately leaves AV LATENT construction, noise, Audio Lock, and external sampling to the workflow.
+- CPU coverage includes the 3-logical / 2-physical Terminal Merge shape (`[1] / 37T`, `[2,3] / 77T`), MODEL/CONDITIONING alignment, non-flattening, schema/registration, and existing Reference Image/Audio/context adaptation regressions. Focused validation is `33 passed`; full source pytest is `442 passed` with only the known `pynvml` FutureWarning.
+- Only `nodes.py`, `v3/second_pass.py`, `v3/conditioning_bridge_nodes.py`, and `tools/verify_runtime.py` were synchronized to ComfyUI_W; every source/runtime SHA-256 matches. Runtime registration, native PackedLayout, and Fixed 3x5 prompt planning pass with the new Bridge registered as a non-legacy node.
+- GPU acceptance through Basic Guider and an external sampler passed for three `1 x 5s` runs: LBH `1.2x` with `simple / 4 steps / denoise 0.3` produced 704x704 twice, and LBH `1.5x` with `simple / 10 steps / denoise 0.3` produced 864x864. Every run kept one MODEL and one complete CONDITIONING for one physical group, completed external sampling/Core decode/Assembly, and produced finite 120-frame/5.000-second video with 32 kHz stereo audio. The existing Issue #10 Reference Audio working-tree changes were preserved without reset or reorganization.
+
+## V3.5.1 Issue #10 Reference Audio candidate (2026-08-24)
+
+- Target version is V3.5.1. The backend keeps the optional `reference_audio_1` and `reference_audio_vae` sockets in their existing input order. The frontend presents them as `Reference Audio (Optional)` and `Reference Audio VAE (Optional)` behind the UI-only `Reference Audio Inputs` dropdown.
+- New or unlinked nodes default to `Hidden`. `Show` restores both sockets at their original positions. A saved workflow with either socket connected opens in `Show`, and `Hidden` is rejected while either link exists; the UI never removes a graph link. The dropdown is added only after Core graph configuration and is excluded from Workflow JSON widget values, preventing widget-value shifts on reload.
+- Related display labels are now `Video Guide Frames`, `Driving Audio`, and `Driving Audio VAE`. Input keys, order, types, Node IDs, and runtime contracts remain unchanged.
+- This exposes the existing Core-compatible standalone Reference Audio 1 path; it adds no new audio encoding, strength control, model allowlist, source-audio copy, or lip-sync guarantee.
+- V3.4 input keys/order/types, Node ID, sockets, and behavior remain unchanged; only the human-facing labels/tooltips are clarified. Its internal `run()` accepts the two values only so V3.5 can forward them to the existing Production path.
+- Reference Audio conditions generated video/audio and leaves generated audio as final. Driving Audio remains the separate timeline-guide path whose original source is selected as final output.
+- CPU integration confirms Reference Audio survives every normal physical group and the FL2VA Terminal Merge group (`logical [2,3]`, `paired_timeline_v1`) in `refine_context`. Run Storage ignores an unused Reference Audio VAE, separates changed audio contracts, and restores the disconnected revision identity.
+- Final canonical validation after the conditional UI change is `450 passed` with only the known `pynvml` FutureWarning. JavaScript syntax, `git diff --check`, ComfyUI_W registration/native PackedLayout/Fixed 3x5 verification, and source/runtime SHA-256 equality for synchronized implementation files pass.
+- Live ComfyUI acceptance passed for unlinked `Hidden`, `Hidden -> Show -> Hidden`, original-position socket restoration, clarified labels, linked-workflow auto-`Show`, and rejection of `Hidden` while linked. The user had already accepted the V3.5.1 generation test categories as all-clear; this UI-only step did not queue another GPU generation.
+- The CPU-validated public feature files were previously published from the isolated clone as `a704aa961fc2ba0c19aef6f2ecfdcb46fa9384b2`. GPU acceptance is now complete and package metadata plus public documentation are being formalized as V3.5.1.
+- V3.5.1 release validation is `450 passed` from the ComfyUI_W root, JavaScript syntax PASS, `git diff --check` PASS, and all 172 distribution Manifest entries match SHA-256. README English/Japanese use the user-supplied normal-state screenshots for Video Guide Frames and Reference Audio Hidden/Show.
+- The public LBH/Conditioning Bridge connection example is `examples/workflows/MiniMax_H3_Continuum_V351_LBH_Conditioning_Bridge.json`; its README chart is `docs/images/v351-lbh-conditioning-bridge-flow.svg`. It is a separate example and does not replace or modify the recommended V3.5 template.
+
+## V3.5.1 Last Queued Seed reuse candidate (2026-08-24)
+
+- The fix is limited to `H3 Continuum Sampler V3.5` frontend state. It does not change V3.4, backend Sampling, Second Pass, Terminal Merge, Assembly, Seam, Run Storage, Node IDs, display names, or public sockets.
+- Per-node session-only state is `last_queued_seed`, `auto_updated_seed`, `previous_control_mode`, and `auto_update_pending`. Nothing is serialized into Workflow JSON or carried across a browser/ComfyUI restart.
+- `beforeQueuePrompt` records the actual `base_seed` submitted for the V3.5 sampler. After Generate records only the automatic Randomize update. A `Randomize -> Fixed` transition restores the prior queued seed only while the displayed value still equals the recorded automatic update; an intervening manual Seed edit cancels restoration and remains authoritative.
+- Restoring the Seed only makes the First Pass inputs eligible for normal ComfyUI cache reuse. If the cache is absent or evicted, First Pass regenerates normally with the same Seed. Run Storage seed contracts remain strict and unchanged.
+- The implementation is isolated in `web/last_queued_seed.js` and integrated through the existing `web/project_id.js` extension. JavaScript syntax and focused frontend behavior validation are `5 passed`; full source pytest is `445 passed`. The two Production frontend files match ComfyUI_W by SHA-256, whose runtime verifier and existing compact-UI regression pass. Real UI/cache acceptance remains pending.
+
+## V3.5.1 Hi-Res Fix Core canvas alignment (2026-08-24)
+
+- A real `576x576`, `scale_by=1.2` run exposed an invalid `43x43` H3 video/conditioning latent. Core MiniMax H3 patchifies spatial latents in `2x2` blocks and exposes pixel dimensions in 32-pixel steps, so the odd latent failed in Core with `24 * 43 * 43 = 44376` elements.
+- Manual Hi-Res Fix targets now use ComfyUI Core's `CANVAS_MULTIPLE` and preserve-or-enlarge each axis on that grid. The failing case resolves to `704x704` / `44x44`; a `1024x576` source at `1.2x` resolves to `1216x704` / `76x44`. The Pixel/VAE, conditioning adaptation, and Second Pass paths remain unchanged.
+- Focused Hi-Res/Second Pass validation is `48 passed`; full source pytest is `448 passed`. `v3/hires_fix_nodes.py` is synchronized to ComfyUI_W by SHA-256, and runtime registration/native PackedLayout/Fixed 3x5 verification passes. GPU acceptance after a ComfyUI process restart remains pending.
+- The same attempt did not validate Last Queued Seed cache reuse: the second prompt was queued at `21:24:38` before the first prompt completed at `21:26:02`, and the log shows another First Pass `20/20`. Retry only after the first prompt has completely finished.
 
 ## V3.5 recommended template workflow (2026-08-24)
 
 - `examples/workflows/MiniMax_H3_Continuum_V35.json` is the recommended V3.5 starting workflow.
 - Hi-Res Fix is disabled by default and `H3 Continuum Assemble + Seam V3.5` uses Auto backend selection.
-- First Frame, Last Frame, and Reference Images 1-3 share one 0.3 MP control. Video Reference remains independently sized by the VHS loader.
-- Reference Images 1-3 and Video Reference are routed to their matching V3.5 sampler sockets; `refine_context` and `video_vae` are connected to the integrated Hi-Res Fix path.
+- First Frame, Last Frame, and Reference Images 1-3 share one 0.3 MP control. Video Guide Frames remains independently sized.
+- Reference Images 1-3 and Video Guide Frames are routed to their matching V3.5 sampler sockets; `refine_context` and `video_vae` are connected to the integrated Hi-Res Fix path.
 - V3.4 standard and Turbo templates remain available for saved-workflow compatibility.
 
 ## Baseline
 
-- Current public baseline: V3.4.0
+- Current public baseline: V3.5.1
 - Authoritative working repository: `D:\Codex\_git_push_work\ComfyUI-H3-Continuum`
 - Primary tested runtime: `D:\StabilityMatrix\Data\Packages\ComfyUI_W\custom_nodes\ComfyUI-H3-Continuum`
 - Secondary runtime: `D:\StabilityMatrix\Data\Packages\ComfyUI_WAN\custom_nodes\ComfyUI-H3-Continuum`
@@ -31,7 +71,7 @@ Updated: 2026-08-24
 ## Active direction
 
 - Driving Audio preserves the supplied audio as final output while conditioning every chunk.
-- Video Reference is persistent across chunks and supports selectable reference sizing.
+- Video Guide Frames is persistent across chunks and supports selectable guide sizing.
 - Prompt syntax is permissive: invalid or empty input warns and falls back instead of blocking generation.
 - Unknown models, wrappers, merged models, and upstream nodes are not rejected merely because they are unknown.
 - Legacy `strict_compatibility` remains loadable only for workflow compatibility and must not enforce a stop.

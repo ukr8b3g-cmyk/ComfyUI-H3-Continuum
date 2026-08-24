@@ -73,6 +73,7 @@ def main() -> int:
         "H3ContinuumHiResFixV35",
         "H3ContinuumLatentResizeV35",
         "H3ContinuumSecondPassV35",
+        "H3ContinuumConditioningBridgeV35",
         "H3ContinuumClipOverrides",
         "H3ContinuumResult",
     }

@@ -168,36 +168,35 @@ def update_second_pass_geometry(
     return updated
 
 
-def run_second_pass_groups(
+def prepare_physical_refine_groups(
     *,
     model: Any,
     clip: Any,
-    sampler: Any,
-    sigmas: torch.Tensor,
     video_latents: Sequence[Any],
-    audio_latents: Sequence[Any],
     assembly_plan: Mapping[str, Any],
-    refine_seed: int,
     refine_context: Any = None,
     video_vae: Any = None,
     conditioning_upscale_method: str = "bilinear",
-    enable_preview: bool = True,
     encode_prompt_fn=None,
-    latent_builder=None,
-    sample_fn=None,
-    stream_extractor=None,
     clone_model_fn=None,
     validate_refine_context_fn=None,
     adapt_group_conditioning_fn=None,
-) -> tuple[list[dict[str, Any]], list[Any], dict[str, Any], str]:
-    """Refine complete physical groups while preserving first-pass audio exactly."""
+    group_consumer_fn=None,
+    retain_group_outputs: bool = True,
+) -> dict[str, Any]:
+    """Prepare one MODEL and one complete CONDITIONING per physical group.
 
-    validation = validate_second_pass_inputs(video_latents, audio_latents, assembly_plan)
-    groups = _contract_groups(assembly_plan)
+    This is the shared, sampling-independent contract used by the built-in
+    Second Pass and the public Advanced Conditioning Bridge.  The returned
+    ``conditioning`` value is an outer physical-group list; every item inside
+    it remains one complete ComfyUI CONDITIONING object.
+    """
+
+    groups, (target_h, target_w) = _validate_video_groups(
+        video_latents,
+        assembly_plan,
+    )
     encode_prompt_fn = encode_prompt_fn or encode_prompt_conditioning
-    latent_builder = latent_builder or latent_from_cpu
-    sample_fn = sample_fn or sample_refine_chunk
-    stream_extractor = stream_extractor or extract_av_streams
     clone_model_fn = clone_model_fn or clone_model_for_chunk
     validate_refine_context_fn = validate_refine_context_fn or validate_refine_context
     adapt_group_conditioning_fn = (
@@ -205,9 +204,9 @@ def run_second_pass_groups(
     )
 
     captured_groups: Sequence[Mapping[str, Any]] | None = None
-    context_warnings: list[str] = []
+    warnings: list[str] = []
     if refine_context is None:
-        context_warnings.append(
+        warnings.append(
             "WARNING: refine_context is not connected; using legacy prompt-only "
             "conditioning."
         )
@@ -226,7 +225,7 @@ def run_second_pass_groups(
                 raise SecondPassContractError(
                     f"refine_context contract is invalid: {exc}"
                 ) from exc
-            context_warnings.append(
+            warnings.append(
                 "WARNING: optional refine_context was not a typed Continuum context; "
                 f"using legacy prompt-only conditioning ({exc})."
             )
@@ -234,29 +233,15 @@ def run_second_pass_groups(
             if bool(validated_context.get("complete")):
                 captured_groups = validated_context["groups"]
             else:
-                context_warnings.append(
+                warnings.append(
                     "WARNING: refine_context capture is incomplete; using legacy "
                     "prompt-only conditioning."
                 )
 
-    refined_videos: list[dict[str, Any]] = []
-    group_seeds: list[int] = []
-    conditioning_sources: list[str] = []
-    report_lines = [
-        "H3 Continuum Second Pass V3.5",
-        "Mode: context-aware physical-group refine when a complete First Pass "
-        "refine_context is available.",
-        f"Physical groups: {validation['physical_group_count']}.",
-        "Sampling contract: video random noise/mask=1; audio zero noise/mask=0; "
-        "workflow SIGMAS are applied directly by Core.",
-        *context_warnings,
-    ]
-
-    for group_index, (video_latent, audio_latent, group) in enumerate(
-        zip(video_latents, audio_latents, groups, strict=True)
-    ):
-        video_samples = _latent_samples(video_latent, name=f"video_latents[{group_index}]")
-        audio_samples = _latent_samples(audio_latent, name=f"audio_latents[{group_index}]")
+    group_models: list[Any] = []
+    group_conditioning: list[list[Any]] = []
+    details: list[dict[str, Any]] = []
+    for group_index, group in enumerate(groups):
         captured_group = (
             captured_groups[group_index] if captured_groups is not None else None
         )
@@ -267,15 +252,15 @@ def run_second_pass_groups(
             try:
                 conditioning, adaptation_stats = adapt_group_conditioning_fn(
                     captured_group,
-                    target_latent_h=validation["target_latent_h"],
-                    target_latent_w=validation["target_latent_w"],
+                    target_latent_h=target_h,
+                    target_latent_w=target_w,
                     video_vae=video_vae,
                     upscale_method=str(conditioning_upscale_method),
                 )
                 conditioning_source = "refine_context"
                 context_conditioning_available = True
             except RefineConditioningAdaptationError as exc:
-                report_lines.append(
+                warnings.append(
                     f"WARNING: group {group_index + 1} refine_context target "
                     f"adaptation was unavailable; using legacy prompt-only "
                     f"conditioning ({exc})."
@@ -296,6 +281,11 @@ def run_second_pass_groups(
                 timeline_video_assets=None,
             )
             conditioning_source = "prompt_only_fallback"
+        if not isinstance(conditioning, list):
+            raise SecondPassContractError(
+                f"physical group {group_index} conditioning is not a complete "
+                "ComfyUI CONDITIONING object"
+            )
 
         logical_chunks = model_group.get("logical_chunks")
         if not isinstance(logical_chunks, Sequence) or not logical_chunks:
@@ -324,6 +314,107 @@ def run_second_pass_groups(
             chunk_index=physical_clip_index,
             context_frames=context_frames if context_frames > 0 else None,
         )
+        detail = {
+            "group_index": group_index,
+            "group": group,
+            "conditioning_source": conditioning_source,
+            "adaptation_stats": adaptation_stats,
+            "physical_clip_index": physical_clip_index,
+            "context_frames": context_frames,
+        }
+        if group_consumer_fn is not None:
+            group_consumer_fn(
+                group_index,
+                video_latents[group_index],
+                group,
+                chunk_model,
+                conditioning,
+                detail,
+            )
+        if retain_group_outputs:
+            group_models.append(chunk_model)
+            # Append, never extend: CONDITIONING's internal entries belong together.
+            group_conditioning.append(conditioning)
+        details.append(detail)
+
+    physical_group_count = len(groups)
+    if retain_group_outputs and not (
+        len(group_models)
+        == len(group_conditioning)
+        == len(details)
+        == physical_group_count
+    ):
+        raise SecondPassContractError(
+            "prepared MODEL/CONDITIONING physical group counts differ"
+        )
+    if not retain_group_outputs and group_consumer_fn is None:
+        raise SecondPassContractError(
+            "non-retained physical group preparation requires a consumer"
+        )
+    return {
+        "group_models": group_models,
+        "conditioning": group_conditioning,
+        "updated_assembly_plan": update_second_pass_geometry(
+            assembly_plan,
+            video_latents,
+        ),
+        "details": details,
+        "warnings": warnings,
+        "physical_group_count": physical_group_count,
+        "target_latent_h": target_h,
+        "target_latent_w": target_w,
+    }
+
+
+def run_second_pass_groups(
+    *,
+    model: Any,
+    clip: Any,
+    sampler: Any,
+    sigmas: torch.Tensor,
+    video_latents: Sequence[Any],
+    audio_latents: Sequence[Any],
+    assembly_plan: Mapping[str, Any],
+    refine_seed: int,
+    refine_context: Any = None,
+    video_vae: Any = None,
+    conditioning_upscale_method: str = "bilinear",
+    enable_preview: bool = True,
+    encode_prompt_fn=None,
+    latent_builder=None,
+    sample_fn=None,
+    stream_extractor=None,
+    clone_model_fn=None,
+    validate_refine_context_fn=None,
+    adapt_group_conditioning_fn=None,
+) -> tuple[list[dict[str, Any]], list[Any], dict[str, Any], str]:
+    """Refine complete physical groups while preserving first-pass audio exactly."""
+
+    validation = validate_second_pass_inputs(video_latents, audio_latents, assembly_plan)
+    groups = _contract_groups(assembly_plan)
+    latent_builder = latent_builder or latent_from_cpu
+    sample_fn = sample_fn or sample_refine_chunk
+    stream_extractor = stream_extractor or extract_av_streams
+    refined_videos: list[dict[str, Any]] = []
+    group_seeds: list[int] = []
+    conditioning_sources: list[str] = []
+    group_report_lines: list[str] = []
+
+    def sample_prepared_group(
+        group_index,
+        video_latent,
+        group,
+        chunk_model,
+        conditioning,
+        detail,
+    ):
+        audio_latent = audio_latents[group_index]
+        video_samples = _latent_samples(video_latent, name=f"video_latents[{group_index}]")
+        audio_samples = _latent_samples(audio_latent, name=f"audio_latents[{group_index}]")
+        conditioning_source = str(detail["conditioning_source"])
+        adaptation_stats = detail["adaptation_stats"]
+        physical_clip_index = int(detail["physical_clip_index"])
+        context_frames = int(detail["context_frames"])
         physical_seed = derive_refine_seed(int(refine_seed), group_index)
         group_seeds.append(physical_seed)
         conditioning_sources.append(conditioning_source)
@@ -349,7 +440,7 @@ def run_second_pass_groups(
         output_latent = dict(video_latent)
         output_latent["samples"] = refined_video
         refined_videos.append(output_latent)
-        report_lines.append(
+        group_report_lines.append(
             "group "
             f"{group_index + 1}: logical_chunks={group.get('logical_chunks')}, "
             f"prompt_policy={group.get('prompt_policy', 'unknown')}, "
@@ -360,20 +451,46 @@ def run_second_pass_groups(
             "sampling_passes=1, temporary_audio_discarded=true"
         )
         if adaptation_stats is not None:
-            report_lines.append(
+            group_report_lines.append(
                 "group "
                 f"{group_index + 1} target conditioning: "
                 f"keyframes_resized={int(adaptation_stats.get('keyframes_resized', 0))}, "
                 f"keyframes_reencoded={int(adaptation_stats.get('keyframes_reencoded', 0))}, "
                 f"context_refs_resized={int(adaptation_stats.get('context_refs_resized', 0))}"
             )
-            report_lines.extend(
+            group_report_lines.extend(
                 f"WARNING: {warning}"
                 for warning in adaptation_stats.get("warnings", ())
             )
 
+    prepared = prepare_physical_refine_groups(
+        model=model,
+        clip=clip,
+        video_latents=video_latents,
+        assembly_plan=assembly_plan,
+        refine_context=refine_context,
+        video_vae=video_vae,
+        conditioning_upscale_method=conditioning_upscale_method,
+        encode_prompt_fn=encode_prompt_fn,
+        clone_model_fn=clone_model_fn,
+        validate_refine_context_fn=validate_refine_context_fn,
+        adapt_group_conditioning_fn=adapt_group_conditioning_fn,
+        group_consumer_fn=sample_prepared_group,
+        retain_group_outputs=False,
+    )
+    report_lines = [
+        "H3 Continuum Second Pass V3.5",
+        "Mode: context-aware physical-group refine when a complete First Pass "
+        "refine_context is available.",
+        f"Physical groups: {validation['physical_group_count']}.",
+        "Sampling contract: video random noise/mask=1; audio zero noise/mask=0; "
+        "workflow SIGMAS are applied directly by Core.",
+        *prepared["warnings"],
+        *group_report_lines,
+    ]
+
     passthrough_audio = passthrough_audio_latents(audio_latents)
-    updated_plan = update_second_pass_geometry(assembly_plan, refined_videos)
+    updated_plan = prepared["updated_assembly_plan"]
     contract = updated_plan["second_pass_contract"]
     if conditioning_sources and all(
         source == "refine_context" for source in conditioning_sources
