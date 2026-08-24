@@ -37,7 +37,7 @@ Updated: 2026-08-25
 - V3.5.1 release validation is `450 passed` from the ComfyUI_W root, JavaScript syntax PASS, `git diff --check` PASS, and all 172 distribution Manifest entries match SHA-256. README English/Japanese use the user-supplied normal-state screenshots for Video Guide Frames and Reference Audio Hidden/Show.
 - The public LBH/Conditioning Bridge connection example is `examples/workflows/MiniMax_H3_Continuum_V351_LBH_Conditioning_Bridge.json`; its README chart is `docs/images/v351-lbh-conditioning-bridge-flow.svg`. It is a separate example and does not replace or modify the recommended V3.5 template.
 
-## V3.5.1 Last Queued Seed reuse candidate (2026-08-24)
+## V3.5.1 Last Queued Seed reuse frontend validation (2026-08-24)
 
 - The fix is limited to `H3 Continuum Sampler V3.5` frontend state. It does not change V3.4, backend Sampling, Second Pass, Terminal Merge, Assembly, Seam, Run Storage, Node IDs, display names, or public sockets.
 - Per-node session-only state is `last_queued_seed`, `auto_updated_seed`, `previous_control_mode`, and `auto_update_pending`. Nothing is serialized into Workflow JSON or carried across a browser/ComfyUI restart.
@@ -339,3 +339,9 @@ Static checks do not replace a real GPU generation. Record workflow, prompt, med
 - `Reference Size` and `Video Guide Size` are existing V3.5 controls, not missing inputs. Compact UI reveals them only after a corresponding Reference Image or Video Guide Frames connection.
 - `Video Guide Size` is the V3.5.1 display name for the earlier `Video Reference Size`; the backend key and saved-workflow compatibility are unchanged.
 - Reference Images and Video Guide Frames are resized internally before VAE encoding. External resize remains optional for deliberate crop, forced source upscaling, or a custom algorithm; loader-side decoding and frame-rate conversion remain unchanged.
+
+## V3.5.1 public-state cleanup (2026-08-25)
+
+- Project instructions now identify V3.5.1 as the current public baseline while retaining V3.4 node IDs, public contracts, and saved-workflow compatibility.
+- Last Queued Seed Reuse is classified as automated frontend-validated; real UI/cache acceptance remains pending. Package validation no longer implies completed real UI/cache acceptance.
+- GitHub Issues #9 and #10 received implementation guidance and were closed as completed. Issue #11 received the conditional-UI/internal-resize explanation and remains open until the local README clarification is published.

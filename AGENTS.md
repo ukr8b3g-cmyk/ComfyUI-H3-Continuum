@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Scope
-MiniMax H3 Continuum V3.4 for ComfyUI. Treat the V3.4 sampler and assembler as the current public baseline; preserve legacy workflow loading without letting legacy controls change V3.4 behavior.
+MiniMax H3 Continuum V3.5.1 for ComfyUI. Treat V3.5.1 as the current public baseline; preserve V3.4 node IDs, public contracts, and saved-workflow loading without letting legacy controls change current behavior.
 
 ## Non-negotiable rules
 - Follow ComfyUI Core behavior for user-facing validation. Continuum-only prompt restrictions, model allowlists, compatibility gates, and policy-based execution stops are prohibited.

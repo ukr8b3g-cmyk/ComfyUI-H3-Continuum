@@ -403,3 +403,12 @@ D:\Codex\_snapshots\ComfyUI-H3-Continuum\pre-rollback-after-00038-fail-20260821_
 - Added matching English/Japanese README guidance covering the conditional display, the `Video Reference Size` to `Video Guide Size` display-name clarification, internal aspect-preserving resize before VAE encoding, the no-automatic-upscale behavior, and the limited cases where external resize is useful.
 - No node schema, backend key, workflow, runtime implementation, Sampling, Conditioning, Terminal Merge, Assembly, Seam, or Run Storage behavior changed.
 - Pre-change snapshot: `pre-issue11-readme-clarification-source-accepted-20260825_001938` (478 files), excluding `.git` and the known ACL-inaccessible `.pytest_cache` after the standard snapshot script encountered that existing ACL condition.
+
+## 2026-08-25 - V3.5.1 public-state cleanup
+
+- Updated the project scope rule from the obsolete V3.4 public baseline to V3.5.1, preserving V3.4 node IDs, contracts, and saved-workflow compatibility.
+- Aligned `PACKAGE_VALIDATION.txt` with `PROJECT_STATE.md`: Last Queued Seed Reuse has automated frontend validation, while real UI/cache acceptance remains pending.
+- Posted implementation answers to GitHub Issues #9, #10, and #11. Closed #9 Conditioning Bridge and #10 Reference Audio as completed; retained #11 as open until its local README clarification is published.
+- No implementation code, node schema, workflow, runtime, Sampling, Conditioning, Terminal Merge, Assembly, Seam, or Run Storage behavior changed.
+- Pre-change snapshot: `pre-v351-public-state-cleanup-source-accepted-20260825_004006` (478 files), excluding `.git` and the known ACL-inaccessible `.pytest_cache` after the standard snapshot script encountered that existing ACL condition.
+- Validation: release metadata `2 passed` with the ComfyUI_W venv, all 172 Manifest entries match SHA-256, and `git diff --check` passes. The system Python lacks pytest; no product-test failure occurred.
