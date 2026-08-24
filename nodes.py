@@ -382,12 +382,41 @@ from .v3.driving_nodes import (
 NODE_CLASS_MAPPINGS.update(V34_NODE_CLASS_MAPPINGS)
 NODE_DISPLAY_NAME_MAPPINGS.update(V34_NODE_DISPLAY_NAME_MAPPINGS)
 
+from .v3.second_pass_nodes import (
+    NODE_CLASS_MAPPINGS as V35_NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as V35_NODE_DISPLAY_NAME_MAPPINGS,
+)
+
+NODE_CLASS_MAPPINGS.update(V35_NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(V35_NODE_DISPLAY_NAME_MAPPINGS)
+
+from .v3.latent_resize_nodes import (
+    NODE_CLASS_MAPPINGS as V35_RESIZE_NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as V35_RESIZE_NODE_DISPLAY_NAME_MAPPINGS,
+)
+
+NODE_CLASS_MAPPINGS.update(V35_RESIZE_NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(V35_RESIZE_NODE_DISPLAY_NAME_MAPPINGS)
+
+from .v3.hires_fix_nodes import (
+    NODE_CLASS_MAPPINGS as V35_HIRES_FIX_NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS as V35_HIRES_FIX_NODE_DISPLAY_NAME_MAPPINGS,
+)
+
+NODE_CLASS_MAPPINGS.update(V35_HIRES_FIX_NODE_CLASS_MAPPINGS)
+NODE_DISPLAY_NAME_MAPPINGS.update(V35_HIRES_FIX_NODE_DISPLAY_NAME_MAPPINGS)
+
 # The stable facade and its pack helpers are the public workflow surface. Keep
 # every older identifier registered so saved workflows still load, while
 # ComfyUI's native deprecated-node filter hides legacy building blocks.
 _primary_node_ids = {
     "H3ContinuumSamplerV34",
+    "H3ContinuumSamplerV35",
     "H3ContinuumAssembleSeamV34",
+    "H3ContinuumAssembleSeamV35",
+    "H3ContinuumHiResFixV35",
+    "H3ContinuumLatentResizeV35",
+    "H3ContinuumSecondPassV35",
     "H3ContinuumClipOverrides",
     "H3ContinuumResult",
 }

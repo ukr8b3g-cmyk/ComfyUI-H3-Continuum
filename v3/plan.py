@@ -11,6 +11,7 @@ from ..state import validate_plan
 ASSEMBLY_PLAN_MAGIC = "H3_CONTINUUM_ASSEMBLY_PLAN"
 ASSEMBLY_PLAN_SCHEMA_VERSION = 1
 FPS = 24
+SECOND_PASS_CONTRACT_VERSION = 1
 
 
 class AssemblyPlanError(ValueError):
@@ -199,6 +200,89 @@ def _recombine_terminal_tensor(
     return output.contiguous()
 
 
+def _terminal_physical_prompt(
+    prompts: list[str],
+    *,
+    chunk_seconds: float,
+) -> tuple[str, str]:
+    """Reproduce the established terminal-pair prompt without reparsing it later."""
+    first, second = prompts
+    if first == second:
+        return first, "shared_prompt_v1"
+    split = f"{float(chunk_seconds):g}"
+    stop = f"{float(chunk_seconds) * 2:g}"
+    return (
+        f"[0-{split}s]\n{first}\n\n[{split}-{stop}s]\n{second}",
+        "paired_timeline_v1",
+    )
+
+
+def _attach_second_pass_contract(
+    plan: dict[str, Any],
+    *,
+    logical_entries: list[dict[str, Any]],
+    physical_entries: list[dict[str, Any]],
+    chunk_seconds: float,
+) -> None:
+    """Attach additive V3.5 metadata without changing V3.4 generation semantics."""
+    decode_groups = plan.get("decode_groups")
+    if not isinstance(decode_groups, list):
+        decode_groups = [
+            {
+                "logical_chunk_indices": [index + 1],
+                "terminal_merged": False,
+                "total_frames": plan["chunks"][index]["total_frames"],
+                "trim_frames": plan["chunks"][index]["trim_frames"],
+            }
+            for index in range(len(physical_entries))
+        ]
+
+    groups: list[dict[str, Any]] = []
+    for group_id, (entry, decode_group) in enumerate(
+        zip(physical_entries, decode_groups, strict=True)
+    ):
+        video = entry["video"]
+        audio = entry["audio"]
+        logical_chunks = [int(value) for value in decode_group["logical_chunk_indices"]]
+        prompts = [str(logical_entries[index - 1].get("prompt", "")) for index in logical_chunks]
+        if len(prompts) == 1:
+            physical_prompt = prompts[0]
+            prompt_policy = "single"
+        elif len(prompts) == 2 and bool(decode_group.get("terminal_merged")):
+            physical_prompt, prompt_policy = _terminal_physical_prompt(
+                prompts,
+                chunk_seconds=chunk_seconds,
+            )
+        else:
+            physical_prompt = "\n\n".join(prompts)
+            prompt_policy = "physical_group_v1"
+
+        groups.append(
+            {
+                "group_id": group_id,
+                "logical_chunks": logical_chunks,
+                "physical_prompt": physical_prompt,
+                "prompt_policy": prompt_policy,
+                "physical_frames": int(decode_group["total_frames"]),
+                "trim_prefix_frames": int(decode_group["trim_frames"]),
+                "terminal_merged": bool(decode_group.get("terminal_merged", False)),
+                "source_width": int(plan["width"]),
+                "source_height": int(plan["height"]),
+                "source_batch": int(video.shape[0]),
+                "latent_channels": int(video.shape[1]),
+                "source_latent_t": int(video.shape[2]),
+                "source_latent_h": int(video.shape[3]),
+                "source_latent_w": int(video.shape[4]),
+                "source_audio_shape": [int(value) for value in audio.shape],
+            }
+        )
+
+    plan["second_pass_contract"] = {
+        "version": SECOND_PASS_CONTRACT_VERSION,
+        "physical_groups": groups,
+    }
+
+
 def prepare_physical_decode_entries(
     entries,
     *,
@@ -215,6 +299,12 @@ def prepare_physical_decode_entries(
         preserve_final_frame=bool(preserve_final_frame),
     )
     if not terminal_merged:
+        _attach_second_pass_contract(
+            plan,
+            logical_entries=logical_entries,
+            physical_entries=logical_entries,
+            chunk_seconds=float(chunk_seconds),
+        )
         return logical_entries, plan
     if len(logical_entries) < 2:
         raise ValueError("terminal physical decode requires two logical entries")
@@ -287,5 +377,11 @@ def prepare_physical_decode_entries(
     plan["logical_chunk_count"] = len(logical_chunks)
     plan["physical_decode_group_count"] = len(decode_groups)
     plan["decode_groups"] = decode_groups
+    _attach_second_pass_contract(
+        plan,
+        logical_entries=logical_entries,
+        physical_entries=decode_entries,
+        chunk_seconds=float(chunk_seconds),
+    )
     validate_assembly_plan(plan)
     return decode_entries, plan

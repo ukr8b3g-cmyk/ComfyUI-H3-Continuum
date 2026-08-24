@@ -5,6 +5,8 @@ const TIMELINE_NODE_CLASS = "H3ContinuumSamplerTimelineVideo";
 const ASSEMBLE_SEAM_NODE_CLASS = "H3ContinuumAssembleSeamExperimental";
 const V34_NODE_CLASS = "H3ContinuumSamplerV34";
 const V34_ASSEMBLE_SEAM_NODE_CLASS = "H3ContinuumAssembleSeamV34";
+const V35_NODE_CLASS = "H3ContinuumSamplerV35";
+const V35_ASSEMBLE_SEAM_NODE_CLASS = "H3ContinuumAssembleSeamV35";
 const PROJECT_WIDGET = "project_id";
 const LEGACY_RUN_NAME_WIDGET = "run_name";
 const CHUNKS_WIDGET = "chunks";
@@ -206,6 +208,7 @@ function configureAssembler(node) {
     if (
         node.comfyClass !== ASSEMBLE_SEAM_NODE_CLASS
         && node.comfyClass !== V34_ASSEMBLE_SEAM_NODE_CLASS
+        && node.comfyClass !== V35_ASSEMBLE_SEAM_NODE_CLASS
     ) {
         return false;
     }
@@ -222,12 +225,13 @@ function configureNode(node) {
     const isProduction = node.comfyClass === PRODUCTION_NODE_CLASS;
     const isTimeline = node.comfyClass === TIMELINE_NODE_CLASS;
     const isV34 = node.comfyClass === V34_NODE_CLASS;
-    if (!isProduction && !isTimeline && !isV34) {
+    const isV35 = node.comfyClass === V35_NODE_CLASS;
+    if (!isProduction && !isTimeline && !isV34 && !isV35) {
         configureAssembler(node);
         return null;
     }
     const projectWidget = findWidget(node, PROJECT_WIDGET);
-    if (isProduction || isV34) {
+    if (isProduction || isV34 || isV35) {
         if (projectWidget && !String(projectWidget.value || "").trim()) {
             projectWidget.value = createProjectId();
         }
@@ -306,6 +310,7 @@ app.registerExtension({
                     node.comfyClass === PRODUCTION_NODE_CLASS
                     || node.comfyClass === TIMELINE_NODE_CLASS
                     || node.comfyClass === V34_NODE_CLASS
+                    || node.comfyClass === V35_NODE_CLASS
                 ) {
                     apiNode.inputs.diagnostics = settingValue(SETTINGS.detailedReport, false)
                         ? "Detailed Report"
@@ -316,6 +321,7 @@ app.registerExtension({
                 } else if (
                     node.comfyClass === ASSEMBLE_SEAM_NODE_CLASS
                     || node.comfyClass === V34_ASSEMBLE_SEAM_NODE_CLASS
+                    || node.comfyClass === V35_ASSEMBLE_SEAM_NODE_CLASS
                 ) {
                     apiNode.inputs.diagnostics = settingValue(SETTINGS.detailedReport, false)
                         ? "Detailed Report"

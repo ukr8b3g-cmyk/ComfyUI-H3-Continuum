@@ -311,6 +311,8 @@ class H3ContinuumSamplerV2:
         driving_audio_vae=None,
         reference_video_source=None,
         timeline_video_source=None,
+        capture_refine_context=False,
+        memory_attribution=False,
         **clip_prompt_inputs,
     ):
         (
@@ -383,6 +385,8 @@ class H3ContinuumSamplerV2:
             driving_audio_vae=driving_audio_vae,
             reference_video_source=reference_video_source,
             timeline_video_source=timeline_video_source,
+            capture_refine_context=bool(capture_refine_context),
+            memory_attribution=bool(memory_attribution),
         )
 
 

@@ -592,6 +592,57 @@ def run_sequence_with_hardening(base: Any, args: tuple[Any, ...], kwargs: dict[s
         return base(*args, **kwargs)
 
     video_vae = _first_argument(arguments, "video_vae")
+    memory_attribution = bool(
+        _first_argument(arguments, "memory_attribution")
+    )
+    if memory_attribution:
+        from .v3.memory_attribution import (
+            MemoryAttributionCollector,
+            capture_attribution_fail_soft,
+        )
+
+        collector = _first_argument(
+            arguments,
+            "_memory_attribution_collector",
+        )
+        if collector is None:
+            collector = MemoryAttributionCollector()
+        capture_attribution_fail_soft(
+            collector,
+            "capture_sequence_start",
+        )
+        call_kwargs = dict(kwargs)
+        call_kwargs["_memory_attribution_collector"] = collector
+        result = base(*args, **call_kwargs)
+        entries = (
+            result[0]
+            if isinstance(result, (tuple, list)) and len(result) > 0
+            else None
+        )
+        session = (
+            result[2]
+            if isinstance(result, (tuple, list)) and len(result) > 2
+            else None
+        )
+        refine_context = (
+            result[4]
+            if isinstance(result, (tuple, list)) and len(result) > 4
+            else None
+        )
+        capture_attribution_fail_soft(
+            collector,
+            "capture_sequence_complete",
+            entries=entries,
+            retained_refine_context=refine_context,
+        )
+        lines = [
+            f"Core Video VAE chunked I/O: "
+            f"{core_video_vae_chunked_io_status(video_vae)}",
+            *collector.lines,
+            format_latent_storage_audit(entries, session),
+        ]
+        return _append_report(result, lines)
+
     lines = [
         f"Core Video VAE chunked I/O: {core_video_vae_chunked_io_status(video_vae)}",
         format_memory_snapshot("sequence start"),
