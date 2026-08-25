@@ -4,7 +4,7 @@
 
 - Added `H3 Continuum Conditioning Bridge V3.5`, exposing one complete Core-compatible MODEL and CONDITIONING object per Continuum physical group without flattening CONDITIONING entries.
 - Added optional standalone Reference Audio conditioning to Sampler V3.5. Its two Python-defined sockets remain permanently present; the frontend no longer adds/removes them or serializes a visibility-only widget, preserving workflow widget alignment on save/reload.
-- Added Last Queued Seed Reuse for the V3.5 sampler, restoring the seed used by the previous queue when switching from ComfyUI Randomize to Fixed while respecting manual seed edits and normal cache behavior.
+- Removed the experimental Last Queued Seed override and restored standard ComfyUI `control after generate` behavior for the V3.5 sampler.
 - Renamed the displayed video-guide inputs to `Video Guide Frames` and `Video Guide Size` to distinguish a video loader's IMAGE frame batch from still Reference Images. Backend input keys and saved-workflow links are unchanged.
 - GPU-accepted Conditioning Bridge generation, Reference Audio/Image retention, and the V3.5 Second Pass/Hi-Res paths while preserving physical-group, Terminal Merge, Run Storage, and audio contracts.
 

@@ -442,3 +442,18 @@ D:\Codex\_snapshots\ComfyUI-H3-Continuum\pre-rollback-after-00038-fail-20260821_
 
 - Added a short English-only optional tip for `--disable-pinned-memory` near the measured memory section. It records the local RTX 5060 Ti 16 GB / RAM 64 GB `0.4 MP, 2 x 5s` result (`5m 23s`, approximately 6.1 GB sampler RSS and 8.6 GB after assembly) without presenting the flag as a default, universal crash fix, or guarantee against Shared GPU Memory use.
 - Pre-change snapshot: `pre-readme-pinned-memory-tip-source-accepted-20260825_031002_500` (477 files), excluding `.git` and the known ACL-inaccessible `.pytest_cache`.
+
+## 2026-08-25 - Last Queued Seed promptQueued observer candidate
+
+- Replaced the unsuccessful widget callback, `afterQueued`, and `onWidgetChanged` wrapping approach instead of stacking another mechanism on top. `beforeQueuePrompt` now stages the V3.5 Randomize seed, the official `promptQueued` event accepts it after a successful queue, and a pending-only 50 ms observer reads current `node.widgets` until it restores the accepted seed on `Fixed` or cancels on a manual seed change.
+- Queue validation failures cannot update `last_queued_seed`; a later single-queue attempt replaces any unaccepted candidate. Restoration changes the visible widget value directly and never mutates the API prompt behind the UI.
+- Accepted exact-file snapshots are `pre-last-seed-observer-source-files-20260825_175117` (4 files), `pre-last-seed-observer-runtime-files-20260825_175117` (2 files), `pre-last-seed-observer-docs-20260825_175652` (2 files), and `pre-last-seed-observer-runtime-manifest-20260825_175724` (1 file). The standard full snapshot attempt stopped only on the known ACL-inaccessible `.pytest_cache` before any edit.
+- Focused frontend/compact-UI validation is `9 passed`; full source pytest is `453 passed` with only the known `pynvml` FutureWarning. JavaScript syntax passes, and `web/last_queued_seed.js` plus `web/project_id.js` match ComfyUI_W by SHA-256. Live UI transition and First Pass cache reuse remain pending; commit/push were not performed.
+
+## 2026-08-25 - Last Queued Seed experiment withdrawn
+
+- Real-browser Randomize-to-Fixed pairs repeatedly submitted different base seeds, including `00043` (`432308459616145`, Randomize) and `00044` (`238985343135586`, Fixed). Each file's Workflow/UI seed matched its submitted Prompt seed, proving that the restoration itself failed rather than metadata being stale.
+- Removed only the Last Queued Seed frontend integration, its dedicated module, and its simulated regression. `H3 Continuum Sampler V3.5` again delegates Seed and `control after generate` entirely to ComfyUI. Reference Audio UI, compact UI settings, and all unrelated Production paths are unchanged.
+- GitHub review found a valid alternative pattern in rgthree's dedicated Seed node: it removes the native control, finalizes the Prompt/Workflow seed immediately before queueing, and exposes an explicit `Use Last Queued Seed` button. That design is materially different from transparently intercepting an existing Sampler's Randomize-to-Fixed transition and was not added to Continuum.
+- Accepted exact-file snapshots are `pre-remove-last-queued-seed-source-files-20260825_184039` (10 files) and `pre-remove-last-queued-seed-runtime-files-20260825_184039` (4 files). The standard snapshot attempt stopped only on the known ACL-inaccessible `.pytest_cache` before any edit.
+- Focused compact/reference-audio/release validation is `8 passed`; full source pytest is `450 passed` with only the known `pynvml` FutureWarning. JavaScript syntax and runtime verification pass; the seed-only removal is synchronized to ComfyUI_W. Commit/push were still pending at this checkpoint.

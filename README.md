@@ -12,11 +12,10 @@ Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pa
 
 ## What's new in V3.5.1
 
-V3.5.1 completes three focused additions without changing the V3.4 Sampling, Conditioning, Terminal Merge, Assembly, Seam, or Run Storage contracts:
+V3.5.1 completes two focused additions without changing the V3.4 Sampling, Conditioning, Terminal Merge, Assembly, Seam, or Run Storage contracts:
 
 1. **Optional Reference Audio** — native H3 audio conditioning that does not replace the generated final audio. Both sockets remain permanently visible to preserve workflow save/reload compatibility.
 2. **Conditioning Bridge V3.5** — exposes one complete Core-compatible `MODEL` and one complete `CONDITIONING` object per Continuum physical group for an external sampler workflow.
-3. **Last queued seed reuse** — when ComfyUI changes a randomized seed after generation, switching the Sampler back to Fixed restores the seed used by the last queued run when it is still safe to do so. Existing ComfyUI cache behavior is not overridden.
 
 ### Reference inputs at a glance
 

@@ -1,8 +1,4 @@
 import { app } from "../../scripts/app.js";
-import {
-    captureLastQueuedSeed,
-    configureLastQueuedSeedReuse,
-} from "./last_queued_seed.js";
 import { normalizeReferenceAudioLabels } from "./reference_audio_ui.js";
 
 const PRODUCTION_NODE_CLASS = "H3ContinuumSamplerProduction";
@@ -244,7 +240,6 @@ function configureNode(node) {
     }
     applyRuntimeSettings(node);
     if (isV35) {
-        configureLastQueuedSeedReuse(node);
         normalizeReferenceAudioLabels(node);
     }
     hidePersistentWidget(findWidget(node, "diagnostics"));
@@ -315,9 +310,6 @@ app.registerExtension({
         for (const node of app.graph?._nodes || []) {
             const projectWidget = configureNode(node);
             const apiNode = prompt.output?.[String(node.id)];
-            if (node.comfyClass === V35_NODE_CLASS) {
-                captureLastQueuedSeed(node, apiNode?.inputs?.base_seed);
-            }
             if (apiNode?.inputs) {
                 if (
                     node.comfyClass === PRODUCTION_NODE_CLASS

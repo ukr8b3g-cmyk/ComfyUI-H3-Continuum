@@ -43,20 +43,18 @@ Updated: 2026-08-25
 - The pre-hotfix V3.5.1 release baseline was `450 passed`. Hotfix validation is `452 passed` with explicit workflow save/reload widget-alignment coverage and only the known `pynvml` FutureWarning. JavaScript syntax and `git diff --check` pass. The two frontend files are synchronized to ComfyUI_W by SHA-256; live save/reload acceptance remains pending.
 - The public LBH/Conditioning Bridge connection example is `examples/workflows/MiniMax_H3_Continuum_V351_LBH_Conditioning_Bridge.json`; its README chart is `docs/images/v351-lbh-conditioning-bridge-flow.svg`. It is a separate example and does not replace or modify the recommended V3.5 template.
 
-## V3.5.1 Last Queued Seed reuse frontend validation (2026-08-24)
+## V3.5.1 standard ComfyUI Seed behavior (2026-08-25)
 
-- The fix is limited to `H3 Continuum Sampler V3.5` frontend state. It does not change V3.4, backend Sampling, Second Pass, Terminal Merge, Assembly, Seam, Run Storage, Node IDs, display names, or public sockets.
-- Per-node session-only state is `last_queued_seed`, `auto_updated_seed`, `previous_control_mode`, and `auto_update_pending`. Nothing is serialized into Workflow JSON or carried across a browser/ComfyUI restart.
-- `beforeQueuePrompt` records the actual `base_seed` submitted for the V3.5 sampler. After Generate records only the automatic Randomize update. A `Randomize -> Fixed` transition restores the prior queued seed only while the displayed value still equals the recorded automatic update; an intervening manual Seed edit cancels restoration and remains authoritative.
-- Restoring the Seed only makes the First Pass inputs eligible for normal ComfyUI cache reuse. If the cache is absent or evicted, First Pass regenerates normally with the same Seed. Run Storage seed contracts remain strict and unchanged.
-- The implementation is isolated in `web/last_queued_seed.js` and integrated through the existing `web/project_id.js` extension. JavaScript syntax and focused frontend behavior validation are `5 passed`; full source pytest is `445 passed`. The two Production frontend files match ComfyUI_W by SHA-256, whose runtime verifier and existing compact-UI regression pass. Real UI/cache acceptance remains pending.
+- The experimental Last Queued Seed frontend override was withdrawn after repeated real-browser failures. Static callback and simulated-event tests did not reproduce the active ComfyUI Frontend lifecycle reliably.
+- `H3 Continuum Sampler V3.5` now uses the same native `control after generate` behavior as ComfyUI Core. Continuum does not wrap seed callbacks, intercept Randomize/Fixed transitions, monitor widgets, or rewrite submitted seed values.
+- This removal is limited to the Last Queued Seed experiment. V3.4/V3.5 node schemas, Reference Audio UI, compact UI settings, Sampling, Second Pass, Terminal Merge, Assembly, Seam, Run Storage, and all other frontend behavior remain unchanged.
+- Focused unaffected-UI validation is `8 passed`; full source pytest is `450 passed` with only the known `pynvml` FutureWarning.
 
 ## V3.5.1 Hi-Res Fix Core canvas alignment (2026-08-24)
 
 - A real `576x576`, `scale_by=1.2` run exposed an invalid `43x43` H3 video/conditioning latent. Core MiniMax H3 patchifies spatial latents in `2x2` blocks and exposes pixel dimensions in 32-pixel steps, so the odd latent failed in Core with `24 * 43 * 43 = 44376` elements.
 - Manual Hi-Res Fix targets now use ComfyUI Core's `CANVAS_MULTIPLE` and preserve-or-enlarge each axis on that grid. The failing case resolves to `704x704` / `44x44`; a `1024x576` source at `1.2x` resolves to `1216x704` / `76x44`. The Pixel/VAE, conditioning adaptation, and Second Pass paths remain unchanged.
 - Focused Hi-Res/Second Pass validation is `48 passed`; full source pytest is `448 passed`. `v3/hires_fix_nodes.py` is synchronized to ComfyUI_W by SHA-256, and runtime registration/native PackedLayout/Fixed 3x5 verification passes. GPU acceptance after a ComfyUI process restart remains pending.
-- The same attempt did not validate Last Queued Seed cache reuse: the second prompt was queued at `21:24:38` before the first prompt completed at `21:26:02`, and the log shows another First Pass `20/20`. Retry only after the first prompt has completely finished.
 
 ## V3.5 recommended template workflow (2026-08-24)
 
@@ -349,7 +347,7 @@ Static checks do not replace a real GPU generation. Record workflow, prompt, med
 ## V3.5.1 public-state cleanup (2026-08-25)
 
 - Project instructions now identify V3.5.1 as the current public baseline while retaining V3.4 node IDs, public contracts, and saved-workflow compatibility.
-- Last Queued Seed Reuse is classified as automated frontend-validated; real UI/cache acceptance remains pending. Package validation no longer implies completed real UI/cache acceptance.
+- The later real-browser acceptance superseded the earlier simulated Last Queued Seed result; that experiment is withdrawn and standard ComfyUI Seed behavior is restored.
 - GitHub Issues #9, #10, and #11 received implementation guidance and are closed as completed. Issue #11 was closed after the conditional-UI/internal-resize README clarification reached public `main`.
 
 ## GitHub Actions dependency/stub repair (2026-08-25)

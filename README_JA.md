@@ -1,16 +1,15 @@
 # ComfyUI-H3-Continuum 3.5.1
 
-**V3.5.1正式版:** V3.4互換を維持し、Reference Audio、Conditioning Bridge、Last Queued Seed Reuseを追加します。V3.4のNode IDとbackend socket keyは保存済みワークフロー互換のため意図的に残しており、表示名を変更しても既存V3.4/V3.5ワークフローの接続は維持されます。
+**V3.5.1正式版:** V3.4互換を維持し、Reference AudioとConditioning Bridgeを追加します。V3.4のNode IDとbackend socket keyは保存済みワークフロー互換のため意図的に残しており、表示名を変更しても既存V3.4/V3.5ワークフローの接続は維持されます。
 
 MiniMax H3を複数チャンクで連続生成し、直前チャンク末尾の**映像latent / 音声latentを直接**次チャンクへ継承するComfyUIカスタムノードです。チャンク間でVideo/Audio VAEのDecode→Encodeは行いません。
 
 ## V3.5.1の追加機能
 
-V3.5.1では、V3.4のSampling、Conditioning、Terminal Merge、Assembly、Seam、Run Storage契約を変更せず、次の3点を追加します。
+V3.5.1では、V3.4のSampling、Conditioning、Terminal Merge、Assembly、Seam、Run Storage契約を変更せず、次の2点を追加します。
 
 1. **Reference Audio（任意）**: 生成音声を置換しない、H3 nativeの音声conditioningです。Workflowの保存・再読込互換を守るため、2つのsocketは常時表示します。
 2. **Conditioning Bridge V3.5**: Continuumのphysical groupごとに、完全なCore互換`MODEL`と`CONDITIONING`を外部Samplerへ公開します。
-3. **Last Queued Seed Reuse**: Randomize生成後にComfyUIが自動更新したseedからFixedへ戻した場合、安全に判定できるときだけ直前Queueで実際に使ったseedを復元します。ComfyUI cache自体は操作しません。
 
 ### Reference系入力の違い
 
