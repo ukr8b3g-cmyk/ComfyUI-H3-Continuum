@@ -1,6 +1,8 @@
 import importlib.util
+import os
 from pathlib import Path
 
+import pytest
 import torch
 
 
@@ -40,10 +42,18 @@ def test_p25_stress_prompt_bypasses_vae_and_preserves_assembler_contract():
     assert prompt["6"]["inputs"]["video_seam"] == "Auto"
 
 
-def test_p25_process_memory_snapshot_reports_windows_commit_fields():
+def test_p25_process_memory_snapshot_reports_portable_fields():
     probe = _probe_module()
     snapshot = probe._process_memory_snapshot()
 
     assert snapshot["rss"] > 0
+    if "uss" in snapshot:
+        assert snapshot["uss"] > 0
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows private commit field")
+def test_p25_process_memory_snapshot_reports_windows_commit_field():
+    probe = _probe_module()
+    snapshot = probe._process_memory_snapshot()
+
     assert snapshot["private"] > 0
-    assert snapshot["uss"] > 0

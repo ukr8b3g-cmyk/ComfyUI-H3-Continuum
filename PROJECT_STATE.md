@@ -12,6 +12,12 @@
 
 Updated: 2026-08-25
 
+## V3.5.1 stabilization Phase 0 CI portability candidate (2026-08-25)
+
+- V3.5.1 is feature-frozen for stabilization. Speculative performance changes and broad refactors are excluded; only measured bottlenecks may proceed after the remaining acceptance work closes.
+- The P2-5 process-memory regression is platform-aware without changing the probe or any Production path: RSS is required everywhere, USS is checked when the platform exposes it, and Windows private commit is tested only on Windows.
+- Local focused validation is `4 passed`; full Windows validation is `453 passed` with only the known `pynvml` FutureWarning. Syntax and `git diff --check` pass. Remote GitHub Actions remains to be confirmed before publication or updating the public validation count.
+
 ## V3.5.1 Issue #9 Conditioning Bridge candidate (2026-08-24)
 
 - Added `H3ContinuumConditioningBridgeV35` / `H3 Continuum Conditioning Bridge V3.5` under `MiniMax H3/Continuum/Advanced`.

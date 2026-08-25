@@ -1,5 +1,12 @@
 # Work Log
 
+## 2026-08-25 - Stabilization Phase 0 local CI portability fix
+
+- Froze V3.5.1 feature work and began stabilization with a test-only change. Production Sampling, Layout, Session, Run Storage, Refine Context, UI, and runtime files were not changed.
+- Split the P2-5 process-memory assertion by actual platform contract: RSS is universal, USS is validated when present, and the Windows private-commit field is Windows-only.
+- Verified snapshot: `pre-stabilization-phase0-ci-platform-test-accepted-20260825_124156` (477 files), revision `cf92ac609341539de95675c86271fea11c85e040`, excluding top-level `.git` and the pre-existing inaccessible `.pytest_cache`. The standard snapshot attempt stopped on that known ACL before any edit.
+- Local focused validation is `4 passed`; full validation is `453 passed`; syntax and `git diff --check` pass. Only the known `pynvml` FutureWarning remains. Remote Actions confirmation, commit, and push were not performed.
+
 ## 2026-08-24 - V3.5.1 Issue #9 Conditioning Bridge CPU implementation
 
 - Preserved all Issue #10 changes and created accepted pre-change snapshots: `pre-issue9-conditioning-bridge-source-accepted-20260824_190823` (460 files) and `pre-issue9-conditioning-bridge-runtime-w-accepted-20260824_190823` (337 files), excluding top-level `.git` and the pre-existing inaccessible `.pytest_cache`.
