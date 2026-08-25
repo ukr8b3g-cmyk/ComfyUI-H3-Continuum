@@ -12,6 +12,17 @@
 
 Updated: 2026-08-26
 
+## V3.5.3 maintenance hotfix (2026-08-26)
+
+- V3.5.3 is a distribution-integrity maintenance hotfix over published V3.5.2. Sampling, Conditioning payloads, Terminal Merge, Assembly, Seam, Run Storage, Prompt/CLIP caching, Video Guide optimization, V3.4 compatibility, node IDs, and backend socket keys are unchanged.
+- Repaired the public Conditioning Bridge workflow links `349`/`350` so the shared Width/Height controls target Sampler V3.5 input slots `16`/`17`; removed stale output link IDs `171`/`172`/`173` from the public V3.4, V3.4 Turbo, and V3.5 workflows.
+- `validate_reference_prompts()` now preserves absolute public `<Picture N>` numbers for Hybrid First/Last + Reference warnings. This matches the previously accepted ComfyUI_W behavior and changes report text only.
+- Re-encoded the unreferenced legacy `docs/images/v31b-auto-resume.png` without changing any displayed pixel. All 19 packaged PNG files pass strict Pillow verification.
+- Added regressions for all eight public workflow graphs and the Hybrid warning numbers. Focused validation is `30 passed`; canonical full pytest is `495 passed`, and the source/runtime V3.5.3 verifier passes native PackedLayout, Fixed 3x5 planning, and complete node registration.
+- The release Manifest now contains 173 files and verifies every recorded SHA-256, including the new public-workflow integrity regression.
+- Production files `reference.py`, `version.py`, and `metadata.ini` are synchronized to ComfyUI_W with exact SHA-256 equality. ComfyUI_WAN is excluded because that secondary runtime is an incomplete older copy and must not be partially relabeled as V3.5.3.
+- Accepted snapshots are `pre-v353-maintenance-hotfix-source-accepted-20260826_030732` (199 tracked files, revision `70cbbcd`) and `pre-v353-maintenance-hotfix-comfyui-w-accepted-20260826_030731` (14 present target files). Commit and push have not been performed.
+
 ## V3.5.2 final release gate (2026-08-26)
 
 - V3.5.2 is the release-candidate baseline for the Stabilization & Optimization Update. It adds no generation mode and preserves all V3.5.x workflow contracts plus V3.4 Node IDs/backend socket keys.
@@ -131,7 +142,7 @@ Updated: 2026-08-26
 
 ## Baseline
 
-- Release-candidate baseline: V3.5.2 (published baseline remains V3.5.1 until commit/push)
+- Release-candidate baseline: V3.5.3 maintenance hotfix (published baseline remains V3.5.2 until commit/push)
 - Authoritative working repository: `D:\Codex\_git_push_work\ComfyUI-H3-Continuum`
 - Primary tested runtime: `D:\StabilityMatrix\Data\Packages\ComfyUI_W\custom_nodes\ComfyUI-H3-Continuum`
 - Secondary runtime: `D:\StabilityMatrix\Data\Packages\ComfyUI_WAN\custom_nodes\ComfyUI-H3-Continuum`

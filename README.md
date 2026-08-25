@@ -1,6 +1,12 @@
-# ComfyUI-H3-Continuum 3.5.2
+# ComfyUI-H3-Continuum 3.5.3
 
 Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pass refinement, optional Hi-Res Fix, low-memory disk-backed assembly, restartable chunks, persistent references, and optional Spectrum interoperability.
+
+## V3.5.3 Maintenance Hotfix
+
+V3.5.3 is a distribution-integrity maintenance release. It repairs the public Conditioning Bridge workflow's Width/Height links, removes stale orphan link IDs from the published V3.4/V3.5 templates, corrects Hybrid `<Picture N>` warning numbering, and repairs one legacy PNG for strict image decoders.
+
+There are no changes to generation behavior, nodes, sockets, Sampling, Conditioning payloads, Terminal Merge, Assembly, Seam, Run Storage, Prompt/CLIP caching, Video Guide optimization, or V3.4 compatibility. Existing V3.5.x workflows continue to load unchanged.
 
 ## V3.5.2 Stabilization & Optimization Update
 
@@ -29,7 +35,7 @@ Prompt/CLIP figures measure only the conditioning subphase, not total generation
 
 The measured Sage-only production baselines on the tested RTX 5060 Ti 16 GB / 64 GB system were 168.069 seconds for 1×5-second 576×576 T2VA and 379.765 seconds for 3×5-second 640×640 FL2VA Long Terminal Merge. These are configuration-specific baselines, not universal speed guarantees. Sampling remained the dominant cost; Continuum Assemble + Seam stayed below 1%.
 
-> **V3.5.2 is the current release.** V3.4 node IDs, backend socket keys, and saved-workflow loading remain intentionally supported. Sampling, Conditioning, Terminal Merge, Assembly, Seam, Run Storage, and standard ComfyUI seed behavior are unchanged. The withdrawn experimental Last Queued Seed override is not included.
+> **V3.5.3 is the current maintenance release.** V3.5.2 remains the accepted Stabilization & Optimization baseline. V3.4 node IDs, backend socket keys, and saved-workflow loading remain intentionally supported. Sampling, Conditioning, Terminal Merge, Assembly, Seam, Run Storage, and standard ComfyUI seed behavior are unchanged. The withdrawn experimental Last Queued Seed override is not included.
 
 ## V3.5.1 Reference Audio & Compatibility Update
 
@@ -601,7 +607,7 @@ Use a 24 fps source for `Video Guide Frames`. `Load Video (Upload)` may accept f
 
 ## Current validation status
 
-The V3.5.2 release passes `485` automated tests, source/runtime registration verification, native PackedLayout, Fixed 3x5 prompt planning, JavaScript UI harnesses, release metadata consistency, Prompt/CLIP MISS-to-HIT output equality, and Video Guide bit-exact GPU A/B acceptance. Earlier representative GPU acceptance also covers the V3.5 Conditioning Bridge path, Reference Audio/Image retention, Second Pass/Hi-Res paths, and accepted 3x5 FL2VA Long Terminal Merge latents through Core Video/Audio VAE Decode and Assemble V3.5 Auto.
+The V3.5.3 maintenance gate passes `495` automated tests, including all published-workflow link integrity and Hybrid public-picture warning regressions. Source/runtime registration verification, native PackedLayout, Fixed 3x5 prompt planning, JavaScript UI harnesses, release metadata consistency, Prompt/CLIP MISS-to-HIT output equality, and Video Guide bit-exact GPU A/B acceptance remain valid. Earlier representative GPU acceptance also covers the V3.5 Conditioning Bridge path, Reference Audio/Image retention, Second Pass/Hi-Res paths, and accepted 3x5 FL2VA Long Terminal Merge latents through Core Video/Audio VAE Decode and Assemble V3.5 Auto.
 
 V3.4 compatibility paths have been exercised locally with:
 

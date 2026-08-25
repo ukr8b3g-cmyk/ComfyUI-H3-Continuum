@@ -1,6 +1,12 @@
-ComfyUI-H3-Continuum V3.5.2
+ComfyUI-H3-Continuum V3.5.3
 
 MiniMax H3の5秒ChunkをAV latent contextで継続し、長尺映像として組み立てるComfyUIカスタムノードです。
+
+V3.5.3:
+- 公開Conditioning Bridge WorkflowのWidth／Height接続を修正
+- 公開V3.4／V3.5 Workflowの孤立link IDを清掃し、全配布Workflowのserialization整合性テストを追加
+- Hybrid First／Last＋Referenceの`<Picture N>`警告を公開番号のまま表示
+- 生成契約、Node／socket、V3.5.2最適化、V3.4互換性は不変
 
 V3.5.2:
 - 同一Prompt / CLIP条件の繰り返し生成でCPU conditioning結果を再利用

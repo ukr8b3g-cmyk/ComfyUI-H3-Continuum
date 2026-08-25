@@ -57,6 +57,27 @@ def test_hybrid_prompt_validation_offsets_reference_numbers() -> None:
     ) == ""
 
 
+def test_hybrid_prompt_validation_keeps_public_picture_numbers_in_warnings() -> None:
+    warning = validate_reference_prompts(
+        ["<Picture 1> starts the shot and <Picture 4> is unavailable."],
+        1,
+        picture_offset=2,
+    )
+    assert "unavailable <Picture 4>" in warning
+    assert "connected reference <Picture 3>" in warning
+    assert "unavailable <Picture 2>" not in warning
+
+
+def test_hybrid_prompt_validation_reports_the_missing_reference_number() -> None:
+    warning = validate_reference_prompts(
+        ["<Picture 1> starts the shot."],
+        1,
+        picture_offset=2,
+    )
+    assert "connected reference <Picture 3>" in warning
+    assert "the prompt contains no <Picture N> tag" not in warning
+
+
 def test_pure_fl_identity_is_unchanged() -> None:
     assert combine_hybrid_visual_identity(
         keyframe_identity_hash="fl-identity",

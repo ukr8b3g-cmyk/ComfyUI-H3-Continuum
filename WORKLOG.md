@@ -1,5 +1,17 @@
 # Work Log
 
+## 2026-08-26 - V3.5.3 distribution-integrity maintenance hotfix
+
+- Kept published V3.5.2 generation and optimization behavior frozen; no Sampling, Conditioning payload, Terminal Merge, Assembly, Seam, Run Storage, Prompt/CLIP cache, Video Guide, V3.4, node, or socket contract was changed.
+- Created accepted source/runtime snapshots `pre-v353-maintenance-hotfix-source-accepted-20260826_030732` and `pre-v353-maintenance-hotfix-comfyui-w-accepted-20260826_030731` after the standard full snapshot stopped only on the known inaccessible `.pytest_cache`.
+- Repaired Conditioning Bridge workflow links `349`/`350` from stale Sampler input slots `14`/`15` to Width/Height slots `16`/`17`; removed orphan output links `171`/`172`/`173` from the public V3.4, V3.4 Turbo, and V3.5 workflows.
+- Replaced source-only Hybrid warning renumbering with the accepted absolute public `<Picture N>` behavior already present in ComfyUI_W. Added two regressions covering unavailable and missing Hybrid references.
+- Added an eight-workflow serialization-integrity regression covering node/link uniqueness, endpoints, slot bounds, reciprocal input/output references, and types. The focused release/hotfix result is `30 passed`; canonical full pytest is `495 passed` with only the known `pynvml` FutureWarning.
+- Regenerated the release Manifest with 173 entries, added the public-workflow integrity regression, and verified every recorded SHA-256.
+- Losslessly re-encoded the unreferenced legacy `v31b-auto-resume.png`; strict Pillow verification passes all 19 packaged PNGs and an independent pixel comparison found zero changed pixels.
+- Synchronized only `reference.py`, `version.py`, and `metadata.ini` to the primary ComfyUI_W runtime and verified exact source/runtime SHA-256 equality. Runtime verification reports V3.5.3, native PackedLayout PASS, Fixed 3x5 planning PASS, and complete node registration. The incomplete ComfyUI_WAN copy was intentionally not modified.
+- No GPU generation was rerun because the only Python behavior change is report warning text and the remaining changes are package/workflow metadata. Commit and push were not performed.
+
 ## 2026-08-26 - V3.5.2 README final audit and publication authorization
 
 - Re-audited English/Japanese README chapter order, historical/current-version wording, withdrawn controls, local links, image references, and validation claims before publication.

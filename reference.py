@@ -236,20 +236,18 @@ def validate_reference_prompts(
     reference_count: int,
     picture_offset: int = 0,
 ) -> str:
-    if picture_offset > 0:
-        def _shift_picture_tag(match: re.Match[str]) -> str:
-            number = int(match.group(1))
-            if number <= picture_offset:
-                return ""
-            return f"<Picture {number - picture_offset}>"
-
-        shifted = [_PICTURE_TAG.sub(_shift_picture_tag, str(prompt)) for prompt in prompts]
-        return validate_reference_prompts(shifted, reference_count)
-
+    reference_count = max(0, int(reference_count))
+    picture_offset = max(0, int(picture_offset))
     found: set[int] = set()
     for prompt in prompts:
         found.update(int(value) for value in _PICTURE_TAG.findall(str(prompt)))
-    invalid = sorted(value for value in found if value < 1 or value > reference_count)
+
+    first_reference = picture_offset + 1
+    last_reference = picture_offset + reference_count
+    found_references = {
+        value for value in found if first_reference <= value <= last_reference
+    }
+    invalid = sorted(value for value in found if value < 1 or value > last_reference)
     warnings: list[str] = []
     if invalid:
         unavailable = ", ".join(f"<Picture {value}>" for value in invalid)
@@ -260,12 +258,14 @@ def validate_reference_prompts(
             "unavailable reference may be ignored or hallucinated. Enable the "
             "corresponding Reference Image input or remove the unavailable tag."
         )
-    missing = sorted(set(range(1, reference_count + 1)) - found)
+
+    expected_references = set(range(first_reference, last_reference + 1))
+    missing = sorted(expected_references - found_references)
     if missing:
         labels = ", ".join(f"<Picture {value}>" for value in missing)
         detail = (
             "the prompt contains no <Picture N> tag"
-            if not found
+            if picture_offset == 0 and not found
             else f"connected reference {labels} is not explicitly mentioned in the prompt"
         )
         warnings.append(

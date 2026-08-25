@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.5.3
+
+- Repaired the public Conditioning Bridge workflow's Width/Height input slots and added serialization-integrity checks for every published workflow.
+- Removed stale orphan link IDs from the public V3.4, V3.4 Turbo, and V3.5 workflow files.
+- Corrected Hybrid First/Last + Reference warning messages so public `<Picture N>` numbering remains absolute and matches the accepted runtime behavior.
+- Losslessly re-encoded one unreferenced legacy PNG that strict image decoders could not read.
+- Preserved all V3.5.2 generation, Sampling, Conditioning, Terminal Merge, Assembly, Seam, Run Storage, Prompt/CLIP cache, Video Guide optimization, and V3.4 compatibility contracts.
+
 ## 3.5.2
 
 - Added a conservative V3.5-only Prompt/CLIP cross-run LRU cache for unchanged T2VA, I2VA, and FL2VA conditioning. Reference, scheduled, tokenizer-option, and hook-modified CLIP paths bypass the cache; V3.4 is unchanged.

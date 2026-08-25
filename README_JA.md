@@ -1,6 +1,12 @@
-# ComfyUI-H3-Continuum 3.5.2
+# ComfyUI-H3-Continuum 3.5.3
 
 MiniMax H3を複数チャンクで連続生成し、直前チャンク末尾の**映像latent / 音声latentを直接**次チャンクへ継承するComfyUIカスタムノードです。チャンク間でVideo/Audio VAEのDecode→Encodeは行いません。
+
+## V3.5.3 Maintenance Hotfix
+
+V3.5.3は配布整合性だけを修正するメンテナンス版です。公開Conditioning Bridge WorkflowのWidth／Height接続、V3.4／V3.5テンプレート内の孤立link ID、Hybridの`<Picture N>`警告番号、厳密な画像decoderで読めなかった旧PNG 1件を修正しました。
+
+生成動作、Node、socket、Sampling、Conditioning payload、Terminal Merge、Assembly、Seam、Run Storage、Prompt/CLIP cache、Video Guide最適化、V3.4互換性は変更していません。既存V3.5.x Workflowはそのまま読み込めます。
 
 ## V3.5.2 Stabilization & Optimization Update
 
@@ -29,7 +35,7 @@ Prompt/CLIPの数値はconditioning区間だけで、総生成時間ではあり
 
 RTX 5060 Ti 16 GB／RAM 64 GBの検証環境で測定したSage-only Production baselineは、576×576 T2VA 1×5秒が168.069秒、640×640 FL2VA Long Terminal Merge 3×5秒が379.765秒です。環境・設定固有の測定値であり、すべての環境に対する速度保証ではありません。Samplingが最大コストで、Continuum Assemble + Seamは1%未満でした。
 
-**V3.5.2が現在の正式版です。** V3.4 Node ID、backend socket key、保存済みWorkflow読込は維持します。Sampling、Conditioning、Terminal Merge、Assembly、Seam、Run Storage、ComfyUI標準Seed動作は変更していません。撤回済みの実験的Last Queued Seed overrideは含まれていません。
+**V3.5.3が現在のメンテナンス版です。** V3.5.2は受入済みStabilization & Optimization baselineとして維持します。V3.4 Node ID、backend socket key、保存済みWorkflow読込は維持します。Sampling、Conditioning、Terminal Merge、Assembly、Seam、Run Storage、ComfyUI標準Seed動作は変更していません。撤回済みの実験的Last Queued Seed overrideは含まれていません。
 
 ## V3.5.1 Reference Audio／互換性更新
 
@@ -250,7 +256,7 @@ ZIPを展開して、`ComfyUI-H3-Continuum`フォルダーを`ComfyUI/custom_nod
 
 ## 検査
 
-V3.5.2正式版は全`485 passed`、source/runtime登録検証、PackedLayout、Fixed 3×5 Prompt Plan、JavaScript UI harness、release metadata、Prompt/CLIP MISS→HIT出力一致、Video Guide bit-exact GPU A/Bを通過しています。以前の代表GPU受入にはConditioning Bridge、Reference Audio/Image保持、Second Pass／Hi-Res経路、3×5秒FL2VA Long Terminal MergeからCore Video/Audio VAE Decode、Assemble V3.5 Autoまでを含みます。
+V3.5.3 maintenance gateは全`495 passed`で、全公開Workflowのlink整合性とHybrid公開Picture番号の警告回帰を含みます。source/runtime登録検証、PackedLayout、Fixed 3×5 Prompt Plan、JavaScript UI harness、release metadata、Prompt/CLIP MISS→HIT出力一致、Video Guide bit-exact GPU A/Bも引き続き有効です。以前の代表GPU受入にはConditioning Bridge、Reference Audio/Image保持、Second Pass／Hi-Res経路、3×5秒FL2VA Long Terminal MergeからCore Video/Audio VAE Decode、Assemble V3.5 Autoまでを含みます。
 
 Main Hi-Res Fixの3×5秒2xは、RTX 5060 Ti 16 GiBで37T groupの1152×1152 Second Pass完了後、Terminal Mergeの77T group最初の推論時にCUDA OOMとなり未受入です。Reference/Hybrid固有の1×5秒Second Passは受入済みですが、長尺Reference/Hybridは未確認です。Disk-backedが保証する低メモリ範囲はContinuum Assemblyであり、Core Decodeや下流ノードが別の全量copyを作る可能性は残ります。
 
