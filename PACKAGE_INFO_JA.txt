@@ -1,11 +1,17 @@
-ComfyUI-H3-Continuum V3.5.1
+ComfyUI-H3-Continuum V3.5.2
 
 MiniMax H3の5秒ChunkをAV latent contextで継続し、長尺映像として組み立てるComfyUIカスタムノードです。
+
+V3.5.2:
+- 同一Prompt / CLIP条件の繰り返し生成でCPU conditioning結果を再利用
+- Referenceや特殊CLIP経路は安全側でcache bypass
+- 長尺Video Guideの全source identityとfinite検査を維持し、必要prefixだけを保持
+- 検証条件でVideo GuideのPeak追加RSSを約71%、保持Storageを約59%削減
+- Sampling、Conditioning payload、Terminal Merge、Assembly、Seam、Run Storage、標準Seed動作は不変
 
 V3.5.1:
 - physical groupごとに完全なMODEL / CONDITIONINGを公開するConditioning Bridge V3.5
 - 生成音声を置換しない任意のReference Audio conditioningと常設socket
-- RandomizeからFixedへ戻す際のLast Queued Seed Reuse
 - Video loaderのIMAGE frame batchを示すVideo Guide Frames / Video Guide Size表示名
 - backend socket key、既存workflow接続、V3.4 sampling契約を維持
 

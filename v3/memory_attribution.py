@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import time
 from typing import Any, Mapping
 
 import torch
@@ -15,6 +16,16 @@ from .plan import validate_assembly_plan
 
 
 _MIB = 1024**2
+
+_CONDITIONING_SUBPHASES = (
+    "conditioning_identity_video_vae",
+    "conditioning_reference_image_vae",
+    "conditioning_reference_audio_vae",
+    "conditioning_driving_audio_vae",
+    "conditioning_reference_video_vae",
+    "conditioning_timeline_video_vae",
+    "conditioning_prompt_clip",
+)
 
 
 def _mib(value: int | None) -> str:
@@ -120,9 +131,119 @@ class MemoryAttributionCollector:
 
     def __init__(self):
         self.lines: list[str] = []
+        self._sequence_started_at: float | None = None
+        self._phase_started_at: dict[tuple[str, int | None, tuple[int, ...]], float] = {}
+        self._phase_totals: dict[str, float] = {}
+        self._phase_counts: dict[str, int] = {}
+        self._group_totals: dict[
+            tuple[int, tuple[int, ...]], dict[str, float]
+        ] = {}
 
     def capture_sequence_start(self) -> None:
+        self._sequence_started_at = time.perf_counter()
         self.lines.append(format_attribution_snapshot("V3.5 sequence start"))
+        self.start_phase(phase="preparation")
+
+    def start_phase(
+        self,
+        *,
+        phase: str,
+        physical_group: int | None = None,
+        logical_chunks: tuple[int, ...] = (),
+    ) -> None:
+        key = (
+            str(phase),
+            None if physical_group is None else int(physical_group),
+            tuple(int(value) for value in logical_chunks),
+        )
+        self._phase_started_at[key] = time.perf_counter()
+
+    def finish_phase(
+        self,
+        *,
+        phase: str,
+        physical_group: int | None = None,
+        logical_chunks: tuple[int, ...] = (),
+    ) -> None:
+        phase = str(phase)
+        group = None if physical_group is None else int(physical_group)
+        logical = tuple(int(value) for value in logical_chunks)
+        key = (phase, group, logical)
+        started = self._phase_started_at.pop(key, None)
+        if started is None:
+            return
+        elapsed = time.perf_counter() - started
+        if not math.isfinite(elapsed) or elapsed < 0.0:
+            return
+        self._phase_totals[phase] = self._phase_totals.get(phase, 0.0) + elapsed
+        self._phase_counts[phase] = self._phase_counts.get(phase, 0) + 1
+        if group is not None:
+            phases = self._group_totals.setdefault((group, logical), {})
+            phases[phase] = phases.get(phase, 0.0) + elapsed
+
+    @staticmethod
+    def _format_seconds(value: float | None) -> str:
+        return "n/a" if value is None else f"{float(value):.6f}s"
+
+    def _performance_lines(self) -> list[str]:
+        now = time.perf_counter()
+        host_wall = None
+        if self._sequence_started_at is not None:
+            candidate = now - self._sequence_started_at
+            if math.isfinite(candidate) and candidate >= 0.0:
+                host_wall = candidate
+        ordered = (
+            "preparation",
+            "conditioning",
+            *_CONDITIONING_SUBPHASES,
+            "group_prepare",
+            "sampling",
+            "cpu_commit_validation",
+            "refine_context",
+            "finalization",
+        )
+        lines = []
+        for (group, logical), phases in sorted(self._group_totals.items()):
+            logical_label = ",".join(str(value) for value in logical)
+            fields = ", ".join(
+                f"{name}={self._format_seconds(phases.get(name))}"
+                for name in (
+                    "group_prepare",
+                    "sampling",
+                    "cpu_commit_validation",
+                    "refine_context",
+                )
+            )
+            lines.append(
+                f"Performance [V3.5 physical group {group} "
+                f"logical=[{logical_label}]]: {fields}"
+            )
+        totals = ", ".join(
+            f"{name}={self._format_seconds(self._phase_totals.get(name))}"
+            for name in ordered
+        )
+        counts = ", ".join(
+            f"{name}={int(self._phase_counts.get(name, 0))}"
+            for name in (
+                "group_prepare",
+                "sampling",
+                "cpu_commit_validation",
+                "refine_context",
+            )
+        )
+        conditioning_counts = ", ".join(
+            f"{name}={int(self._phase_counts.get(name, 0))}"
+            for name in _CONDITIONING_SUBPHASES
+        )
+        lines.append(
+            "Performance [V3.5 summary]: "
+            f"host_wall_including_diagnostics={self._format_seconds(host_wall)}, "
+            f"{totals}; "
+            f"phase_counts({counts}); "
+            f"conditioning_counts({conditioning_counts}); "
+            "CUDA_synchronize=not_used"
+        )
+        return lines
 
     def capture_group(
         self,
@@ -150,6 +271,7 @@ class MemoryAttributionCollector:
         entries: Any,
         retained_refine_context: Any = None,
     ) -> None:
+        self.lines.extend(self._performance_lines())
         self.lines.append(
             format_attribution_snapshot(
                 "V3.5 sequence complete",

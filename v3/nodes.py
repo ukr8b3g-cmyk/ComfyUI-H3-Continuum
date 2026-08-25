@@ -258,6 +258,7 @@ class H3ContinuumSamplerV3:
         timeline_video_source=None,
         capture_refine_context=False,
         memory_attribution=False,
+        prompt_conditioning_cache=False,
     ):
         if prompt_overrides is not None and not isinstance(prompt_overrides, dict):
             prompt_overrides = None
@@ -339,6 +340,7 @@ class H3ContinuumSamplerV3:
             timeline_video_source=timeline_video_source,
             capture_refine_context=bool(capture_refine_context),
             memory_attribution=bool(memory_attribution),
+            prompt_conditioning_cache=bool(prompt_conditioning_cache),
             **clip_prompt_inputs,
         )
         if bool(capture_refine_context):
@@ -663,6 +665,7 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
         timeline_video_source=None,
         capture_refine_context=False,
         memory_attribution=False,
+        prompt_conditioning_cache=False,
     ):
         runtime_started_at = time.perf_counter()
         from ..reference import prepare_reference_assets
@@ -714,6 +717,7 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                 timeline_video_source=timeline_video_source,
                 capture_refine_context=bool(capture_refine_context),
                 memory_attribution=bool(memory_attribution),
+                prompt_conditioning_cache=bool(prompt_conditioning_cache),
                 advanced={
                     "audio_continuity": bool(audio_continuity),
                     "diagnostics": diagnostics,

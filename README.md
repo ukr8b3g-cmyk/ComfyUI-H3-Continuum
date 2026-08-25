@@ -1,21 +1,46 @@
-# ComfyUI-H3-Continuum 3.5.1
-
-## V3.5.1 Emergency Compatibility Hotfix
-
-Reference Audio sockets are now permanently defined by Python `INPUT_TYPES`. Dynamic socket changes and the UI-only `Hidden / Show` control were removed to prevent workflow save/reload value shifts.
-
-Node IDs, backend keys, Sampling, Conditioning, Seed handling, and other widgets are unchanged.
+# ComfyUI-H3-Continuum 3.5.2
 
 Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pass refinement, optional Hi-Res Fix, low-memory disk-backed assembly, restartable chunks, persistent references, and optional Spectrum interoperability.
 
-> **V3.5.1 is the current release.** All V3.4 node IDs and backend socket keys remain registered intentionally for saved-workflow compatibility. Existing V3.4/V3.5 workflows continue to load; V3.5.1 clarifies the displayed input names without rewriting saved links.
+## V3.5.2 Stabilization & Optimization Update
 
-## What's new in V3.5.1
+V3.5.2 adds no new generation mode. It stabilizes the V3.5.x release, removes repeated Prompt/CLIP work when safe, and lowers temporary memory for long Video Guide inputs while preserving existing workflow and generation contracts.
 
-V3.5.1 completes two focused additions without changing the V3.4 Sampling, Conditioning, Terminal Merge, Assembly, Seam, or Run Storage contracts:
+![H3 Continuum V3.5.2 stabilization and optimization results](docs/images/v352-stabilization-optimization.png)
 
-1. **Optional Reference Audio** — native H3 audio conditioning that does not replace the generated final audio. Both sockets remain permanently visible to preserve workflow save/reload compatibility.
-2. **Conditioning Bridge V3.5** — exposes one complete Core-compatible `MODEL` and one complete `CONDITIONING` object per Continuum physical group for an external sampler workflow.
+The figure records the accepted optimization measurements. The final packaging gate additionally passed on ComfyUI 0.33.3 with a 172-entry Manifest, including this image.
+
+### What changed
+
+1. **Repeated-run Prompt/CLIP cache** — unchanged T2VA, I2VA, and FL2VA conditioning can reuse CPU-cached Prompt/CLIP results. Reference, scheduled, tokenizer-option, and hook-modified CLIP paths conservatively bypass the cache. Sampling still runs normally.
+2. **Video Guide memory optimization** — the complete source remains part of finite validation and SHA-256 identity, but only the required prefix remains stored for VAE/conditioning work.
+3. **Stabilization audit** — measured Sampling, Decode, Assembly, saving, optional-feature tax, and retained memory. No speculative Sampling, Driving Audio, Audio hash, Assembly, Seam, Session, or V3.4 optimization was adopted.
+
+### Measured results
+
+| Area | Before | V3.5.2 | Result |
+|---|---:|---:|---:|
+| T2VA repeated Prompt/CLIP | 5.898398 s | 0.000028 s | Cache HIT, `encode_calls=0` |
+| FL2VA repeated Prompt/CLIP | 21.642687 s | 0.007128 s | Cache HIT, `encode_calls=0` |
+| Video Guide peak additional RSS | 396.8 MiB | 114.7 MiB | About 71% lower |
+| Video Guide retained storage | 225 MiB | 93 MiB | About 59% lower |
+
+Prompt/CLIP figures measure only the conditioning subphase, not total generation time. The Video Guide memory benchmark uses deterministic 300×256×256 RGB input with a 124-frame required prefix. A separate GPU A/B used an actual 15-second / 360-frame Video Guide and produced identical decoded video and audio PCM.
+
+The measured Sage-only production baselines on the tested RTX 5060 Ti 16 GB / 64 GB system were 168.069 seconds for 1×5-second 576×576 T2VA and 379.765 seconds for 3×5-second 640×640 FL2VA Long Terminal Merge. These are configuration-specific baselines, not universal speed guarantees. Sampling remained the dominant cost; Continuum Assemble + Seam stayed below 1%.
+
+> **V3.5.2 is the current release.** V3.4 node IDs, backend socket keys, and saved-workflow loading remain intentionally supported. Sampling, Conditioning, Terminal Merge, Assembly, Seam, Run Storage, and standard ComfyUI seed behavior are unchanged. The withdrawn experimental Last Queued Seed override is not included.
+
+## V3.5.1 Reference Audio & Compatibility Update
+
+V3.5.1 added two focused features without changing the V3.4 Sampling, Conditioning, Terminal Merge, Assembly, Seam, or Run Storage contracts:
+
+1. **Optional Reference Audio** — native H3 audio conditioning that does not replace the generated final audio.
+2. **Conditioning Bridge V3.5** — one complete Core-compatible `MODEL` and `CONDITIONING` object per Continuum physical group for external sampler workflows.
+
+The Reference Audio sockets are permanently defined by Python `INPUT_TYPES`. Dynamic socket changes and the UI-only `Hidden / Show` control were removed to prevent workflow save/reload value shifts. Node IDs, backend keys, Sampling, Conditioning, standard Seed handling, and other widgets are unchanged.
+
+All V3.4 node IDs and backend socket keys remain registered intentionally for saved-workflow compatibility. Existing V3.4/V3.5 workflows continue to load; V3.5.1 clarified the displayed input names without rewriting saved links.
 
 ### Reference inputs at a glance
 
@@ -576,7 +601,7 @@ Use a 24 fps source for `Video Guide Frames`. `Load Video (Upload)` may accept f
 
 ## Current validation status
 
-The V3.5.1 release passes `452` automated tests, source/runtime registration verification, native PackedLayout, Fixed 3x5 prompt planning, JavaScript UI harnesses, and release metadata consistency. Representative GPU acceptance includes the V3.5 Conditioning Bridge path, Reference Audio/Image retention, Second Pass/Hi-Res paths, and accepted 3x5 FL2VA Long Terminal Merge latents through Core Video/Audio VAE Decode and Assemble V3.5 Auto.
+The V3.5.2 release passes `485` automated tests, source/runtime registration verification, native PackedLayout, Fixed 3x5 prompt planning, JavaScript UI harnesses, release metadata consistency, Prompt/CLIP MISS-to-HIT output equality, and Video Guide bit-exact GPU A/B acceptance. Earlier representative GPU acceptance also covers the V3.5 Conditioning Bridge path, Reference Audio/Image retention, Second Pass/Hi-Res paths, and accepted 3x5 FL2VA Long Terminal Merge latents through Core Video/Audio VAE Decode and Assemble V3.5 Auto.
 
 V3.4 compatibility paths have been exercised locally with:
 

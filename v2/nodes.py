@@ -313,6 +313,7 @@ class H3ContinuumSamplerV2:
         timeline_video_source=None,
         capture_refine_context=False,
         memory_attribution=False,
+        prompt_conditioning_cache=False,
         **clip_prompt_inputs,
     ):
         (
@@ -387,6 +388,7 @@ class H3ContinuumSamplerV2:
             timeline_video_source=timeline_video_source,
             capture_refine_context=bool(capture_refine_context),
             memory_attribution=bool(memory_attribution),
+            prompt_conditioning_cache=bool(prompt_conditioning_cache),
         )
 
 

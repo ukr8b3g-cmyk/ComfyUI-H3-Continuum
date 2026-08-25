@@ -216,6 +216,88 @@ def test_cuda_snapshot_reads_counters_without_allocator_mutation(monkeypatch):
     assert "CUDA_peak_allocated_since_external_reset=0.0 MiB" in line
 
 
+def test_performance_attribution_reports_group_and_summary_without_cuda_sync(
+    monkeypatch,
+):
+    ticks = iter((0.0, 0.0, 1.0, 2.0, 4.0, 5.0, 9.0, 10.0, 11.0, 12.0))
+    monkeypatch.setattr(memory.time, "perf_counter", lambda: next(ticks))
+    monkeypatch.setattr(
+        memory.torch.cuda,
+        "synchronize",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("performance attribution must not synchronize CUDA")
+        ),
+    )
+
+    collector = memory.MemoryAttributionCollector()
+    collector.capture_sequence_start()
+    collector.finish_phase(phase="preparation")
+    collector.start_phase(
+        phase="group_prepare", physical_group=1, logical_chunks=(1,)
+    )
+    collector.finish_phase(
+        phase="group_prepare", physical_group=1, logical_chunks=(1,)
+    )
+    collector.start_phase(
+        phase="sampling", physical_group=1, logical_chunks=(1,)
+    )
+    collector.finish_phase(
+        phase="sampling", physical_group=1, logical_chunks=(1,)
+    )
+    collector.start_phase(
+        phase="cpu_commit_validation", physical_group=1, logical_chunks=(1,)
+    )
+    collector.finish_phase(
+        phase="cpu_commit_validation", physical_group=1, logical_chunks=(1,)
+    )
+    collector.capture_sequence_complete(entries=[])
+
+    group_line = next(
+        line
+        for line in collector.lines
+        if line.startswith("Performance [V3.5 physical group 1")
+    )
+    summary = next(
+        line
+        for line in collector.lines
+        if line.startswith("Performance [V3.5 summary]")
+    )
+    assert "group_prepare=2.000000s" in group_line
+    assert "sampling=4.000000s" in group_line
+    assert "cpu_commit_validation=1.000000s" in group_line
+    assert "refine_context=n/a" in group_line
+    assert "host_wall_including_diagnostics=12.000000s" in summary
+    assert "preparation=1.000000s" in summary
+    assert "CUDA_synchronize=not_used" in summary
+
+
+def test_performance_attribution_reports_conditioning_subphases_without_flattening():
+    collector = memory.MemoryAttributionCollector()
+    collector.capture_sequence_start()
+    collector.start_phase(phase="conditioning")
+    collector.start_phase(phase="conditioning_identity_video_vae")
+    collector.finish_phase(phase="conditioning_identity_video_vae")
+    collector.start_phase(phase="conditioning_reference_audio_vae")
+    collector.finish_phase(phase="conditioning_reference_audio_vae")
+    collector.start_phase(phase="conditioning_prompt_clip")
+    collector.finish_phase(phase="conditioning_prompt_clip")
+    collector.finish_phase(phase="conditioning")
+    collector.capture_sequence_complete(entries=[])
+
+    summary = next(
+        line
+        for line in collector.lines
+        if line.startswith("Performance [V3.5 summary]")
+    )
+    assert "conditioning_identity_video_vae=" in summary
+    assert "conditioning_reference_audio_vae=" in summary
+    assert "conditioning_prompt_clip=" in summary
+    assert "conditioning_reference_image_vae=n/a" in summary
+    assert "conditioning_identity_video_vae=1" in summary
+    assert "conditioning_reference_audio_vae=1" in summary
+    assert "conditioning_prompt_clip=1" in summary
+
+
 @pytest.mark.parametrize(
     "method",
     (

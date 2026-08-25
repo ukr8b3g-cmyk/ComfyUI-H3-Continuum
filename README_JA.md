@@ -1,15 +1,44 @@
-# ComfyUI-H3-Continuum 3.5.1
-
-**V3.5.1正式版:** V3.4互換を維持し、Reference AudioとConditioning Bridgeを追加します。V3.4のNode IDとbackend socket keyは保存済みワークフロー互換のため意図的に残しており、表示名を変更しても既存V3.4/V3.5ワークフローの接続は維持されます。
+# ComfyUI-H3-Continuum 3.5.2
 
 MiniMax H3を複数チャンクで連続生成し、直前チャンク末尾の**映像latent / 音声latentを直接**次チャンクへ継承するComfyUIカスタムノードです。チャンク間でVideo/Audio VAEのDecode→Encodeは行いません。
 
-## V3.5.1の追加機能
+## V3.5.2 Stabilization & Optimization Update
 
-V3.5.1では、V3.4のSampling、Conditioning、Terminal Merge、Assembly、Seam、Run Storage契約を変更せず、次の2点を追加します。
+V3.5.2は新しい生成モードを追加する版ではありません。V3.5.xを安定化し、安全な条件で繰り返しPrompt/CLIP処理を省略し、長いVideo Guide入力の一時メモリを削減します。既存Workflowと生成契約は維持します。
+
+![H3 Continuum V3.5.2の安定化・最適化結果](docs/images/v352-stabilization-optimization.png)
+
+画像は受入済み最適化の実測値です。最終パッケージゲートでは、さらにComfyUI 0.33.3と、この画像を含む172項目のManifestでPASSを確認しています。
+
+### 主な変更
+
+1. **繰り返し実行Prompt/CLIP cache**: 条件が変わらないT2VA、I2VA、FL2VAではCPU上のPrompt/CLIP結果を再利用できます。Reference、schedule、tokenizer option、hook変更CLIPは安全側でbypassします。Sampling自体は通常どおり再実行します。
+2. **Video Guideメモリ最適化**: source全体をfinite検査とSHA-256 identityへ含めたまま、VAE/conditioningに必要なprefixだけを保持します。
+3. **安定化監査**: Sampling、Decode、Assembly、保存、任意機能の負荷、保持memoryを実測しました。根拠のないSampling、Driving Audio、Audio hash、Assembly、Seam、Session、V3.4最適化は採用していません。
+
+### 実測結果
+
+| 項目 | 変更前 | V3.5.2 | 結果 |
+|---|---:|---:|---:|
+| T2VA繰り返しPrompt/CLIP | 5.898398秒 | 0.000028秒 | Cache HIT、`encode_calls=0` |
+| FL2VA繰り返しPrompt/CLIP | 21.642687秒 | 0.007128秒 | Cache HIT、`encode_calls=0` |
+| Video Guide Peak追加RSS | 396.8 MiB | 114.7 MiB | 約71%削減 |
+| Video Guide保持Storage | 225 MiB | 93 MiB | 約59%削減 |
+
+Prompt/CLIPの数値はconditioning区間だけで、総生成時間ではありません。Video Guideメモリ比較は300×256×256 RGB入力／必要prefix 124 framesの固定CPU条件です。別のGPU A/Bでは実際の15秒／360-frame Video Guideを使い、decoded videoとaudio PCMの完全一致を確認しています。
+
+RTX 5060 Ti 16 GB／RAM 64 GBの検証環境で測定したSage-only Production baselineは、576×576 T2VA 1×5秒が168.069秒、640×640 FL2VA Long Terminal Merge 3×5秒が379.765秒です。環境・設定固有の測定値であり、すべての環境に対する速度保証ではありません。Samplingが最大コストで、Continuum Assemble + Seamは1%未満でした。
+
+**V3.5.2が現在の正式版です。** V3.4 Node ID、backend socket key、保存済みWorkflow読込は維持します。Sampling、Conditioning、Terminal Merge、Assembly、Seam、Run Storage、ComfyUI標準Seed動作は変更していません。撤回済みの実験的Last Queued Seed overrideは含まれていません。
+
+## V3.5.1 Reference Audio／互換性更新
+
+V3.5.1ではV3.4のSampling、Conditioning、Terminal Merge、Assembly、Seam、Run Storage契約を変更せず、次の2点を追加しました。
 
 1. **Reference Audio（任意）**: 生成音声を置換しない、H3 nativeの音声conditioningです。Workflowの保存・再読込互換を守るため、2つのsocketは常時表示します。
 2. **Conditioning Bridge V3.5**: Continuumのphysical groupごとに、完全なCore互換`MODEL`と`CONDITIONING`を外部Samplerへ公開します。
+
+Reference Audio socketはPython `INPUT_TYPES`で常設し、保存・再読込時の値ずれを防ぐため動的socket変更とUI-onlyの`Hidden`／`Show` controlを削除しました。V3.4のNode IDとbackend socket keyは保存済みWorkflow互換のため維持しており、既存V3.4/V3.5 Workflowの接続は変わりません。
 
 ### Reference系入力の違い
 
@@ -221,7 +250,7 @@ ZIPを展開して、`ComfyUI-H3-Continuum`フォルダーを`ComfyUI/custom_nod
 
 ## 検査
 
-V3.5.1正式版は全`452 passed`、source/runtime登録検証、PackedLayout、Fixed 3×5 Prompt Plan、JavaScript UI harnessを通過しています。代表GPU受入にはConditioning Bridge、Reference Audio/Image保持、Second Pass／Hi-Res経路、3×5秒FL2VA Long Terminal MergeからCore Video/Audio VAE Decode、Assemble V3.5 Autoまでを含みます。
+V3.5.2正式版は全`485 passed`、source/runtime登録検証、PackedLayout、Fixed 3×5 Prompt Plan、JavaScript UI harness、release metadata、Prompt/CLIP MISS→HIT出力一致、Video Guide bit-exact GPU A/Bを通過しています。以前の代表GPU受入にはConditioning Bridge、Reference Audio/Image保持、Second Pass／Hi-Res経路、3×5秒FL2VA Long Terminal MergeからCore Video/Audio VAE Decode、Assemble V3.5 Autoまでを含みます。
 
 Main Hi-Res Fixの3×5秒2xは、RTX 5060 Ti 16 GiBで37T groupの1152×1152 Second Pass完了後、Terminal Mergeの77T group最初の推論時にCUDA OOMとなり未受入です。Reference/Hybrid固有の1×5秒Second Passは受入済みですが、長尺Reference/Hybridは未確認です。Disk-backedが保証する低メモリ範囲はContinuum Assemblyであり、Core Decodeや下流ノードが別の全量copyを作る可能性は残ります。
 

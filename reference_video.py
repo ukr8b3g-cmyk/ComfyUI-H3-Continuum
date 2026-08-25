@@ -10,9 +10,11 @@ from typing import Any
 
 import torch
 
+from .temporal import align_frame_count_up
+
 
 REFERENCE_VIDEO_CONTRACT_VERSION = 1
-REFERENCE_VIDEO_PREPROCESS_VERSION = 2
+REFERENCE_VIDEO_PREPROCESS_VERSION = 3
 REFERENCE_VIDEO_SIZE_EFFICIENT = "Efficient - 0.4 MP"
 REFERENCE_VIDEO_SIZE_BALANCED = "Balanced - 0.6 MP"
 REFERENCE_VIDEO_SIZE_MATCH_OUTPUT = "Match Output"
@@ -25,6 +27,7 @@ _CANVAS_MULTIPLE = 32
 _EFFICIENT_AREA = 400_000
 _BALANCED_AREA = 600_000
 _SOURCE_FPS = 24
+_HASH_CHUNK_FRAMES = 8
 
 
 class ReferenceVideoError(ValueError):
@@ -39,11 +42,15 @@ def _canonical_hash(value: Any) -> str:
 
 
 def _tensor_hash(value: torch.Tensor) -> str:
-    tensor = value.detach().to(device="cpu").contiguous()
+    tensor = value.detach()
     digest = hashlib.sha256()
     digest.update(str(tuple(int(v) for v in tensor.shape)).encode("ascii"))
     digest.update(str(tensor.dtype).encode("ascii"))
-    digest.update(tensor.numpy().tobytes(order="C"))
+    for start in range(0, int(tensor.shape[0]), _HASH_CHUNK_FRAMES):
+        chunk = tensor[start : start + _HASH_CHUNK_FRAMES].to(
+            device="cpu"
+        ).contiguous()
+        digest.update(chunk.numpy().tobytes(order="C"))
     return digest.hexdigest()
 
 
@@ -121,6 +128,66 @@ class ReferenceVideoAssets:
     block: dict[str, Any]
 
 
+def _resolve_reference_frame_count(source_frames: int, target_frames: int) -> int:
+    source_count = int(source_frames)
+    target_count = int(target_frames)
+    if source_count < 5 or target_count < 5:
+        raise ReferenceVideoError("Video Reference requires at least 5 frames")
+    target_cap = align_frame_count_up(target_count)
+    available_count = min(source_count, target_cap)
+    return min(align_frame_count_up(available_count), target_cap)
+
+
+def _fit_reference_frames(frames: torch.Tensor, frame_count: int) -> torch.Tensor:
+    requested_count = int(frame_count)
+    current_count = int(frames.shape[0])
+    if current_count >= requested_count:
+        return frames[:requested_count].contiguous()
+    if current_count < 1:
+        raise ReferenceVideoError("Video Reference contains no frames")
+    padding = frames[-1:].expand(requested_count - current_count, -1, -1, -1)
+    return torch.cat((frames, padding), dim=0).contiguous()
+
+
+def _prepare_reference_frames(
+    value: torch.Tensor,
+    *,
+    frame_count: int,
+) -> tuple[torch.Tensor, tuple[int, ...], str, str]:
+    """Hash the full normalized source while retaining only its used prefix."""
+
+    source_shape = (
+        int(value.shape[0]),
+        int(value.shape[1]),
+        int(value.shape[2]),
+        3,
+    )
+    source_dtype = str(torch.float32)
+    retained_count = min(int(source_shape[0]), int(frame_count))
+    retained = torch.empty(
+        (retained_count, *source_shape[1:]),
+        dtype=torch.float32,
+        device="cpu",
+    )
+    digest = hashlib.sha256()
+    digest.update(str(source_shape).encode("ascii"))
+    digest.update(source_dtype.encode("ascii"))
+
+    for start in range(0, source_shape[0], _HASH_CHUNK_FRAMES):
+        stop = min(start + _HASH_CHUNK_FRAMES, source_shape[0])
+        chunk = value[start:stop, :, :, :3].detach().to(
+            device="cpu", dtype=torch.float32
+        ).contiguous()
+        if not bool(torch.isfinite(chunk).all().item()):
+            raise ReferenceVideoError("Video Reference contains NaN or infinity")
+        digest.update(chunk.numpy().tobytes(order="C"))
+        if start < retained_count:
+            retained_stop = min(stop, retained_count)
+            retained[start:retained_stop].copy_(chunk[: retained_stop - start])
+
+    return retained, source_shape, source_dtype, digest.hexdigest()
+
+
 def prepare_reference_video_source(
     reference_video_1: Any,
     *,
@@ -137,26 +204,22 @@ def prepare_reference_video_source(
         )
     if int(reference_video_1.shape[-1]) < 3:
         raise ReferenceVideoError("Video Reference must contain RGB channels")
-    frames = reference_video_1[:, :, :, :3].detach().to(
-        device="cpu", dtype=torch.float32
-    ).contiguous()
-    if not bool(torch.isfinite(frames).all().item()):
-        raise ReferenceVideoError("Video Reference contains NaN or infinity")
-    source_shape = tuple(int(value) for value in frames.shape)
-    source_sha256 = _tensor_hash(frames)
-    frame_count = min(int(frames.shape[0]), int(target_frames))
-    if frame_count < 5:
-        raise ReferenceVideoError("Video Reference requires at least 5 frames")
-    while frame_count > 5 and frame_count % 17 != 5:
-        frame_count -= 1
+    frame_count = _resolve_reference_frame_count(
+        int(reference_video_1.shape[0]),
+        int(target_frames),
+    )
+    frames, source_shape, source_dtype, source_sha256 = _prepare_reference_frames(
+        reference_video_1,
+        frame_count=frame_count,
+    )
     normalized_size_mode = (
         str(size_mode)
         if str(size_mode) in REFERENCE_VIDEO_SIZE_OPTIONS
         else REFERENCE_VIDEO_SIZE_EFFICIENT
     )
     target_width, target_height = _resolved_size(
-        int(frames.shape[2]),
-        int(frames.shape[1]),
+        int(source_shape[2]),
+        int(source_shape[1]),
         output_width=int(output_width),
         output_height=int(output_height),
         size_mode=normalized_size_mode,
@@ -164,7 +227,7 @@ def prepare_reference_video_source(
     contract_base = {
         "reference_video_contract_version": REFERENCE_VIDEO_CONTRACT_VERSION,
         "source_shape": list(source_shape),
-        "source_dtype": str(frames.dtype),
+        "source_dtype": source_dtype,
         "source_sha256": source_sha256,
         "source_fps": _SOURCE_FPS,
         "size_mode": normalized_size_mode,
@@ -176,7 +239,7 @@ def prepare_reference_video_source(
     return ReferenceVideoSource(
         frames=frames,
         source_shape=source_shape,
-        source_dtype=str(frames.dtype),
+        source_dtype=source_dtype,
         source_sha256=source_sha256,
         size_mode=normalized_size_mode,
         target_width=target_width,
@@ -190,7 +253,8 @@ def encode_reference_video(
     video_vae: Any,
     source: ReferenceVideoSource,
 ) -> ReferenceVideoAssets:
-    frames = source.frames[: source.frame_count]
+    available_count = min(int(source.frames.shape[0]), int(source.frame_count))
+    frames = source.frames[:available_count]
     if (
         int(frames.shape[2]) != source.target_width
         or int(frames.shape[1]) != source.target_height
@@ -208,6 +272,7 @@ def encode_reference_video(
             "lanczos",
             "disabled",
         ).movedim(1, -1).contiguous()
+    frames = _fit_reference_frames(frames, source.frame_count)
     try:
         latent = video_vae.encode(frames).detach().to("cpu").contiguous()
     except Exception as exc:

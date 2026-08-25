@@ -35,10 +35,24 @@ class _Nested:
 
 
 class _Clip:
+    def __init__(self):
+        self.encode_calls = 0
+        self.layer_idx = None
+        self.use_clip_schedule = False
+        self.tokenizer_options = {}
+        self.apply_hooks_to_conds = None
+        self.patcher = SimpleNamespace(
+            patches_uuid="test-patch-a",
+            forced_hooks=None,
+            current_hooks=None,
+            hook_patches={},
+        )
+
     def tokenize(self, prompt, **_kwargs):
         return prompt
 
     def encode_from_tokens_scheduled(self, _tokens):
+        self.encode_calls += 1
         return [[torch.zeros((1, 1, 2)), {}]]
 
 
@@ -73,6 +87,8 @@ def _capture_sequence(
     session=None,
     diagnostics=DIAGNOSTICS_BASIC,
     memory_attribution=False,
+    prompt_conditioning_cache=False,
+    clip=None,
 ):
     width, height = 96, 64
     first_image = torch.zeros((1, height, width, 3)) if terminal else None
@@ -134,7 +150,7 @@ def _capture_sequence(
     )
     return sequence.run_sequence(
         model=_model(),
-        clip=_Clip(),
+        clip=clip or _Clip(),
         video_vae=object(),
         audio_vae=None,
         sampler=object(),
@@ -159,6 +175,7 @@ def _capture_sequence(
         reference_audio_vae=reference_audio_vae,
         capture_refine_context=True,
         memory_attribution=memory_attribution,
+        prompt_conditioning_cache=prompt_conditioning_cache,
     )
 
 
@@ -210,6 +227,7 @@ def test_v35_runtime_keeps_driving_audio_fifth_and_context_sixth(monkeypatch):
     def fake_production_run(_self, **kwargs):
         captured["capture"] = kwargs["capture_refine_context"]
         captured["memory"] = kwargs.get("memory_attribution", False)
+        captured["prompt_cache"] = kwargs.get("prompt_conditioning_cache", False)
         base = ("video", "audio", {"plan": True}, "status")
         return (*base, "context") if kwargs["capture_refine_context"] else base
 
@@ -222,6 +240,7 @@ def test_v35_runtime_keeps_driving_audio_fifth_and_context_sixth(monkeypatch):
     )
     assert captured["capture"] is False
     assert captured["memory"] is False
+    assert captured["prompt_cache"] is False
     assert v34_outputs == (
         "video",
         "audio",
@@ -237,6 +256,7 @@ def test_v35_runtime_keeps_driving_audio_fifth_and_context_sixth(monkeypatch):
     )
     assert captured["capture"] is True
     assert captured["memory"] is True
+    assert captured["prompt_cache"] is True
     assert outputs == (
         "video",
         "audio",
@@ -361,6 +381,41 @@ def test_v35_full_memory_events_follow_physical_terminal_group_order(monkeypatch
         "Memory [V3.5 physical group 2 logical=[2,3] after CPU commit]",
         "Memory [V3.5 sequence complete]",
     ]
+    performance_lines = [
+        line
+        for line in outputs[3].splitlines()
+        if line.startswith("Performance [V3.5")
+    ]
+    assert len(performance_lines) == 3
+    assert performance_lines[0].startswith(
+        "Performance [V3.5 physical group 1 logical=[1]]"
+    )
+    assert performance_lines[1].startswith(
+        "Performance [V3.5 physical group 2 logical=[2,3]]"
+    )
+    assert performance_lines[2].startswith("Performance [V3.5 summary]")
+    assert "sampling=2" in performance_lines[2]
+    assert "conditioning_identity_video_vae=1" in performance_lines[2]
+    assert "conditioning_prompt_clip=1" in performance_lines[2]
+    assert "conditioning_reference_audio_vae=0" in performance_lines[2]
+    assert "CUDA_synchronize=not_used" in performance_lines[2]
+
+
+def test_v35_reference_audio_conditioning_attribution_is_reported(monkeypatch):
+    outputs = _capture_sequence(
+        monkeypatch,
+        terminal=False,
+        reference_audio=True,
+        diagnostics=DIAGNOSTICS_FULL,
+        memory_attribution=True,
+    )
+    summary = next(
+        line
+        for line in outputs[3].splitlines()
+        if line.startswith("Performance [V3.5 summary]")
+    )
+    assert "conditioning_reference_audio_vae=" in summary
+    assert "conditioning_reference_audio_vae=1" in summary
 
 
 def test_memory_attribution_is_absent_when_private_flag_is_off(monkeypatch):
@@ -373,3 +428,48 @@ def test_memory_attribution_is_absent_when_private_flag_is_off(monkeypatch):
     assert "Memory [V3.5" not in outputs[3]
     assert "Memory [sequence start]" in outputs[3]
     assert "Memory [sequence complete]" in outputs[3]
+
+
+def test_v35_prompt_cache_reports_real_encode_elision_across_runs(monkeypatch):
+    clip = _Clip()
+    first = _capture_sequence(
+        monkeypatch,
+        terminal=False,
+        diagnostics=DIAGNOSTICS_FULL,
+        prompt_conditioning_cache=True,
+        clip=clip,
+    )
+    assert clip.encode_calls == 1
+    assert "Prompt/CLIP cache [V3.5]: hits=0, misses=1, bypasses=0, encode_calls=1." in first[3]
+
+    second = _capture_sequence(
+        monkeypatch,
+        terminal=False,
+        diagnostics=DIAGNOSTICS_FULL,
+        prompt_conditioning_cache=True,
+        clip=clip,
+    )
+    assert clip.encode_calls == 1
+    assert "Prompt/CLIP cache [V3.5]: hits=1, misses=0, bypasses=0, encode_calls=0." in second[3]
+
+
+def test_v35_terminal_prompt_cache_preserves_physical_prompt_set(monkeypatch):
+    clip = _Clip()
+    _capture_sequence(
+        monkeypatch,
+        terminal=True,
+        diagnostics=DIAGNOSTICS_FULL,
+        prompt_conditioning_cache=True,
+        clip=clip,
+    )
+    assert clip.encode_calls == 4
+
+    second = _capture_sequence(
+        monkeypatch,
+        terminal=True,
+        diagnostics=DIAGNOSTICS_FULL,
+        prompt_conditioning_cache=True,
+        clip=clip,
+    )
+    assert clip.encode_calls == 4
+    assert "Prompt/CLIP cache [V3.5]: hits=4, misses=0, bypasses=0, encode_calls=0." in second[3]

@@ -6,14 +6,20 @@ conditioning is cached per unique prompt and image presentation.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 import hashlib
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 import torch
 
 from ..continuation import clone_conditioning
 from ..temporal import audio_latent_t, video_latent_t
+
+
+_PROMPT_CACHE_ATTR = "_h3_continuum_prompt_conditioning_cache_v1"
+_PROMPT_CACHE_VERSION = 1
+_PROMPT_CACHE_MAX_ENTRIES = 16
 
 
 @dataclass(slots=True)
@@ -44,6 +50,155 @@ def _tensor_fingerprint(tensor: torch.Tensor | None) -> str:
     digest.update(str(sample.dtype).encode("ascii"))
     digest.update(sample.view(torch.uint8).numpy().tobytes(order="C"))
     return digest.hexdigest()
+
+
+def _cache_event(callback: Callable[[str], None] | None, event: str) -> None:
+    if callback is None:
+        return
+    try:
+        callback(str(event))
+    except Exception:
+        pass
+
+
+def _clone_metadata_containers(value: Any) -> Any:
+    """Clone mutable metadata containers while sharing immutable tensor payloads."""
+
+    if isinstance(value, dict):
+        return {
+            key: _clone_metadata_containers(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_clone_metadata_containers(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_clone_metadata_containers(item) for item in value)
+    return value
+
+
+def _clone_cached_conditioning(conditioning: list) -> list:
+    output = []
+    for index, item in enumerate(conditioning):
+        if not isinstance(item, (tuple, list)) or len(item) != 2:
+            raise ValueError(f"conditioning entry {index} is not [tensor, metadata]")
+        if not isinstance(item[1], dict):
+            raise ValueError(f"conditioning entry {index} metadata is not a dictionary")
+        output.append([item[0], _clone_metadata_containers(item[1])])
+    if not output:
+        raise ValueError("conditioning is empty")
+    return output
+
+
+def _contains_cuda_tensor(value: Any) -> bool:
+    if torch.is_tensor(value):
+        return value.device.type == "cuda"
+    if isinstance(value, dict):
+        return any(_contains_cuda_tensor(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_contains_cuda_tensor(item) for item in value)
+    return False
+
+
+def _prompt_cache_clip_state(clip: Any) -> tuple[str, Any] | None:
+    """Return a conservative state key, or None for CLIP modes we do not cache."""
+
+    patcher = getattr(clip, "patcher", None)
+    patches_uuid = getattr(patcher, "patches_uuid", None)
+    if patcher is None or patches_uuid is None:
+        return None
+    if bool(getattr(clip, "use_clip_schedule", False)):
+        return None
+    if getattr(clip, "apply_hooks_to_conds", None) is not None:
+        return None
+    if getattr(patcher, "forced_hooks", None) is not None:
+        return None
+    if getattr(patcher, "current_hooks", None) is not None:
+        return None
+    if bool(getattr(patcher, "hook_patches", {}) or {}):
+        return None
+    if bool(getattr(clip, "tokenizer_options", {}) or {}):
+        return None
+    return str(patches_uuid), getattr(clip, "layer_idx", None)
+
+
+def encode_prompt_conditioning_cached(
+    clip: Any,
+    prompt: str,
+    *,
+    first_image: torch.Tensor | None,
+    last_image: torch.Tensor | None,
+    first_image_fingerprint: str,
+    last_image_fingerprint: str,
+    cache_enabled: bool,
+    cache_event: Callable[[str], None] | None = None,
+) -> list:
+    """V3.5-only bounded prompt cache; every unsafe state falls back to encode."""
+
+    if not bool(cache_enabled):
+        return encode_prompt_conditioning(
+            clip,
+            prompt,
+            first_image=first_image,
+            last_image=last_image,
+        )
+    state = _prompt_cache_clip_state(clip)
+    if state is None:
+        result = encode_prompt_conditioning(
+            clip,
+            prompt,
+            first_image=first_image,
+            last_image=last_image,
+        )
+        _cache_event(cache_event, "bypass_special_clip")
+        return result
+    key = (
+        _PROMPT_CACHE_VERSION,
+        str(prompt),
+        str(first_image_fingerprint),
+        str(last_image_fingerprint),
+        state,
+    )
+    try:
+        cache = getattr(clip, _PROMPT_CACHE_ATTR, None)
+        if cache is None:
+            cache = OrderedDict()
+            setattr(clip, _PROMPT_CACHE_ATTR, cache)
+        if not isinstance(cache, OrderedDict):
+            raise TypeError("unexpected prompt cache container")
+        if key in cache:
+            cached = cache.pop(key)
+            cache[key] = cached
+            result = _clone_cached_conditioning(cached)
+            _cache_event(cache_event, "hit")
+            return result
+    except Exception:
+        result = encode_prompt_conditioning(
+            clip,
+            prompt,
+            first_image=first_image,
+            last_image=last_image,
+        )
+        _cache_event(cache_event, "bypass_cache_error")
+        return result
+
+    result = encode_prompt_conditioning(
+        clip,
+        prompt,
+        first_image=first_image,
+        last_image=last_image,
+    )
+    if _contains_cuda_tensor(result):
+        _cache_event(cache_event, "bypass_cuda_output")
+        return result
+    try:
+        cache[key] = _clone_cached_conditioning(result)
+        cache.move_to_end(key)
+        while len(cache) > _PROMPT_CACHE_MAX_ENTRIES:
+            cache.popitem(last=False)
+        _cache_event(cache_event, "miss")
+    except Exception:
+        _cache_event(cache_event, "bypass_cache_error")
+    return result
 
 
 def resize_h3_image(image: torch.Tensor, width: int, height: int, crop: str) -> torch.Tensor:

@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.5.2
+
+- Added a conservative V3.5-only Prompt/CLIP cross-run LRU cache for unchanged T2VA, I2VA, and FL2VA conditioning. Reference, scheduled, tokenizer-option, and hook-modified CLIP paths bypass the cache; V3.4 is unchanged.
+- Verified cache HIT execution with `encode_calls=0` and bit-identical decoded video and audio PCM. The optimization removes repeated Prompt/CLIP work only; Sampling still runs normally.
+- Reduced long Video Guide preprocessing memory by hashing and finite-checking the complete source in eight-frame CPU chunks while retaining only the prefix required by H3 conditioning.
+- Preserved the exact Video Guide source SHA-256, Run Storage identity, `17k+5` frame alignment, final-frame padding, VAE input, Qwen input, Sampling seed, decoded video, and decoded audio.
+- Measured the deterministic CPU comparison at approximately 71% lower additional peak RSS (`396.8 MiB` to `114.7 MiB`) and 59% lower retained storage (`225 MiB` to `93 MiB`) with effectively unchanged preprocessing time.
+- Completed the Phase 3/4 performance and feature-overhead audit. No speculative Sampling, Driving Audio lazy-decode, Audio hash, Assembly, Seam, Session, or V3.4 optimization was adopted.
+- Preserved all V3.4/V3.5 node IDs, backend socket keys, saved-workflow compatibility, Sampling, Conditioning, Terminal Merge, Assembly, Seam, and Run Storage contracts.
+
 ## 3.5.1
 
 - Added `H3 Continuum Conditioning Bridge V3.5`, exposing one complete Core-compatible MODEL and CONDITIONING object per Continuum physical group without flattening CONDITIONING entries.

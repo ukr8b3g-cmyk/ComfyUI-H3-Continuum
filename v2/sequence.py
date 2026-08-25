@@ -35,7 +35,7 @@ from ..temporal import (
 from ..version import PACKAGE_VERSION
 from .decoder import decode_sequence, decode_sequence_with_seam, enforce_total_frames
 from .context_diagnostics import ContextDiagnosticsTracker
-from .h3_builder import attach_keyframes, empty_h3_latent, encode_identity_latents, encode_prompt_conditioning, prepare_identity_assets
+from .h3_builder import attach_keyframes, empty_h3_latent, encode_identity_latents, encode_prompt_conditioning, encode_prompt_conditioning_cached, prepare_identity_assets
 from .motion import choose_context_frames
 from .prompts import prompt_plan_report, validate_prompt_plan
 from .sampling import latent_from_cpu, latent_to_cpu, sample_chunk
@@ -99,16 +99,44 @@ def _conditioning_cache_key(prompt, *, include_last, reference_assets=None):
     return (prompt, False if reference_assets is not None else bool(include_last))
 
 
-def _conditioning_cache(*,clip,prompts,assets,final_has_last_frame,reference_assets=None,reference_audio_assets=None,timeline_video_assets=None):
+def _record_prompt_cache_event(callback, event):
+    if callback is None:
+        return
+    try:
+        callback(str(event))
+    except Exception:
+        pass
+
+
+def _prompt_cache_diagnostics(events):
+    hits=sum(event=="hit" for event in events)
+    misses=sum(event=="miss" for event in events)
+    bypasses=len(events)-hits-misses
+    return (
+        "Prompt/CLIP cache [V3.5]: "
+        f"hits={hits}, misses={misses}, bypasses={bypasses}, "
+        f"encode_calls={misses+bypasses}."
+    )
+
+
+def _conditioning_cache(*,clip,prompts,assets,final_has_last_frame,reference_assets=None,reference_audio_assets=None,timeline_video_assets=None,prompt_conditioning_cache=False,prompt_cache_event=None):
     cache={}; final_index=len(prompts)-1
     for index,prompt in enumerate(prompts):
         include_last=bool(final_has_last_frame and index==final_index); key=_conditioning_cache_key(prompt,include_last=include_last,reference_assets=reference_assets)
         if key in cache: continue
         if reference_assets is not None:
             from ..reference import encode_reference_prompt
+            if bool(prompt_conditioning_cache):
+                _record_prompt_cache_event(prompt_cache_event,"bypass_reference_inputs")
             cache[key]=encode_reference_prompt(clip,prompt,reference_assets,first_image=assets.first_image,last_image=assets.last_image,reference_audio_assets=reference_audio_assets,timeline_video_assets=timeline_video_assets)
         else:
-            cache[key]=encode_prompt_conditioning(clip,prompt,first_image=assets.first_image,last_image=assets.last_image if include_last else None,reference_audio_assets=reference_audio_assets,timeline_video_assets=timeline_video_assets)
+            cache_allowed=bool(prompt_conditioning_cache and reference_audio_assets is None and timeline_video_assets is None)
+            if bool(prompt_conditioning_cache) and not cache_allowed:
+                _record_prompt_cache_event(prompt_cache_event,"bypass_reference_inputs")
+            if cache_allowed:
+                cache[key]=encode_prompt_conditioning_cached(clip,prompt,first_image=assets.first_image,last_image=assets.last_image if include_last else None,first_image_fingerprint=assets.identity_hash,last_image_fingerprint=assets.last_frame_hash if include_last else "none",cache_enabled=True,cache_event=prompt_cache_event)
+            else:
+                cache[key]=encode_prompt_conditioning(clip,prompt,first_image=assets.first_image,last_image=assets.last_image if include_last else None,reference_audio_assets=reference_audio_assets,timeline_video_assets=timeline_video_assets)
     return cache
 
 
@@ -339,12 +367,14 @@ def _attach_terminal_flf_keyframes(
         metadata["minimax_frame_count"] = int(frame_count)
     return conditioning
 
-def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,sigmas:torch.Tensor,first_frame:torch.Tensor|None,last_frame:torch.Tensor|None,prompt_plan:dict[str,Any],width:int,height:int,continuity:str,base_seed:int,audio_continuity:bool,exact_total_duration:bool,diagnostics_mode:str,reroll_from_chunk:int,reroll_nonce:int,strict_compatibility:bool,debug:bool,seam_correction:str=SEAM_CORRECTION_OFF,enable_preview:bool=True,session:dict[str,Any]|None=None,initial_state:dict[str,Any]|None=None,latent_only:bool=False,reference_assets=None,reference_audio_source=None,reference_audio_vae=None,driving_audio_source=None,driving_audio_vae=None,reference_video_source=None,timeline_video_source=None,capture_refine_context:bool=False,memory_attribution:bool=False,_memory_attribution_collector:Any=None):
+def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,sigmas:torch.Tensor,first_frame:torch.Tensor|None,last_frame:torch.Tensor|None,prompt_plan:dict[str,Any],width:int,height:int,continuity:str,base_seed:int,audio_continuity:bool,exact_total_duration:bool,diagnostics_mode:str,reroll_from_chunk:int,reroll_nonce:int,strict_compatibility:bool,debug:bool,seam_correction:str=SEAM_CORRECTION_OFF,enable_preview:bool=True,session:dict[str,Any]|None=None,initial_state:dict[str,Any]|None=None,latent_only:bool=False,reference_assets=None,reference_audio_source=None,reference_audio_vae=None,driving_audio_source=None,driving_audio_vae=None,reference_video_source=None,timeline_video_source=None,capture_refine_context:bool=False,memory_attribution:bool=False,prompt_conditioning_cache:bool=False,_memory_attribution_collector:Any=None):
     from ..conditioning import detect_conditioning_mode, conditioning_display_label
     from ..run_storage import get_active_run_storage
     storage_controller=get_active_run_storage()
     capture_refine_context=bool(capture_refine_context and latent_only)
     memory_attribution=bool(memory_attribution and capture_refine_context)
+    prompt_conditioning_cache=bool(prompt_conditioning_cache and capture_refine_context and latent_only)
+    prompt_cache_events=[]
     memory_collector=None
     refine_groups=[]
     make_refine_group=make_refine_context=None
@@ -447,25 +477,52 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
         if old_fingerprint and old_fingerprint!=current_model_fingerprint: reuse_notes.append("model/accelerator fingerprint differs from the saved session; accepted chunks were kept")
     cache={}
     if len(preserved)<chunks:
+        if memory_collector is not None:
+            capture_memory(memory_collector, "start_phase", phase="conditioning")
+            capture_memory(memory_collector, "start_phase", phase="conditioning_identity_video_vae")
         assets=encode_identity_latents(video_vae,assets)
+        if memory_collector is not None:
+            capture_memory(memory_collector, "finish_phase", phase="conditioning_identity_video_vae")
         if reference_assets is not None:
             from ..reference import encode_reference_latents
+            if memory_collector is not None:
+                capture_memory(memory_collector, "start_phase", phase="conditioning_reference_image_vae")
             reference_assets=encode_reference_latents(video_vae,reference_assets)
+            if memory_collector is not None:
+                capture_memory(memory_collector, "finish_phase", phase="conditioning_reference_image_vae")
         reference_audio_assets=None
         if reference_audio_source is not None:
             from ..reference_audio import encode_reference_audio
+            if memory_collector is not None:
+                capture_memory(memory_collector, "start_phase", phase="conditioning_reference_audio_vae")
             reference_audio_assets=encode_reference_audio(reference_audio_vae,reference_audio_source)
+            if memory_collector is not None:
+                capture_memory(memory_collector, "finish_phase", phase="conditioning_reference_audio_vae")
+        if memory_collector is not None and driving_audio_source is not None:
+            capture_memory(memory_collector, "start_phase", phase="conditioning_driving_audio_vae")
         driving_audio_assets=encode_driving_audio(driving_audio_source,driving_audio_vae)
+        if memory_collector is not None and driving_audio_source is not None:
+            capture_memory(memory_collector, "finish_phase", phase="conditioning_driving_audio_vae")
         reference_video_assets=None
         if reference_video_source is not None:
             from ..reference_video import encode_reference_video
+            if memory_collector is not None:
+                capture_memory(memory_collector, "start_phase", phase="conditioning_reference_video_vae")
             reference_video_assets=encode_reference_video(video_vae,reference_video_source)
+            if memory_collector is not None:
+                capture_memory(memory_collector, "finish_phase", phase="conditioning_reference_video_vae")
         if timeline_video_source is None:
-            cache=_conditioning_cache(clip=clip,prompts=prompts,assets=assets,final_has_last_frame=last_frame is not None,reference_assets=reference_assets,reference_audio_assets=reference_audio_assets,timeline_video_assets=reference_video_assets)
+            if memory_collector is not None:
+                capture_memory(memory_collector, "start_phase", phase="conditioning_prompt_clip")
+            cache=_conditioning_cache(clip=clip,prompts=prompts,assets=assets,final_has_last_frame=last_frame is not None,reference_assets=reference_assets,reference_audio_assets=reference_audio_assets,timeline_video_assets=reference_video_assets,prompt_conditioning_cache=prompt_conditioning_cache,prompt_cache_event=prompt_cache_events.append)
             if terminal_merge_enabled and terminal_prompt is not None:
                 terminal_key=_conditioning_cache_key(terminal_prompt,include_last=True,reference_assets=reference_assets)
                 if terminal_key not in cache:
-                    cache.update(_conditioning_cache(clip=clip,prompts=[terminal_prompt],assets=assets,final_has_last_frame=True,reference_assets=reference_assets,reference_audio_assets=reference_audio_assets,timeline_video_assets=reference_video_assets))
+                    cache.update(_conditioning_cache(clip=clip,prompts=[terminal_prompt],assets=assets,final_has_last_frame=True,reference_assets=reference_assets,reference_audio_assets=reference_audio_assets,timeline_video_assets=reference_video_assets,prompt_conditioning_cache=prompt_conditioning_cache,prompt_cache_event=prompt_cache_events.append))
+            if memory_collector is not None:
+                capture_memory(memory_collector, "finish_phase", phase="conditioning_prompt_clip")
+        if memory_collector is not None:
+            capture_memory(memory_collector, "finish_phase", phase="conditioning")
     entries=preserved[:]; previous_state=None
     if entries:
         try: previous_state=entry_to_state(entries[-1])
@@ -489,16 +546,30 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
         elif previous_state is not None:
             _record_context_diagnostics(tracker=context_diagnostics,reports=sampling_reports,state=previous_state,continuity=continuity,reused=True)
     normal_indices,terminal_merge_pending=_terminal_sampling_plan(chunks=chunks,completed=len(entries),merge_enabled=terminal_merge_enabled)
+    if memory_collector is not None:
+        capture_memory(memory_collector, "finish_phase", phase="preparation")
     for sequence_index in normal_indices:
+        if memory_collector is not None:
+            capture_memory(memory_collector, "start_phase", phase="group_prepare", physical_group=sequence_index+1, logical_chunks=(sequence_index+1,))
         prompt=prompts[sequence_index]; prompt_hash_value=prompt_hashes[sequence_index]; is_final=sequence_index==chunks-1; effective_reroll_nonce=int(reroll_nonce) if int(reroll_from_chunk)>0 and sequence_index+1>=int(reroll_from_chunk) else 0; seed=derive_chunk_seed(base_seed,sequence_index,effective_reroll_nonce); motion_score=0.0; video_context=None; audio_context=None; context_before=None
         timeline_video_assets=reference_video_assets
         chunk_cache=cache
         if timeline_video_source is not None:
             from ..timeline_video import encode_timeline_video_chunk
+            if memory_collector is not None:
+                capture_memory(memory_collector, "start_phase", phase="conditioning")
+                capture_memory(memory_collector, "start_phase", phase="conditioning_timeline_video_vae")
             timeline_video_assets=encode_timeline_video_chunk(video_vae,timeline_video_source,sequence_index)
+            if memory_collector is not None:
+                capture_memory(memory_collector, "finish_phase", phase="conditioning_timeline_video_vae")
         chunk_assets=assets
         if timeline_video_source is not None:
-            chunk_cache=_conditioning_cache(clip=clip,prompts=[prompt],assets=assets,final_has_last_frame=bool(last_frame is not None and is_final),reference_assets=reference_assets,reference_audio_assets=reference_audio_assets,timeline_video_assets=timeline_video_assets)
+            if memory_collector is not None:
+                capture_memory(memory_collector, "start_phase", phase="conditioning_prompt_clip")
+            chunk_cache=_conditioning_cache(clip=clip,prompts=[prompt],assets=assets,final_has_last_frame=bool(last_frame is not None and is_final),reference_assets=reference_assets,reference_audio_assets=reference_audio_assets,timeline_video_assets=timeline_video_assets,prompt_conditioning_cache=prompt_conditioning_cache,prompt_cache_event=prompt_cache_events.append)
+            if memory_collector is not None:
+                capture_memory(memory_collector, "finish_phase", phase="conditioning_prompt_clip")
+                capture_memory(memory_collector, "finish_phase", phase="conditioning")
         if previous_state is None:
             include_chunk_last=bool(last_frame is not None and is_final)
             conditioning_key=_conditioning_cache_key(prompt,include_last=include_chunk_last,reference_assets=reference_assets)
@@ -515,6 +586,9 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
         driving_audio_latent=slice_driving_audio_latent(driving_audio_assets,cumulative_retained_before=retained_frames,total_frames=int(chunk_plan["total_frames"]),trim_frames=int(chunk_plan["trim_frames"]),fps=FPS)
         conditioning=attach_driving_audio(conditioning,driving_audio_latent)
         chunk_model=clone_model_for_chunk(model,strict=bool(strict_compatibility),debug=bool(debug),chunk_index=clip_index,context_frames=context_frames if previous_state is not None else None)
+        if memory_collector is not None:
+            capture_memory(memory_collector, "finish_phase", phase="group_prepare", physical_group=sequence_index+1, logical_chunks=(sequence_index+1,))
+            capture_memory(memory_collector, "start_phase", phase="refine_context", physical_group=sequence_index+1, logical_chunks=(sequence_index+1,))
         if bool(capture_refine_context):
             from ..state import extract_av_streams
             source_video,_=extract_av_streams(latent)
@@ -533,6 +607,8 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
             ))
             del source_video,_
         if memory_collector is not None:
+            capture_memory(memory_collector, "finish_phase", phase="refine_context", physical_group=sequence_index+1, logical_chunks=(sequence_index+1,))
+        if memory_collector is not None:
             capture_memory(memory_collector, "capture_group",
                 physical_group=sequence_index+1,
                 logical_chunks=(sequence_index+1,),
@@ -541,7 +617,11 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
                 observed_latent=latent,
                 retained_refine_context=refine_groups,
             )
+        if memory_collector is not None:
+            capture_memory(memory_collector, "start_phase", phase="sampling", physical_group=sequence_index+1, logical_chunks=(sequence_index+1,))
         sampled=sample_chunk(model=chunk_model,conditioning=conditioning,latent=latent,sampler=sampler,sigmas=sigmas,seed=seed,enable_preview=bool(enable_preview))
+        if memory_collector is not None:
+            capture_memory(memory_collector, "finish_phase", phase="sampling", physical_group=sequence_index+1, logical_chunks=(sequence_index+1,))
         if memory_collector is not None:
             capture_memory(memory_collector, "capture_group",
                 physical_group=sequence_index+1,
@@ -551,10 +631,14 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
                 observed_latent=sampled,
                 retained_refine_context=refine_groups,
             )
+        if memory_collector is not None:
+            capture_memory(memory_collector, "start_phase", phase="cpu_commit_validation", physical_group=sequence_index+1, logical_chunks=(sequence_index+1,))
         if context_before is not None and video_context is not None: assert_context_unchanged(video_context,audio_context,context_before)
         entry=make_chunk_entry(latent=sampled,plan=chunk_plan,prompt=prompt,prompt_hash=prompt_hash_value,seed=seed,context_frames=context_frames,motion_score=motion_score,reused=False); previous_state=entry_to_state(entry); entries.append(entry)
         _record_context_diagnostics(tracker=context_diagnostics,reports=sampling_reports,state=previous_state,continuity=continuity,reused=False)
         if storage_controller is not None: storage_controller.commit_chunk(entry, position=sequence_index)
+        if memory_collector is not None:
+            capture_memory(memory_collector, "finish_phase", phase="cpu_commit_validation", physical_group=sequence_index+1, logical_chunks=(sequence_index+1,))
         retained_frames+=int(chunk_plan["net_frames"])
         sampling_reports.append(f"chunk {sequence_index+1}/{chunks}: seed={seed}, frames={chunk_plan['total_frames']}, trim={chunk_plan['trim_frames']}, retained_total={retained_frames}, context={context_frames} ({reason}), motion={motion_score:.6f}, "+(f"interop=emitted actual_prefix={CONTINUUM_ACTUAL_PREFIX_STEPS} consumer=not_observable" if context_before is not None else "interop=not_emitted"))
         del sampled,latent,conditioning,chunk_model,chunk_cache
@@ -571,6 +655,10 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
         pair_start=chunks-2
         if len(entries)!=pair_start:
             raise SequenceRuntimeError(f"terminal merged pair expected {pair_start} completed chunks, got {len(entries)}")
+        terminal_physical_group=pair_start+1
+        terminal_logical_chunks=(pair_start+1,chunks)
+        if memory_collector is not None:
+            capture_memory(memory_collector, "start_phase", phase="group_prepare", physical_group=terminal_physical_group, logical_chunks=terminal_logical_chunks)
         prompt=terminal_prompt
         seed_nonce=int(reroll_nonce) if int(reroll_from_chunk)>0 else 0
         terminal_seed_plan=_terminal_physical_seed_plan(base_seed=base_seed,physical_window_start_index=pair_start,reroll_nonce=seed_nonce)
@@ -597,6 +685,9 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
         driving_audio_latent=slice_driving_audio_latent(driving_audio_assets,cumulative_retained_before=retained_frames,total_frames=physical_frames,trim_frames=physical_context_frames,fps=FPS)
         conditioning=attach_driving_audio(conditioning,driving_audio_latent)
         chunk_model=clone_model_for_chunk(model,strict=bool(strict_compatibility),debug=bool(debug),chunk_index=physical_clip_index,context_frames=physical_context_frames if not initial_pair else None)
+        if memory_collector is not None:
+            capture_memory(memory_collector, "finish_phase", phase="group_prepare", physical_group=terminal_physical_group, logical_chunks=terminal_logical_chunks)
+            capture_memory(memory_collector, "start_phase", phase="refine_context", physical_group=terminal_physical_group, logical_chunks=terminal_logical_chunks)
         if bool(capture_refine_context):
             from ..state import extract_av_streams
             source_video,_=extract_av_streams(latent)
@@ -614,8 +705,8 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
                 last_image=assets.last_image,
             ))
             del source_video,_
-        terminal_physical_group=pair_start+1
-        terminal_logical_chunks=(pair_start+1,chunks)
+        if memory_collector is not None:
+            capture_memory(memory_collector, "finish_phase", phase="refine_context", physical_group=terminal_physical_group, logical_chunks=terminal_logical_chunks)
         if memory_collector is not None:
             capture_memory(memory_collector, "capture_group",
                 physical_group=terminal_physical_group,
@@ -625,7 +716,11 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
                 observed_latent=latent,
                 retained_refine_context=refine_groups,
             )
+        if memory_collector is not None:
+            capture_memory(memory_collector, "start_phase", phase="sampling", physical_group=terminal_physical_group, logical_chunks=terminal_logical_chunks)
         sampled=sample_chunk(model=chunk_model,conditioning=conditioning,latent=latent,sampler=sampler,sigmas=sigmas,seed=physical_seed,enable_preview=bool(enable_preview))
+        if memory_collector is not None:
+            capture_memory(memory_collector, "finish_phase", phase="sampling", physical_group=terminal_physical_group, logical_chunks=terminal_logical_chunks)
         if memory_collector is not None:
             capture_memory(memory_collector, "capture_group",
                 physical_group=terminal_physical_group,
@@ -635,6 +730,8 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
                 observed_latent=sampled,
                 retained_refine_context=refine_groups,
             )
+        if memory_collector is not None:
+            capture_memory(memory_collector, "start_phase", phase="cpu_commit_validation", physical_group=terminal_physical_group, logical_chunks=terminal_logical_chunks)
         if context_before is not None and video_context is not None:
             assert_context_unchanged(video_context,audio_context,context_before)
         sampled_video,sampled_audio=latent_to_cpu(sampled)
@@ -659,6 +756,8 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
             retained_frames+=int(chunk_plan["net_frames"])
             sampling_reports.append(f"chunk {sequence_index+1}/{chunks}: seed={logical_seed}, frames={total_frames}, trim={trim_frames}, retained_total={retained_frames}, context={trim_frames}, shared_physical_sample=terminal_10s_seed_v2")
             del logical_latent
+        if memory_collector is not None:
+            capture_memory(memory_collector, "finish_phase", phase="cpu_commit_validation", physical_group=terminal_physical_group, logical_chunks=terminal_logical_chunks)
         del sampled,sampled_video,sampled_audio,logical_parts,latent,conditioning,chunk_model
         del video_part,audio_part
         if memory_collector is not None:
@@ -669,6 +768,8 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
                 retained_entries=entries,
                 retained_refine_context=refine_groups,
             )
+    if memory_collector is not None:
+        capture_memory(memory_collector, "start_phase", phase="finalization")
     if len(entries)!=chunks: raise SequenceRuntimeError(f"internal sequence length mismatch: expected {chunks}, got {len(entries)}")
     if latent_only:
         last_state=entry_to_state(entries[-1]); parent_id=session.get("session_id") if session is not None else None
@@ -681,6 +782,8 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
         new_session=make_session(chunks=entries,width=width,height=height,chunk_seconds=chunk_seconds,identity_hash=sequence_identity_hash,model_fingerprint_value=current_model_fingerprint,parent_session_id=parent_id,reroll_from_chunk=int(reroll_from_chunk),settings=settings)
         report_lines=[f"H3 Continuum V3 {PACKAGE_VERSION}",f"Conditioning mode: {conditioning_display}.",prompt_plan_report(plan),"Decode: external ComfyUI Core VAE nodes; full raw AV chunks retained.",accelerators,"Execution: conditioning precomputed; single call-local MODEL clone per chunk; no internal VAE decode.",*reuse_notes]
         if diagnostics_mode!=DIAGNOSTICS_OFF: report_lines.extend(sampling_reports)
+        if prompt_conditioning_cache and diagnostics_mode==DIAGNOSTICS_FULL:
+            report_lines.append(_prompt_cache_diagnostics(prompt_cache_events))
         report_lines.extend([session_summary(new_session),f"Output: {len(entries)} raw AV latent chunk(s); connect Core VAE Decode nodes, then H3 Continuum Assemble V3."])
         outputs=(entries,last_state,new_session,"\n".join(report_lines))
         if bool(capture_refine_context):
@@ -701,7 +804,11 @@ def run_sequence(*,model:Any,clip:Any,video_vae:Any,audio_vae:Any,sampler:Any,si
                 complete=complete,
                 notes=notes,
             )
+            if memory_collector is not None:
+                capture_memory(memory_collector, "finish_phase", phase="finalization")
             return (*outputs,raw_refine_context)
+        if memory_collector is not None:
+            capture_memory(memory_collector, "finish_phase", phase="finalization")
         return outputs
     if seam_correction==SEAM_CORRECTION_OFF: images,audio,decode_reports=decode_sequence(entries=entries,video_vae=video_vae,audio_vae=audio_vae,diagnostics_full=diagnostics_mode==DIAGNOSTICS_FULL)
     else: images,audio,decode_reports=decode_sequence_with_seam(entries=entries,video_vae=video_vae,audio_vae=audio_vae,diagnostics_mode=diagnostics_mode,automatic=seam_correction==SEAM_CORRECTION_AUTO)

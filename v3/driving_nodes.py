@@ -255,10 +255,12 @@ class H3ContinuumSamplerV35(H3ContinuumSamplerV34):
     def run(self, *args, **kwargs):
         kwargs.pop("capture_refine_context", None)
         kwargs.pop("memory_attribution", None)
+        kwargs.pop("prompt_conditioning_cache", None)
         return super().run(
             *args,
             capture_refine_context=True,
             memory_attribution=True,
+            prompt_conditioning_cache=True,
             **kwargs,
         )
 

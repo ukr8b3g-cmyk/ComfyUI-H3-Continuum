@@ -1,6 +1,6 @@
-ComfyUI-H3-Continuum V3.5.1 package validation
+ComfyUI-H3-Continuum V3.5.2 package validation
 
-Status: V3.5.1 release. Stable V3.5 paths, Conditioning Bridge, and Reference Audio are validated. Seed widgets use standard ComfyUI behavior. Integrated Hi-Res Fix remains Experimental.
+Status: V3.5.2 stabilization and optimization release. Stable V3.5 paths, Conditioning Bridge, Reference Audio, Prompt/CLIP cache reuse, and Video Guide memory optimization are validated. Seed widgets use standard ComfyUI behavior. Integrated Hi-Res Fix remains Experimental.
 
 Required automated checks:
 - python -m compileall -q .
@@ -30,7 +30,7 @@ Validated runtime paths include:
 - Audio Seam Auto
 - Video Seam Auto guarded transient and micro-flash correction
 
-Latest verified automated result: 450 passed.
+Latest verified automated result: 485 passed.
 
 Hi-Res Fix and Auto 2 remain experimental. Main 3x5 2x is not accepted on the tested RTX 5060 Ti 16 GiB because the terminal 77T Second Pass group exceeded VRAM; longer Reference/Hybrid acceptance remains pending.
 
