@@ -1,5 +1,8 @@
 # ComfyUI-H3-Continuum 3.6.0
 
+<img width="1536" height="1024" alt="Clip_95" src="https://github.com/user-attachments/assets/4cf97e5d-27e3-40e5-aefd-6a54ab035461" />
+
+
 Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pass refinement, optional Hi-Res Fix, low-memory disk-backed assembly, restartable chunks, persistent references, and optional Spectrum interoperability.
 
 ## V3.6 Masked AV Continuation
