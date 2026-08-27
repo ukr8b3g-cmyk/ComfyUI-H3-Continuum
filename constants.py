@@ -8,6 +8,17 @@ AUDIO_LATENT_FPS = 40.0
 FRAME_RESCALE = AUDIO_LATENT_FPS / FPS
 FRAME_PER_TOKEN = (1, 4, 4, 4, 4)
 
+CHUNK_SECONDS_DEFAULT = 5.0
+CHUNK_SECONDS_MIN = 4.0
+CHUNK_SECONDS_MAX = 30.0
+CHUNK_SECONDS_STEP = 0.1
+CHUNK_SECONDS_TOOLTIP = (
+    "Target duration shared by every chunk. 5–15 seconds is the recommended "
+    "and validated range. Values above 15 seconds are supported, but VRAM "
+    "use and processing time can increase substantially, especially at high "
+    "resolution."
+)
+
 STATE_MAGIC = "H3_CONTINUUM_STATE"
 PLAN_MAGIC = "H3_CONTINUUM_PLAN"
 SESSION_MAGIC = "H3_CONTINUUM_SESSION"

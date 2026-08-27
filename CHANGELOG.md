@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.6.0
+
+- Added `H3 Continuum Sampler V3.6` with Standard Masked AV continuation. Prior finalized Video/Audio prefixes are preserved inside the next H3 target with Core noise masks instead of being appended as duplicate Reference rows.
+- Retained `Compatibility` as an Advanced fallback to the V3.5 `Reference Context` transport. Internal transport identifiers are not exposed in the public UI, and all V3.4/V3.5 node IDs and saved workflows remain loadable.
+- Scoped Run Storage identity and Sampling Contract execution semantics by nondefault continuation backend, preventing Reference and Masked chunks from being mixed while preserving legacy Reference revision identity.
+- Preserved Long Terminal Merge as one physical sample during resume and `Regenerate From`; logical chunks `[2,3]` are never split or partially reused.
+- Extended the shared V2/V3 `chunk_seconds` range to 4–30 seconds with a 5-second default and 0.1-second step. The 5–15 second range remains recommended and validated; longer high-resolution chunks can substantially increase VRAM and runtime.
+- GPU-accepted T2VA, I2VA, Reference Image + Reference Audio, Balanced 22f/37T Joint AV, and 3×5-second FL2VA Long Terminal Merge Masked continuation. Protected Video/Audio prefixes finalize bit-exact, and the accepted PIG-3 audio output passed subjective listening.
+- Measured the accepted FL2VA Terminal Group 2 path at 8.01% fewer packed rows and a 4.06% lower median Sampling time than Reference Context in the tested paired runs. These are environment-specific measurements, not universal speed guarantees.
+- Preserved V3.5 Second Pass, Hi-Res Fix, Conditioning Bridge, disk-backed Assembly, Prompt/CLIP cache, Video Guide optimization, V3.4 compatibility, and existing Audio/Video Seam algorithms.
+
 ## 3.5.3
 
 - Repaired the public Conditioning Bridge workflow's Width/Height input slots and added serialization-integrity checks for every published workflow.

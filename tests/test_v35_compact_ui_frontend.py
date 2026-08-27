@@ -31,6 +31,20 @@ def test_v35_sampler_uses_existing_compact_runtime_settings_path():
         assert f"hidePersistentWidget(findWidget(node, {widget_name}))" in configure
 
 
+def test_v36_sampler_uses_compact_settings_without_hiding_backend_choice():
+    source = PROJECT_ID_JS.read_text(encoding="utf-8")
+    configure = _function_source(source, "configureNode", "configureNodeAfterSetup")
+    before_queue = source[source.index("async beforeQueuePrompt") :]
+
+    assert 'const V36_NODE_CLASS = "H3ContinuumSamplerV36";' in source
+    assert "const isV36 = node.comfyClass === V36_NODE_CLASS;" in configure
+    assert "!isProduction && !isTimeline && !isV34 && !isV35 && !isV36" in configure
+    assert "isProduction || isV34 || isV35 || isV36" in configure
+    assert "isV35 || isV36" in configure
+    assert "node.comfyClass === V36_NODE_CLASS" in before_queue
+    assert 'hidePersistentWidget(findWidget(node, "continuation_backend"))' not in configure
+
+
 def test_v35_assembler_uses_existing_compact_runtime_settings_path():
     source = PROJECT_ID_JS.read_text(encoding="utf-8")
     configure = _function_source(source, "configureAssembler", "configureNode")

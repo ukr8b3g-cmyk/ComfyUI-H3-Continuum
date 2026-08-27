@@ -265,6 +265,80 @@ class H3ContinuumSamplerV35(H3ContinuumSamplerV34):
         )
 
 
+CONTINUATION_BACKEND_STANDARD = "Standard"
+CONTINUATION_BACKEND_COMPATIBILITY = "Compatibility"
+CONTINUATION_BACKEND_OPTIONS = (
+    CONTINUATION_BACKEND_STANDARD,
+    CONTINUATION_BACKEND_COMPATIBILITY,
+)
+
+
+class H3ContinuumSamplerV36(H3ContinuumSamplerV35):
+    """V3.6 sampler with Masked continuation and a legacy fallback."""
+
+    DEPRECATED = False
+    CATEGORY = CONTINUUM_CATEGORY
+    DESCRIPTION = (
+        "H3 Continuum V3.6 sampler. Standard continuation preserves prior Video/Audio "
+        "inside the next H3 target with native noise masks; Compatibility retains the "
+        "V3.5 Reference Context transport."
+    )
+    SEARCH_ALIASES = [
+        "H3 Continuum Sampler V3.6",
+        "MiniMax H3 masked continuation",
+    ]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        schema = super().INPUT_TYPES()
+        required = dict(schema.get("required", {}))
+        required["continuation_backend"] = (
+            CONTINUATION_BACKEND_OPTIONS,
+            {
+                "default": CONTINUATION_BACKEND_STANDARD,
+                "display_name": "Continuation Backend",
+                "advanced": True,
+                "tooltip": (
+                    "Standard uses the V3.6 target-preserving continuation path. "
+                    "Compatibility restores the V3.5 Reference Context path for "
+                    "older workflows or comparison. Run Storage keeps the two "
+                    "backends in separate revisions."
+                ),
+            },
+        )
+        schema["required"] = required
+        return schema
+
+    def run(
+        self,
+        *args,
+        continuation_backend=CONTINUATION_BACKEND_STANDARD,
+        **kwargs,
+    ):
+        from ..v2.sequence import (
+            MASKED_AV_PREFIX_22_V1,
+            MASKED_VIDEO_PREFIX_V1,
+            REFERENCE_CONTEXT_V1,
+        )
+
+        backend = str(continuation_backend)
+        if backend == CONTINUATION_BACKEND_COMPATIBILITY:
+            transport = REFERENCE_CONTEXT_V1
+        else:
+            audio_continuity = kwargs.get("audio_continuity")
+            if audio_continuity is None and len(args) > 13:
+                audio_continuity = args[13]
+            if audio_continuity is None:
+                audio_continuity = True
+            transport = (
+                MASKED_AV_PREFIX_22_V1
+                if bool(audio_continuity)
+                else MASKED_VIDEO_PREFIX_V1
+            )
+        kwargs["continuation_transport"] = transport
+        return super().run(*args, **kwargs)
+
+
 class H3ContinuumAssembleSeamV34(H3ContinuumAssembleSeamExperimental):
     """Assemble decoded chunks and select original Driving Audio when connected."""
 
@@ -444,6 +518,7 @@ class H3ContinuumAssembleSeamV35(H3ContinuumAssembleSeamV34):
 NODE_CLASS_MAPPINGS = {
     "H3ContinuumSamplerV34": H3ContinuumSamplerV34,
     "H3ContinuumSamplerV35": H3ContinuumSamplerV35,
+    "H3ContinuumSamplerV36": H3ContinuumSamplerV36,
     "H3ContinuumAssembleSeamV34": H3ContinuumAssembleSeamV34,
     "H3ContinuumAssembleSeamV35": H3ContinuumAssembleSeamV35,
 }
@@ -451,6 +526,7 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "H3ContinuumSamplerV34": "H3 Continuum Sampler V3.4",
     "H3ContinuumSamplerV35": "H3 Continuum Sampler V3.5",
+    "H3ContinuumSamplerV36": "H3 Continuum Sampler V3.6",
     "H3ContinuumAssembleSeamV34": "H3 Continuum Assemble + Seam V3.4",
     "H3ContinuumAssembleSeamV35": "H3 Continuum Assemble + Seam V3.5",
 }

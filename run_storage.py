@@ -856,6 +856,25 @@ def _entry_metadata(entry: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _resume_session_settings(
+    *,
+    contract: dict[str, Any],
+    revision_id: str,
+    first_frame_hash: str,
+    last_frame_hash: str,
+) -> dict[str, Any]:
+    settings = {
+        "run_storage_validated_prefix": True,
+        "revision_id": str(revision_id),
+        "first_frame_hash": str(first_frame_hash),
+        "last_frame_hash": str(last_frame_hash),
+    }
+    settings.update(
+        dict((contract.get("global") or {}).get("execution_semantics") or {})
+    )
+    return settings
+
+
 class RunStorageController:
     def __init__(self, run_name: str):
         self.run_name = sanitize_run_name(run_name)
@@ -1129,17 +1148,18 @@ class RunStorageController:
         self._write_project()
         if not best_entries:
             return None
+        session_settings = _resume_session_settings(
+            contract=contract,
+            revision_id=self.revision_id,
+            first_frame_hash=first_frame_hash,
+            last_frame_hash=last_frame_hash,
+        )
         return make_session(
             chunks=best_entries, width=int(width), height=int(height),
             chunk_seconds=float(chunk_seconds), identity_hash=str(identity_hash),
             model_fingerprint_value=str(model_fingerprint_value),
             parent_session_id=None, reroll_from_chunk=0,
-            settings={
-                "run_storage_validated_prefix": True,
-                "revision_id": self.revision_id,
-                "first_frame_hash": str(first_frame_hash),
-                "last_frame_hash": str(last_frame_hash),
-            },
+            settings=session_settings,
         )
 
     def commit_chunk(self, entry: dict[str, Any], *, position: int) -> None:

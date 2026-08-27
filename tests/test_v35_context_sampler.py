@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+from types import ModuleType
 from types import SimpleNamespace
 
 import torch
@@ -12,6 +14,10 @@ from ComfyUI_H3_Continuum_Join.constants import (
     V2_CONTINUITY_OPTIONS,
 )
 from ComfyUI_H3_Continuum_Join.temporal import audio_latent_t, video_latent_t
+from ComfyUI_H3_Continuum_Join.reference import (
+    REFERENCE_SIZE_MATCH_OUTPUT,
+    ReferenceAssets,
+)
 from ComfyUI_H3_Continuum_Join.v2 import sequence
 from ComfyUI_H3_Continuum_Join.v2.h3_builder import IdentityAssets
 from ComfyUI_H3_Continuum_Join.v2.prompts import make_prompt_plan
@@ -32,6 +38,15 @@ class _Nested:
 
     def unbind(self):
         return self.parts
+
+
+def _install_nested_tensor(monkeypatch):
+    nested_module = ModuleType("comfy.nested_tensor")
+    nested_module.NestedTensor = _Nested
+    comfy_module = sys.modules.get("comfy") or ModuleType("comfy")
+    comfy_module.nested_tensor = nested_module
+    monkeypatch.setitem(sys.modules, "comfy", comfy_module)
+    monkeypatch.setitem(sys.modules, "comfy.nested_tensor", nested_module)
 
 
 class _Clip:
@@ -83,13 +98,16 @@ def _capture_sequence(
     monkeypatch,
     *,
     terminal: bool,
+    reference_image: bool = False,
     reference_audio: bool = False,
+    continuation_transport=sequence.REFERENCE_CONTEXT_V1,
     session=None,
     diagnostics=DIAGNOSTICS_BASIC,
     memory_attribution=False,
     prompt_conditioning_cache=False,
     clip=None,
 ):
+    _install_nested_tensor(monkeypatch)
     width, height = 96, 64
     first_image = torch.zeros((1, height, width, 3)) if terminal else None
     last_image = torch.ones((1, height, width, 3)) if terminal else None
@@ -118,6 +136,15 @@ def _capture_sequence(
         "clone_model_for_chunk",
         lambda model, **_kwargs: model,
     )
+    reference_assets = None
+    if reference_image:
+        reference_assets = ReferenceAssets(
+            images=(torch.full((1, height, width, 3), 0.5),),
+            latents=(torch.full((1, 24, 1, height // 16, width // 16), 0.5),),
+            image_hashes=("b" * 64,),
+            combined_hash="c" * 64,
+            size_mode=REFERENCE_SIZE_MATCH_OUTPUT,
+        )
     reference_audio_source = None
     reference_audio_vae = None
     if reference_audio:
@@ -171,11 +198,13 @@ def _capture_sequence(
         debug=False,
         session=session,
         latent_only=True,
+        reference_assets=reference_assets,
         reference_audio_source=reference_audio_source,
         reference_audio_vae=reference_audio_vae,
         capture_refine_context=True,
         memory_attribution=memory_attribution,
         prompt_conditioning_cache=prompt_conditioning_cache,
+        continuation_transport=continuation_transport,
     )
 
 
@@ -344,6 +373,37 @@ def test_reference_audio_is_captured_in_terminal_physical_group(monkeypatch):
     for group in groups:
         refs = group["conditioning"][0][1]["minimax_refs"]
         assert [ref["kind"] for ref in refs].count("audio") == 1
+
+
+def test_masked_av_preserves_image_and_audio_refs_in_every_normal_group(monkeypatch):
+    outputs = _capture_sequence(
+        monkeypatch,
+        terminal=False,
+        reference_image=True,
+        reference_audio=True,
+        continuation_transport=sequence.MASKED_AV_PREFIX_22_V1,
+    )
+    groups = outputs[4]["groups"]
+    assert [group["logical_chunks"] for group in groups] == [(1,), (2,)]
+    for group in groups:
+        refs = group["conditioning"][0][1]["minimax_refs"]
+        assert [ref["kind"] for ref in refs] == ["image", "audio"]
+
+
+def test_masked_av_preserves_image_and_audio_refs_in_terminal_groups(monkeypatch):
+    outputs = _capture_sequence(
+        monkeypatch,
+        terminal=True,
+        reference_image=True,
+        reference_audio=True,
+        continuation_transport=sequence.MASKED_AV_PREFIX_22_V1,
+    )
+    groups = outputs[4]["groups"]
+    assert [group["logical_chunks"] for group in groups] == [(1,), (2, 3)]
+    assert groups[1]["prompt_policy"] == "paired_timeline_v1"
+    for group in groups:
+        refs = group["conditioning"][0][1]["minimax_refs"]
+        assert [ref["kind"] for ref in refs] == ["image", "audio"]
 
 
 def test_reused_session_returns_incomplete_context_without_stopping(monkeypatch):

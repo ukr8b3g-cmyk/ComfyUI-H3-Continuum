@@ -68,6 +68,7 @@ def main() -> int:
     current_required = {
         "H3ContinuumSamplerV34",
         "H3ContinuumSamplerV35",
+        "H3ContinuumSamplerV36",
         "H3ContinuumAssembleSeamV34",
         "H3ContinuumAssembleSeamV35",
         "H3ContinuumHiResFixV35",

@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import time
 
-from ..constants import DIAGNOSTICS_FULL
+from ..constants import (
+    CHUNK_SECONDS_DEFAULT,
+    CHUNK_SECONDS_MAX,
+    CHUNK_SECONDS_MIN,
+    CHUNK_SECONDS_STEP,
+    CHUNK_SECONDS_TOOLTIP,
+    DIAGNOSTICS_FULL,
+)
 from ..v2.nodes import (
     CATEGORY,
     DIAGNOSTICS_OPTIONS,
@@ -181,7 +188,13 @@ class H3ContinuumSamplerV3:
                 "chunks": ("INT", {"default": 3, "min": 1, "max": 16, "step": 1}),
                 "chunk_seconds": (
                     "FLOAT",
-                    {"default": 5.0, "min": 4.0, "max": 15.0, "step": 0.1},
+                    {
+                        "default": CHUNK_SECONDS_DEFAULT,
+                        "min": CHUNK_SECONDS_MIN,
+                        "max": CHUNK_SECONDS_MAX,
+                        "step": CHUNK_SECONDS_STEP,
+                        "tooltip": CHUNK_SECONDS_TOOLTIP,
+                    },
                 ),
                 "width": (
                     "INT",
@@ -259,6 +272,7 @@ class H3ContinuumSamplerV3:
         capture_refine_context=False,
         memory_attribution=False,
         prompt_conditioning_cache=False,
+        continuation_transport="reference_context_v1",
     ):
         if prompt_overrides is not None and not isinstance(prompt_overrides, dict):
             prompt_overrides = None
@@ -341,6 +355,7 @@ class H3ContinuumSamplerV3:
             capture_refine_context=bool(capture_refine_context),
             memory_attribution=bool(memory_attribution),
             prompt_conditioning_cache=bool(prompt_conditioning_cache),
+            continuation_transport=str(continuation_transport),
             **clip_prompt_inputs,
         )
         if bool(capture_refine_context):
@@ -465,11 +480,11 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                 "chunk_seconds": (
                     "FLOAT",
                     {
-                        "default": 5.0,
-                        "min": 4.0,
-                        "max": 15.0,
-                        "step": 0.1,
-                        "tooltip": "Target duration per chunk. Five seconds is the validated default.",
+                        "default": CHUNK_SECONDS_DEFAULT,
+                        "min": CHUNK_SECONDS_MIN,
+                        "max": CHUNK_SECONDS_MAX,
+                        "step": CHUNK_SECONDS_STEP,
+                        "tooltip": CHUNK_SECONDS_TOOLTIP,
                     },
                 ),
                 "width": (
@@ -666,6 +681,7 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
         capture_refine_context=False,
         memory_attribution=False,
         prompt_conditioning_cache=False,
+        continuation_transport="reference_context_v1",
     ):
         runtime_started_at = time.perf_counter()
         from ..reference import prepare_reference_assets
@@ -718,6 +734,7 @@ class H3ContinuumSamplerProduction(H3ContinuumSamplerV3):
                 capture_refine_context=bool(capture_refine_context),
                 memory_attribution=bool(memory_attribution),
                 prompt_conditioning_cache=bool(prompt_conditioning_cache),
+                continuation_transport=str(continuation_transport),
                 advanced={
                     "audio_continuity": bool(audio_continuity),
                     "diagnostics": diagnostics,

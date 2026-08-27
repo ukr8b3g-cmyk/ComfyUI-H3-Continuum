@@ -169,6 +169,39 @@ def test_native_h3_chunk_duration_rejects_sub_four_seconds():
         make_prompt_plan(mode=PROMPT_MODE_FIXED, script="x", chunks=1, chunk_seconds=3.9)
 
 
+def test_chunk_duration_accepts_thirty_seconds_and_rejects_above_limit():
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_FIXED,
+        script="x",
+        chunks=1,
+        chunk_seconds=30.0,
+    )
+    assert plan["chunk_seconds"] == 30.0
+    assert validate_prompt_plan(plan) is plan
+
+    invalid_plan = dict(plan, chunk_seconds=30.1)
+    with pytest.raises(PromptPlanError, match="30.0"):
+        validate_prompt_plan(invalid_plan)
+
+    with pytest.raises(PromptPlanError, match="30.0"):
+        make_prompt_plan(
+            mode=PROMPT_MODE_FIXED,
+            script="x",
+            chunks=1,
+            chunk_seconds=30.1,
+        )
+
+
+def test_thirty_second_timeline_maps_one_section_to_each_chunk():
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_TIMELINE,
+        script="[0-30s]\nfirst\n[30-60s]\nsecond",
+        chunks=2,
+        chunk_seconds=30.0,
+    )
+    assert plan["prompts"] == ["first", "second"]
+
+
 def test_external_prompt_overrides_only_the_connected_clip_and_rehashes_it():
     plan = make_prompt_plan(mode=PROMPT_MODE_LIST, script="first\n---\nsecond\n---\nthird", chunks=3, chunk_seconds=5)
     updated = apply_prompt_overrides(plan, [None, "external second", None])

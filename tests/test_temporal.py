@@ -75,7 +75,7 @@ def test_dynamic_state_capacity_for_short_extensions():
 
 def test_extension_shapes_remain_valid_across_ui_range():
     for context in (5, 22, 39):
-        for tenths in range(5, 151):
+        for tenths in range(40, 301):
             shape = make_extension_shape(context, tenths / 10.0)
             assert shape.total_frames % 17 == 5
             assert shape.net_new_frames >= 5

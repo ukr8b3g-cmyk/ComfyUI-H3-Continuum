@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib, json, re
 from typing import Any
 from ..constants import (
+    CHUNK_SECONDS_MAX,CHUNK_SECONDS_MIN,
     PROMPT_FORMAT_AUTO,PROMPT_FORMAT_FIXED,PROMPT_FORMAT_LIST,PROMPT_FORMAT_TIMELINE,
     PROMPT_MODE_FIXED,PROMPT_MODE_LIST,PROMPT_MODE_TIMELINE,PROMPT_PLAN_MAGIC,
 )
@@ -155,7 +156,7 @@ def resolve_prompt_mode(mode,script):
 def make_prompt_plan(*,mode,script,chunks,chunk_seconds):
     chunks=int(chunks); chunk_seconds=float(chunk_seconds)
     if not 1<=chunks<=16: raise PromptPlanError("chunks must be between 1 and 16")
-    if not 4.0<=chunk_seconds<=15.0: raise PromptPlanError("chunk_seconds must be between 4.0 and 15.0 for native H3")
+    if not CHUNK_SECONDS_MIN<=chunk_seconds<=CHUNK_SECONDS_MAX: raise PromptPlanError(f"chunk_seconds must be between {CHUNK_SECONDS_MIN:.1f} and {CHUNK_SECONDS_MAX:.1f}")
     notes=[]; diagnostics=[]
     try:
         resolved_mode=resolve_prompt_mode(mode,script)
@@ -177,6 +178,9 @@ def validate_prompt_plan(plan):
     if int(plan.get("schema_version",-1))!=PROMPT_PLAN_SCHEMA_VERSION: raise PromptPlanError(f"unsupported prompt-plan schema {plan.get('schema_version')}; expected {PROMPT_PLAN_SCHEMA_VERSION}")
     chunks=int(plan.get("chunks",0)); prompts=plan.get("prompts"); hashes=plan.get("hashes")
     if not 1<=chunks<=16: raise PromptPlanError("prompt-plan chunks are invalid")
+    try: chunk_seconds=float(plan.get("chunk_seconds"))
+    except (TypeError,ValueError): raise PromptPlanError("prompt-plan chunk_seconds is invalid") from None
+    if not CHUNK_SECONDS_MIN<=chunk_seconds<=CHUNK_SECONDS_MAX: raise PromptPlanError(f"prompt-plan chunk_seconds must be between {CHUNK_SECONDS_MIN:.1f} and {CHUNK_SECONDS_MAX:.1f}")
     if not isinstance(prompts,list) or len(prompts)!=chunks: raise PromptPlanError("prompt-plan prompt count does not match chunks")
     if not isinstance(hashes,list) or len(hashes)!=chunks: raise PromptPlanError("prompt-plan hash count does not match chunks")
     for index,prompt in enumerate(prompts):

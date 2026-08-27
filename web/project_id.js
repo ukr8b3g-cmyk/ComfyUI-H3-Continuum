@@ -7,6 +7,7 @@ const ASSEMBLE_SEAM_NODE_CLASS = "H3ContinuumAssembleSeamExperimental";
 const V34_NODE_CLASS = "H3ContinuumSamplerV34";
 const V34_ASSEMBLE_SEAM_NODE_CLASS = "H3ContinuumAssembleSeamV34";
 const V35_NODE_CLASS = "H3ContinuumSamplerV35";
+const V36_NODE_CLASS = "H3ContinuumSamplerV36";
 const V35_ASSEMBLE_SEAM_NODE_CLASS = "H3ContinuumAssembleSeamV35";
 const PROJECT_WIDGET = "project_id";
 const LEGACY_RUN_NAME_WIDGET = "run_name";
@@ -227,19 +228,20 @@ function configureNode(node) {
     const isTimeline = node.comfyClass === TIMELINE_NODE_CLASS;
     const isV34 = node.comfyClass === V34_NODE_CLASS;
     const isV35 = node.comfyClass === V35_NODE_CLASS;
-    if (!isProduction && !isTimeline && !isV34 && !isV35) {
+    const isV36 = node.comfyClass === V36_NODE_CLASS;
+    if (!isProduction && !isTimeline && !isV34 && !isV35 && !isV36) {
         configureAssembler(node);
         return null;
     }
     const projectWidget = findWidget(node, PROJECT_WIDGET);
-    if (isProduction || isV34 || isV35) {
+    if (isProduction || isV34 || isV35 || isV36) {
         if (projectWidget && !String(projectWidget.value || "").trim()) {
             projectWidget.value = createProjectId();
         }
         removeUnusedInput(node, PROMPT_OVERRIDES_INPUT);
     }
     applyRuntimeSettings(node);
-    if (isV35) {
+    if (isV35 || isV36) {
         normalizeReferenceAudioLabels(node);
     }
     hidePersistentWidget(findWidget(node, "diagnostics"));
@@ -316,6 +318,7 @@ app.registerExtension({
                     || node.comfyClass === TIMELINE_NODE_CLASS
                     || node.comfyClass === V34_NODE_CLASS
                     || node.comfyClass === V35_NODE_CLASS
+                    || node.comfyClass === V36_NODE_CLASS
                 ) {
                     apiNode.inputs.diagnostics = settingValue(SETTINGS.detailedReport, false)
                         ? "Detailed Report"

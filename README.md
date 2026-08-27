@@ -1,6 +1,27 @@
-# ComfyUI-H3-Continuum 3.5.3
+# ComfyUI-H3-Continuum 3.6.0
 
 Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pass refinement, optional Hi-Res Fix, low-memory disk-backed assembly, restartable chunks, persistent references, and optional Spectrum interoperability.
+
+## V3.6 Masked AV Continuation
+
+V3.6 adds **H3 Continuum Sampler V3.6**. Its Standard continuation backend places the previous finalized Video and Audio latent prefixes directly inside the next H3 target and protects them with Core noise masks. Unlike the V3.5 Reference Context route, it does not append the same prior frames as a separate Reference block, reducing the packed sequence processed by H3.
+
+| Continuation Backend | Purpose |
+|---|---|
+| `Standard` | Recommended V3.6 path. Preserves prior Video/Audio in the next target; when Audio Continuity is off, only Video is preserved. |
+| `Compatibility` | Advanced fallback using the accepted V3.5 Reference Context behavior. |
+
+Internal transport identifiers are not exposed in the UI. Run Storage keeps Standard and Compatibility revisions separate, and `Regenerate From` treats the Long Terminal Merge logical pair `[2,3]` as one atomic physical sample.
+
+### Accepted behavior
+
+- T2VA, I2VA, Reference Image + Reference Audio, Balanced 22-frame Joint AV, and 3×5-second FL2VA Long Terminal Merge GPU gates passed.
+- Protected Video and Audio prefixes finalize bit-exact; generated regions remain owned by the sampler.
+- The accepted Reference Image + Reference Audio output passed subjective audio listening with no reported click, dropout, or stereo-positioning defect.
+- In the tested FL2VA Terminal Group 2 pairs, Standard removed 2,874 packed rows (`8.01%`) and reduced median Sampling time by `4.06%` versus Compatibility. Performance varies by model, hardware, and workflow.
+- `chunk_seconds` now accepts 4.0–30.0 seconds with a 5.0-second default and 0.1-second step. The 5–15 second range remains recommended and validated; longer high-resolution chunks can substantially increase VRAM use and runtime.
+
+V3.5.3, V3.5, and V3.4 Node IDs and saved workflows remain registered. V3.5.3 continues to use its original Reference Context behavior and is not silently redirected to the V3.6 backend.
 
 ## V3.5.3 Maintenance Hotfix
 
@@ -35,7 +56,7 @@ Prompt/CLIP figures measure only the conditioning subphase, not total generation
 
 The measured Sage-only production baselines on the tested RTX 5060 Ti 16 GB / 64 GB system were 168.069 seconds for 1×5-second 576×576 T2VA and 379.765 seconds for 3×5-second 640×640 FL2VA Long Terminal Merge. These are configuration-specific baselines, not universal speed guarantees. Sampling remained the dominant cost; Continuum Assemble + Seam stayed below 1%.
 
-> **V3.5.3 is the current maintenance release.** V3.5.2 remains the accepted Stabilization & Optimization baseline. V3.4 node IDs, backend socket keys, and saved-workflow loading remain intentionally supported. Sampling, Conditioning, Terminal Merge, Assembly, Seam, Run Storage, and standard ComfyUI seed behavior are unchanged. The withdrawn experimental Last Queued Seed override is not included.
+> **V3.6.0 is the current release.** V3.5.3 remains the maintenance/compatibility baseline, and V3.5.2 remains the accepted Stabilization & Optimization baseline. Older Node IDs, backend socket keys, and saved-workflow loading remain intentionally supported. The withdrawn experimental Last Queued Seed override is not included.
 
 ## V3.5.1 Reference Audio & Compatibility Update
 
@@ -218,12 +239,13 @@ This is a usability and reliability decision, not a claim that the experimental 
 
 ## Example workflows
 
-- [V3.5 recommended template](examples/workflows/MiniMax_H3_Continuum_V35.json)
+- [V3.6 recommended template](examples/workflows/MiniMax_H3_Continuum_V36.json)
+- [V3.5 compatibility template](examples/workflows/MiniMax_H3_Continuum_V35.json)
 - [V3.5.1 LBH + Conditioning Bridge connection example](examples/workflows/MiniMax_H3_Continuum_V351_LBH_Conditioning_Bridge.json)
 - [V3.4 standard](examples/workflows/MiniMax_H3_Continuum_V34.json)
 - [V3.4 Turbo](examples/workflows/MiniMax_H3_Continuum_V34_turbo.json)
 
-The V3.5 template is the recommended starting point. Hi-Res Fix is disabled by default, the V3.5 Assemble backend is set to Auto, and First Frame, Last Frame, and Reference Images 1-3 share one megapixel control. `Video Guide Size` controls the frame batch used by `Video Guide Frames`; the video loader remains responsible for decoding and frame-rate conversion. Advanced users can bypass or rearrange the optional sections as needed.
+The V3.6 template is the recommended starting point. It selects the Standard continuation backend; Hi-Res Fix is disabled by default, the V3.5 Assemble backend remains Auto, and First Frame, Last Frame, and Reference Images 1-3 share one megapixel control. `Video Guide Size` controls the frame batch used by `Video Guide Frames`; the video loader remains responsible for decoding and frame-rate conversion. The V3.5 template remains unchanged for compatibility.
 
 The V3.4 templates remain valid for saved-workflow compatibility.
 
@@ -393,6 +415,12 @@ Visible controls:
 - Reference Size
 - Video Guide Size
 
+`chunk_seconds` uses one shared duration for every chunk. The default is 5.0
+seconds; 5–15 seconds remains the recommended and validated range. Durations up
+to 30.0 seconds are supported, but values above 15 seconds can substantially
+increase VRAM use and processing time, especially at high resolution. Per-chunk
+variable durations are not supported.
+
 ### H3 Continuum Assemble + Seam V3.4
 
 Inputs: images, audio, assembly_plan, and driving_audio.
@@ -485,6 +513,7 @@ The time ranges should normally match the configured `chunk_seconds`.
 - `chunk_seconds = 5` → `[0-5s]`, `[5-10s]`, `[10-15s]` ...
 - `chunk_seconds = 10` → `[0-10s]`, `[10-20s]`, `[20-30s]` ...
 - `chunk_seconds = 15` → `[0-15s]`, `[15-30s]`, `[30-45s]` ...
+- `chunk_seconds = 30` → `[0-30s]`, `[30-60s]`, `[60-90s]` ...
 
 #### Global preamble and per-chunk prompting
 
@@ -607,7 +636,7 @@ Use a 24 fps source for `Video Guide Frames`. `Load Video (Upload)` may accept f
 
 ## Current validation status
 
-The V3.5.3 maintenance gate passes `495` automated tests, including all published-workflow link integrity and Hybrid public-picture warning regressions. Source/runtime registration verification, native PackedLayout, Fixed 3x5 prompt planning, JavaScript UI harnesses, release metadata consistency, Prompt/CLIP MISS-to-HIT output equality, and Video Guide bit-exact GPU A/B acceptance remain valid. Earlier representative GPU acceptance also covers the V3.5 Conditioning Bridge path, Reference Audio/Image retention, Second Pass/Hi-Res paths, and accepted 3x5 FL2VA Long Terminal Merge latents through Core Video/Audio VAE Decode and Assemble V3.5 Auto.
+The V3.6 release gate includes the complete PIG-0 through PIG-5 Production Integration acceptance: backend-scoped Run Storage, real-cache Save/Resume/Regenerate From, atomic Terminal Merge reuse, Reference Image/Audio retention, bit-exact protected prefixes, GPU workflow output, numeric Audio Seam analysis, and subjective Audio PASS. Final automated validation is `527 passed`; the complete package checklist is recorded in `PACKAGE_VALIDATION.txt`. Source/runtime registration, native PackedLayout, Fixed 3x5 prompt planning, JavaScript UI harnesses, Prompt/CLIP cache equality, Video Guide bit-exact A/B, V3.5 Second Pass/Hi-Res, and V3.5.3 distribution-integrity checks remain covered.
 
 V3.4 compatibility paths have been exercised locally with:
 

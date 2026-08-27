@@ -1,6 +1,14 @@
-ComfyUI-H3-Continuum V3.5.3
+ComfyUI-H3-Continuum V3.6.0
 
 MiniMax H3の5秒ChunkをAV latent contextで継続し、長尺映像として組み立てるComfyUIカスタムノードです。
+
+V3.6.0:
+- H3 Continuum Sampler V3.6を追加
+- 標準Continuationは前ChunkのVideo／Audio latentを次Target内でNoise Mask保護するMasked AV方式
+- AdvancedのCompatibilityで従来V3.5 Reference Contextへ切替可能
+- Run Storage identityをbackend別に分離し、Terminal Mergeのlogical [2,3]はphysical group単位で再利用／再生成
+- chunk_seconds上限を30秒へ拡張（5～15秒を推奨・検証済み範囲として維持）
+- V3.5.3、V3.4 Node ID、保存済みWorkflow、Second Pass、Hi-Res Fix、Assemblyを維持
 
 V3.5.3:
 - 公開Conditioning Bridge WorkflowのWidth／Height接続を修正

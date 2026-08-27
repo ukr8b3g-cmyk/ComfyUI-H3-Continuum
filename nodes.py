@@ -422,6 +422,7 @@ NODE_DISPLAY_NAME_MAPPINGS.update(V35_HIRES_FIX_NODE_DISPLAY_NAME_MAPPINGS)
 _primary_node_ids = {
     "H3ContinuumSamplerV34",
     "H3ContinuumSamplerV35",
+    "H3ContinuumSamplerV36",
     "H3ContinuumAssembleSeamV34",
     "H3ContinuumAssembleSeamV35",
     "H3ContinuumHiResFixV35",

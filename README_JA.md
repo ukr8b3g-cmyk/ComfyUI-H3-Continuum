@@ -1,6 +1,27 @@
-# ComfyUI-H3-Continuum 3.5.3
+# ComfyUI-H3-Continuum 3.6.0
 
 MiniMax H3を複数チャンクで連続生成し、直前チャンク末尾の**映像latent / 音声latentを直接**次チャンクへ継承するComfyUIカスタムノードです。チャンク間でVideo/Audio VAEのDecode→Encodeは行いません。
+
+## V3.6 Masked AV Continuation
+
+V3.6では`H3 Continuum Sampler V3.6`を追加しました。標準backendは、前Chunkで確定したVideo／Audio latent prefixを次のH3 Target内へ直接配置し、CoreのNoise Maskで保持します。V3.5のReference Context方式のように、同じ過去フレームを別Reference blockとして追加しないため、H3が処理するpacked sequenceを短縮できます。
+
+| Continuation Backend | 用途 |
+|---|---|
+| `Standard` | 推奨V3.6経路。次Target内でVideo／Audioを保持します。Audio Continuity OFF時はVideoだけを保持します。 |
+| `Compatibility` | 受入済みV3.5 Reference Context動作へ戻すAdvanced fallbackです。 |
+
+内部transport識別子はUIへ表示しません。Run Storage revisionはStandard／Compatibilityで分離し、`Regenerate From`でもLong Terminal Mergeのlogical `[2,3]`を1つのphysical sampleとして再利用・再生成します。
+
+### 受入結果
+
+- T2VA、I2VA、Reference Image＋Reference Audio、Balanced 22-frame Joint AV、3×5秒FL2VA Long Terminal MergeのGPU GateをPASS。
+- 保護Video／Audio prefixは最終的にbit-exact。生成領域はSamplerの出力を維持します。
+- Reference Image＋Reference Audio代表出力は実聴PASSで、click、dropout、定位異常の報告なし。
+- 実測したFL2VA Terminal Group 2では、StandardがCompatibilityよりpacked rowsを2,874行（`8.01%`）削減し、Sampling中央値を`4.06%`短縮。速度はmodel、hardware、workflowで変わります。
+- `chunk_seconds`は4.0～30.0秒、初期値5.0秒、step 0.1です。5～15秒を推奨・検証済み範囲として維持し、長時間・高解像度ChunkはVRAMと処理時間が大きく増える場合があります。
+
+V3.5.3、V3.5、V3.4のNode IDと保存済みWorkflowは維持します。V3.5.3は従来Reference Contextのままで、V3.6標準backendへ暗黙に切り替えません。
 
 ## V3.5.3 Maintenance Hotfix
 
@@ -35,7 +56,7 @@ Prompt/CLIPの数値はconditioning区間だけで、総生成時間ではあり
 
 RTX 5060 Ti 16 GB／RAM 64 GBの検証環境で測定したSage-only Production baselineは、576×576 T2VA 1×5秒が168.069秒、640×640 FL2VA Long Terminal Merge 3×5秒が379.765秒です。環境・設定固有の測定値であり、すべての環境に対する速度保証ではありません。Samplingが最大コストで、Continuum Assemble + Seamは1%未満でした。
 
-**V3.5.3が現在のメンテナンス版です。** V3.5.2は受入済みStabilization & Optimization baselineとして維持します。V3.4 Node ID、backend socket key、保存済みWorkflow読込は維持します。Sampling、Conditioning、Terminal Merge、Assembly、Seam、Run Storage、ComfyUI標準Seed動作は変更していません。撤回済みの実験的Last Queued Seed overrideは含まれていません。
+**V3.6.0が現在の公開版です。** V3.5.3はmaintenance／compatibility baseline、V3.5.2は受入済みStabilization & Optimization baselineとして維持します。旧Node ID、backend socket key、保存済みWorkflow読込は維持します。撤回済みの実験的Last Queued Seed overrideは含まれていません。
 
 ## V3.5.1 Reference Audio／互換性更新
 
@@ -156,10 +177,11 @@ Hi-Res Fixを接続しなければV3.4 Sampling経路は変わりません。強
 
 ## 推奨テンプレートワークフロー
 
-- [V3.5推奨テンプレート](examples/workflows/MiniMax_H3_Continuum_V35.json)
+- [V3.6推奨テンプレート](examples/workflows/MiniMax_H3_Continuum_V36.json)
+- [V3.5互換テンプレート](examples/workflows/MiniMax_H3_Continuum_V35.json)
 - [V3.5.1 LBH＋Conditioning Bridge接続例](examples/workflows/MiniMax_H3_Continuum_V351_LBH_Conditioning_Bridge.json)
 
-V3.5テンプレートはHi-Res Fixが初期OFF、AssembleのBuffer BackendがAutoです。First Frame、Last Frame、Reference Image 1～3は1つのmegapixel設定を共有します。`Video Guide Size`は`Video Guide Frames`に使うframe batchを調整し、decodeとframe-rate変換はVideo loader側で行います。用途に応じて不要な補助経路を外したり、Advanced Second Pass経路へ組み替えたりできます。
+V3.6テンプレートはContinuation BackendがStandard、Hi-Res Fixが初期OFF、AssembleのBuffer BackendがAutoです。First Frame、Last Frame、Reference Image 1～3は1つのmegapixel設定を共有します。`Video Guide Size`は`Video Guide Frames`に使うframe batchを調整し、decodeとframe-rate変換はVideo loader側で行います。V3.5テンプレートは互換用として変更せず維持します。
 
 ## V3.4互換
 
@@ -256,7 +278,7 @@ ZIPを展開して、`ComfyUI-H3-Continuum`フォルダーを`ComfyUI/custom_nod
 
 ## 検査
 
-V3.5.3 maintenance gateは全`495 passed`で、全公開Workflowのlink整合性とHybrid公開Picture番号の警告回帰を含みます。source/runtime登録検証、PackedLayout、Fixed 3×5 Prompt Plan、JavaScript UI harness、release metadata、Prompt/CLIP MISS→HIT出力一致、Video Guide bit-exact GPU A/Bも引き続き有効です。以前の代表GPU受入にはConditioning Bridge、Reference Audio/Image保持、Second Pass／Hi-Res経路、3×5秒FL2VA Long Terminal MergeからCore Video/Audio VAE Decode、Assemble V3.5 Autoまでを含みます。
+V3.6 release gateはPIG-0～PIG-5を完了し、backend別Run Storage、実cache Save／Resume／Regenerate From、Terminal Mergeのatomic再利用、Reference Image／Audio保持、保護prefix bit-exact、GPU Workflow、Audio Seam数値検証、実聴Audio PASSを含みます。最終自動検証は`527 passed`で、完全なpackage checklistは`PACKAGE_VALIDATION.txt`へ記録しています。source/runtime登録、PackedLayout、Fixed 3×5 Prompt Plan、JavaScript UI harness、Prompt/CLIP cache一致、Video Guide bit-exact A/B、V3.5 Second Pass／Hi-Res、V3.5.3配布整合性の回帰も維持します。
 
 Main Hi-Res Fixの3×5秒2xは、RTX 5060 Ti 16 GiBで37T groupの1152×1152 Second Pass完了後、Terminal Mergeの77T group最初の推論時にCUDA OOMとなり未受入です。Reference/Hybrid固有の1×5秒Second Passは受入済みですが、長尺Reference/Hybridは未確認です。Disk-backedが保証する低メモリ範囲はContinuum Assemblyであり、Core Decodeや下流ノードが別の全量copyを作る可能性は残ります。
 

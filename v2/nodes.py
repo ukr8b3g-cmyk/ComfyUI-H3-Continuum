@@ -5,6 +5,11 @@ from __future__ import annotations
 import logging
 
 from ..constants import (
+    CHUNK_SECONDS_DEFAULT,
+    CHUNK_SECONDS_MAX,
+    CHUNK_SECONDS_MIN,
+    CHUNK_SECONDS_STEP,
+    CHUNK_SECONDS_TOOLTIP,
     DIAGNOSTICS_ACCEPTED_OPTIONS,
     DIAGNOSTICS_OPTIONS,
     PROMPT_FORMAT_OPTIONS,
@@ -142,7 +147,13 @@ class H3ContinuumSamplerV2:
                 ),
                 "chunk_seconds": (
                     "FLOAT",
-                    {"default": 5.0, "min": 4.0, "max": 15.0, "step": 0.1, "tooltip": "Native H3 is trained for roughly 4–15 second outputs."},
+                    {
+                        "default": CHUNK_SECONDS_DEFAULT,
+                        "min": CHUNK_SECONDS_MIN,
+                        "max": CHUNK_SECONDS_MAX,
+                        "step": CHUNK_SECONDS_STEP,
+                        "tooltip": CHUNK_SECONDS_TOOLTIP,
+                    },
                 ),
                 "width": (
                     "INT",
@@ -314,6 +325,7 @@ class H3ContinuumSamplerV2:
         capture_refine_context=False,
         memory_attribution=False,
         prompt_conditioning_cache=False,
+        continuation_transport="reference_context_v1",
         **clip_prompt_inputs,
     ):
         (
@@ -389,6 +401,7 @@ class H3ContinuumSamplerV2:
             capture_refine_context=bool(capture_refine_context),
             memory_attribution=bool(memory_attribution),
             prompt_conditioning_cache=bool(prompt_conditioning_cache),
+            continuation_transport=str(continuation_transport),
         )
 
 
@@ -413,7 +426,13 @@ class H3ContinuumPromptPlanPreview:
                 "chunks": ("INT", {"default": 3, "min": 1, "max": 16, "step": 1}),
                 "chunk_seconds": (
                     "FLOAT",
-                    {"default": 5.0, "min": 4.0, "max": 15.0, "step": 0.1, "tooltip": "Native H3 is trained for roughly 4–15 second outputs."},
+                    {
+                        "default": CHUNK_SECONDS_DEFAULT,
+                        "min": CHUNK_SECONDS_MIN,
+                        "max": CHUNK_SECONDS_MAX,
+                        "step": CHUNK_SECONDS_STEP,
+                        "tooltip": CHUNK_SECONDS_TOOLTIP,
+                    },
                 ),
             }
         }
@@ -669,7 +688,13 @@ class H3ContinuumSampler:
                 "chunks": ("INT", {"default": 3, "min": 1, "max": 16, "step": 1}),
                 "chunk_seconds": (
                     "FLOAT",
-                    {"default": 5.0, "min": 4.0, "max": 15.0, "step": 0.1},
+                    {
+                        "default": CHUNK_SECONDS_DEFAULT,
+                        "min": CHUNK_SECONDS_MIN,
+                        "max": CHUNK_SECONDS_MAX,
+                        "step": CHUNK_SECONDS_STEP,
+                        "tooltip": CHUNK_SECONDS_TOOLTIP,
+                    },
                 ),
                 "width": ("INT", {"default": 1344, "min": 32, "max": 16384, "step": 32}),
                 "height": ("INT", {"default": 768, "min": 32, "max": 16384, "step": 32}),

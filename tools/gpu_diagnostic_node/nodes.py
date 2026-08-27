@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import copy
 from datetime import datetime
 import gc
+import hashlib
 import importlib
 import json
 from pathlib import Path, PurePosixPath
 import random
 import sys
+import time
 import traceback
 from types import SimpleNamespace
 from typing import Any
@@ -65,6 +68,7 @@ def _resolve_continuum_modules() -> SimpleNamespace:
         sampling=load("v2/sampling.py", "v2.sampling"),
         prompts=load("v2/prompts.py", "v2.prompts"),
         decoder=load("v2/decoder.py", "v2.decoder"),
+        temporal=load("temporal.py", "temporal"),
     )
 
 
@@ -80,6 +84,52 @@ def _release_cuda() -> None:
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+
+def _diagnostic_tensor_summary(tensor: torch.Tensor) -> dict[str, Any]:
+    value = tensor.detach().to("cpu").contiguous()
+    digest = hashlib.sha256()
+    digest.update(str(tuple(int(part) for part in value.shape)).encode("ascii"))
+    digest.update(str(value.dtype).encode("ascii"))
+    digest.update(value.view(torch.uint8).numpy().tobytes(order="C"))
+    return {
+        "shape": [int(part) for part in value.shape],
+        "dtype": str(value.dtype),
+        "sha256": digest.hexdigest(),
+        "finite": bool(torch.isfinite(value.float()).all().item()),
+    }
+
+
+def _packed_layout_summary(layout: Any) -> dict[str, Any]:
+    segments = []
+    rows_by_kind: dict[str, int] = {}
+    for start, stop, kind in getattr(layout, "segments", ()):
+        row_count = int(stop) - int(start)
+        label = str(kind)
+        segments.append(
+            {
+                "start": int(start),
+                "stop": int(stop),
+                "kind": label,
+                "rows": row_count,
+            }
+        )
+        rows_by_kind[label] = rows_by_kind.get(label, 0) + row_count
+    return {
+        "seq_len": int(getattr(layout, "seq_len", 0)),
+        "signature": [int(value) for value in getattr(layout, "signature", ())],
+        "rows_by_kind": rows_by_kind,
+        "segments": segments,
+    }
+
+
+def _diagnostic_public_v35_class():
+    import nodes as comfy_nodes
+
+    node_class = comfy_nodes.NODE_CLASS_MAPPINGS.get("H3ContinuumSamplerV35")
+    if node_class is None:
+        raise RuntimeError("H3ContinuumSamplerV35 is not loaded")
+    return node_class
 
 
 def _safe_output_directory(subdir: str) -> Path:
@@ -706,10 +756,414 @@ class H3CoreContinuumGpuDiagnostic:
         return (summary,)
 
 
+class H3ContinuumMaskedPrefixR1Diagnostic:
+    """Test-only V3.6-R1 wrapper; the Production V3.5 schema stays unchanged."""
+
+    CATEGORY = "H3-Continuum/Diagnostics"
+    FUNCTION = "run"
+    RETURN_TYPES = (
+        "LATENT",
+        "LATENT",
+        "H3_CONTINUUM_ASSEMBLY_PLAN",
+        "STRING",
+        "AUDIO",
+        "H3_CONTINUUM_REFINE_CONTEXT",
+    )
+    RETURN_NAMES = (
+        "video_latents",
+        "audio_latents",
+        "assembly_plan",
+        "status",
+        "driving_audio",
+        "refine_context",
+    )
+    OUTPUT_IS_LIST = (True, True, False, False, False, False)
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        schema = copy.deepcopy(_diagnostic_public_v35_class().INPUT_TYPES())
+        required = dict(schema.get("required", {}))
+        required["continuation_transport"] = (
+            (
+                "reference_context_v1",
+                "masked_video_prefix_v1",
+                "masked_av_prefix_22_v1",
+                "masked_av_prefix_39_v1",
+            ),
+            {
+                "default": "masked_video_prefix_v1",
+                "tooltip": "Diagnostic-only V3.6-R1 A/B selector.",
+            },
+        )
+        required["synchronize_sampling"] = (
+            "BOOLEAN",
+            {
+                "default": False,
+                "tooltip": (
+                    "Diagnostic-only CUDA synchronization around each physical "
+                    "Sampling call. Keep Off for normal wall-time A/B runs."
+                ),
+            },
+        )
+        required["diagnostic_nonce"] = (
+            "INT",
+            {
+                "default": 0,
+                "min": 0,
+                "max": 0x7FFFFFFF,
+                "tooltip": "Diagnostic-only cache invalidation nonce; generation semantics are unchanged.",
+            },
+        )
+        schema["required"] = required
+        return schema
+
+    def run(
+        self,
+        continuation_transport,
+        synchronize_sampling=False,
+        diagnostic_nonce=0,
+        **kwargs,
+    ):
+        transport = str(continuation_transport)
+        if transport not in (
+            "reference_context_v1",
+            "masked_video_prefix_v1",
+            "masked_av_prefix_22_v1",
+            "masked_av_prefix_39_v1",
+        ):
+            raise ValueError(f"unknown diagnostic transport: {transport!r}")
+
+        modules = _resolve_continuum_modules()
+        production_class = _diagnostic_public_v35_class()
+        original_sample = modules.sequence.sample_chunk
+        continuity = str(kwargs.get("continuity", ""))
+        context_frames = int(
+            modules.constants.CONTINUITY_FRAMES.get(continuity, 22)
+        )
+        if transport == "masked_video_prefix_v1":
+            context_frames = 22
+        elif transport == "masked_av_prefix_22_v1":
+            context_frames = 22
+        elif transport == "masked_av_prefix_39_v1":
+            context_frames = 39
+        video_prefix_slots = int(modules.temporal.context_slots(context_frames))
+        audio_prefix_steps = (
+            int(modules.temporal.audio_latent_t(context_frames))
+            if transport in ("masked_av_prefix_22_v1", "masked_av_prefix_39_v1")
+            else 0
+        )
+        requested_audio_continuity = bool(kwargs.get("audio_continuity", False))
+        effective_audio_continuity = requested_audio_continuity
+        if transport == "masked_video_prefix_v1":
+            effective_audio_continuity = False
+        elif transport in ("masked_av_prefix_22_v1", "masked_av_prefix_39_v1"):
+            effective_audio_continuity = True
+        diagnostic: dict[str, Any] = {
+            "transport": transport,
+            "context_frames": context_frames,
+            "video_prefix_slots": video_prefix_slots,
+            "audio_prefix_steps": audio_prefix_steps,
+            "requested_audio_continuity": requested_audio_continuity,
+            "audio_continuity_forced": effective_audio_continuity,
+            "synchronize_sampling": bool(synchronize_sampling),
+            "diagnostic_nonce": int(diagnostic_nonce),
+            "sample_calls": [],
+        }
+        sample_number = 0
+        previous_output_tail = None
+        previous_output_audio_tail = None
+        previous_output_source_frames = None
+        previous_output_audio_t = None
+
+        def sampled_with_evidence(**sample_kwargs):
+            nonlocal sample_number, previous_output_tail, previous_output_audio_tail
+            nonlocal previous_output_source_frames, previous_output_audio_t
+            sample_number += 1
+            input_video, input_audio = modules.state.extract_av_streams(
+                sample_kwargs["latent"]
+            )
+            evidence: dict[str, Any] = {
+                "sample_number": sample_number,
+                "seed": int(sample_kwargs["seed"]),
+                "input_video": _diagnostic_tensor_summary(input_video),
+                "input_audio": _diagnostic_tensor_summary(input_audio),
+            }
+            conditioning = sample_kwargs.get("conditioning") or []
+            metadata = conditioning[0][1] if conditioning else {}
+            evidence["minimax_frame_count"] = metadata.get("minimax_frame_count")
+            evidence["minimax_ref_kinds"] = [
+                item.get("kind") for item in (metadata.get("minimax_refs") or [])
+            ]
+            evidence["minimax_keyframe_indices"] = [
+                int(item.get("resolved_frame_index"))
+                for item in (metadata.get("minimax_keyframes") or [])
+            ]
+            transformer_options = getattr(
+                sample_kwargs.get("model"), "model_options", {}
+            ).get("transformer_options", {})
+            evidence["continuum_interop_emitted"] = bool(
+                transformer_options.get(modules.constants.CONTINUUM_INTEROP_KEY)
+            )
+
+            before_prefix = None
+            before_audio_prefix = None
+            mask = sample_kwargs["latent"].get("noise_mask")
+            if sample_number >= 2:
+                before_prefix = input_video[:, :, :video_prefix_slots].detach().clone()
+                evidence["target_prefix_before"] = _diagnostic_tensor_summary(
+                    before_prefix
+                )
+                if previous_output_tail is not None:
+                    evidence["source_tail_matches_target_prefix"] = bool(
+                        torch.equal(previous_output_tail.to(before_prefix), before_prefix)
+                    )
+                    evidence["source_tail"] = _diagnostic_tensor_summary(
+                        previous_output_tail
+                    )
+                if previous_output_source_frames is not None and previous_output_audio_t is not None:
+                    evidence["source_audio_grid_offset"] = float(
+                        modules.temporal.audio_grid_offset(
+                            previous_output_source_frames,
+                            previous_output_audio_t,
+                        )
+                    )
+                if audio_prefix_steps:
+                    before_audio_prefix = input_audio[..., :audio_prefix_steps].detach().clone()
+                    evidence["target_audio_prefix_before"] = _diagnostic_tensor_summary(
+                        before_audio_prefix
+                    )
+                    if previous_output_audio_tail is not None:
+                        evidence["source_audio_tail_matches_target_prefix"] = bool(
+                            torch.equal(
+                                previous_output_audio_tail.to(before_audio_prefix),
+                                before_audio_prefix,
+                            )
+                        )
+                        evidence["source_audio_tail"] = _diagnostic_tensor_summary(
+                            previous_output_audio_tail
+                        )
+                if mask is not None:
+                    mask_parts = list(mask.unbind())
+                    video_mask, audio_mask = mask_parts[0], mask_parts[1]
+                    evidence["video_mask"] = _diagnostic_tensor_summary(video_mask)
+                    evidence["audio_mask"] = _diagnostic_tensor_summary(audio_mask)
+                    evidence["video_mask_prefix_zero"] = bool(
+                        torch.count_nonzero(
+                            video_mask[:, :, :video_prefix_slots]
+                        ).item() == 0
+                    )
+                    evidence["video_mask_generated_one"] = bool(
+                        torch.all(
+                            video_mask[:, :, video_prefix_slots:] == 1
+                        ).item()
+                    )
+                    evidence["audio_mask_all_one"] = bool(
+                        torch.all(audio_mask == 1).item()
+                    )
+                    if audio_prefix_steps:
+                        evidence["audio_mask_prefix_zero"] = bool(
+                            torch.count_nonzero(
+                                audio_mask[..., :audio_prefix_steps]
+                            ).item() == 0
+                        )
+                        evidence["audio_mask_generated_one"] = bool(
+                            torch.all(
+                                audio_mask[..., audio_prefix_steps:] == 1
+                            ).item()
+                        )
+                else:
+                    evidence["video_mask"] = None
+                    evidence["audio_mask"] = None
+
+            import comfy.ldm.minimax.model as minimax_model
+
+            captured_layouts: list[dict[str, Any]] = []
+            original_layout_init = minimax_model.PackedLayout.__init__
+
+            def capture_layout(layout_self, *layout_args, **layout_kwargs):
+                original_layout_init(layout_self, *layout_args, **layout_kwargs)
+                captured_layouts.append(_packed_layout_summary(layout_self))
+
+            use_cuda = bool(torch.cuda.is_available())
+            if use_cuda:
+                torch.cuda.reset_peak_memory_stats()
+                if bool(synchronize_sampling):
+                    torch.cuda.synchronize()
+            sample_started = time.perf_counter()
+            minimax_model.PackedLayout.__init__ = capture_layout
+            try:
+                result = original_sample(**sample_kwargs)
+                if use_cuda and bool(synchronize_sampling):
+                    torch.cuda.synchronize()
+            finally:
+                minimax_model.PackedLayout.__init__ = original_layout_init
+            evidence["sample_host_elapsed_seconds"] = float(
+                time.perf_counter() - sample_started
+            )
+            evidence["packed_layouts"] = captured_layouts
+            if use_cuda:
+                evidence["cuda_allocator_peak_allocated_bytes"] = int(
+                    torch.cuda.max_memory_allocated()
+                )
+                evidence["cuda_allocator_peak_reserved_bytes"] = int(
+                    torch.cuda.max_memory_reserved()
+                )
+            output_video, output_audio = modules.state.extract_av_streams(result)
+            evidence["output_video"] = _diagnostic_tensor_summary(output_video)
+            evidence["output_audio"] = _diagnostic_tensor_summary(output_audio)
+            if before_prefix is not None:
+                after_prefix = output_video[:, :, :video_prefix_slots]
+                difference = (
+                    after_prefix.detach().float() - before_prefix.detach().float()
+                ).abs()
+                evidence["target_prefix_after"] = _diagnostic_tensor_summary(
+                    after_prefix
+                )
+                evidence["prefix_bit_exact"] = bool(
+                    torch.equal(before_prefix, after_prefix)
+                )
+                evidence["prefix_max_abs_diff"] = float(
+                    difference.max().item() if difference.numel() else 0.0
+                )
+            if before_audio_prefix is not None:
+                after_audio_prefix = output_audio[..., :audio_prefix_steps]
+                audio_difference = (
+                    after_audio_prefix.detach().float()
+                    - before_audio_prefix.detach().float()
+                ).abs()
+                evidence["target_audio_prefix_after"] = _diagnostic_tensor_summary(
+                    after_audio_prefix
+                )
+                evidence["audio_prefix_bit_exact"] = bool(
+                    torch.equal(before_audio_prefix, after_audio_prefix)
+                )
+                evidence["audio_prefix_max_abs_diff"] = float(
+                    audio_difference.max().item()
+                    if audio_difference.numel()
+                    else 0.0
+                )
+            previous_output_tail = output_video[
+                :, :, -video_prefix_slots:
+            ].detach().clone()
+            previous_output_audio_tail = (
+                output_audio[..., -audio_prefix_steps:].detach().clone()
+                if audio_prefix_steps
+                else None
+            )
+            previous_output_source_frames = int(
+                modules.temporal.pixel_frames_for_latent_t(output_video.shape[2])
+            )
+            previous_output_audio_t = int(output_audio.shape[-1])
+            diagnostic["sample_calls"].append(evidence)
+            return result
+
+        kwargs["audio_continuity"] = effective_audio_continuity
+
+        modules.sequence.sample_chunk = sampled_with_evidence
+        try:
+            outputs = production_class().run(
+                continuation_transport=transport,
+                **kwargs,
+            )
+        finally:
+            modules.sequence.sample_chunk = original_sample
+
+        video_latents = outputs[0]
+        audio_latents = outputs[1]
+        diagnostic["physical_video_groups"] = [
+            _diagnostic_tensor_summary(item["samples"]) for item in video_latents
+        ]
+        diagnostic["physical_audio_groups"] = [
+            _diagnostic_tensor_summary(item["samples"]) for item in audio_latents
+        ]
+        diagnostic["physical_group_count"] = len(video_latents)
+        diagnostic["final_prefix_pairs"] = []
+        for index in range(1, len(video_latents)):
+            source_tail = video_latents[index - 1]["samples"][
+                :, :, -video_prefix_slots:
+            ]
+            final_prefix = video_latents[index]["samples"][
+                :, :, :video_prefix_slots
+            ]
+            final_difference = (
+                final_prefix.detach().float() - source_tail.detach().float()
+            ).abs()
+            pair = {
+                    "source_group": index,
+                    "target_group": index + 1,
+                    "source_tail": _diagnostic_tensor_summary(source_tail),
+                    "target_prefix": _diagnostic_tensor_summary(final_prefix),
+                    "bit_exact": bool(torch.equal(source_tail, final_prefix)),
+                    "max_abs_diff": float(
+                        final_difference.max().item()
+                        if final_difference.numel()
+                        else 0.0
+                    ),
+                }
+            if audio_prefix_steps:
+                source_audio_tail = audio_latents[index - 1]["samples"][
+                    ..., -audio_prefix_steps:
+                ]
+                final_audio_prefix = audio_latents[index]["samples"][
+                    ..., :audio_prefix_steps
+                ]
+                final_audio_difference = (
+                    final_audio_prefix.detach().float()
+                    - source_audio_tail.detach().float()
+                ).abs()
+                pair.update(
+                    {
+                        "source_audio_tail": _diagnostic_tensor_summary(
+                            source_audio_tail
+                        ),
+                        "target_audio_prefix": _diagnostic_tensor_summary(
+                            final_audio_prefix
+                        ),
+                        "audio_bit_exact": bool(
+                            torch.equal(source_audio_tail, final_audio_prefix)
+                        ),
+                        "audio_max_abs_diff": float(
+                            final_audio_difference.max().item()
+                            if final_audio_difference.numel()
+                            else 0.0
+                        ),
+                    }
+                )
+            diagnostic["final_prefix_pairs"].append(pair)
+        diagnostic["logical_chunk_count"] = len(
+            outputs[2].get("chunks", outputs[2].get("logical_chunks", []))
+        )
+        diagnostic["physical_decode_group_count"] = int(
+            outputs[2].get("physical_decode_group_count", len(video_latents))
+        )
+        diagnostic["decode_groups"] = [
+            {
+                "logical_chunk_indices": [
+                    int(value)
+                    for value in group.get("logical_chunk_indices", [])
+                ],
+                "terminal_merged": bool(group.get("terminal_merged", False)),
+                "total_frames": int(group.get("total_frames", 0)),
+                "trim_frames": int(group.get("trim_frames", 0)),
+                "expected_video_latent_t": int(
+                    group.get("expected_video_latent_t", 0)
+                ),
+                "expected_audio_latent_t": int(
+                    group.get("expected_audio_latent_t", 0)
+                ),
+            }
+            for group in outputs[2].get("decode_groups", [])
+        ]
+        report = json.dumps(diagnostic, ensure_ascii=False, sort_keys=True)
+        return (*outputs[:3], f"{outputs[3]}\nV3.6-R1 diagnostic: {report}", *outputs[4:])
+
+
 NODE_CLASS_MAPPINGS = {
     "H3CoreContinuumGpuDiagnostic": H3CoreContinuumGpuDiagnostic,
+    "H3ContinuumMaskedPrefixR1Diagnostic": H3ContinuumMaskedPrefixR1Diagnostic,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "H3CoreContinuumGpuDiagnostic": "H3 Core vs Continuum GPU Diagnostic",
+    "H3ContinuumMaskedPrefixR1Diagnostic": "H3 Continuum V3.6-R1 Masked Prefix Diagnostic",
 }

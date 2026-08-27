@@ -10,6 +10,7 @@ import ctypes
 
 from ComfyUI_H3_Continuum_Join.run_storage import (
     RunStorageController,
+    _resume_session_settings,
     _apply_nonce_contract,
     _fsync_file,
     _pid_exists_windows,
@@ -405,6 +406,64 @@ def test_terminal_seed_v2_revision_is_scoped_and_distinct():
         "terminal_seed_policy": "physical_window_seed_v2",
     }
     assert revision_identity(old_contract) != revision_identity(new_contract)
+
+
+def test_nondefault_continuation_transport_scopes_revision_identity():
+    common = {
+        "model": _Model(),
+        "clip": _Clip(),
+        "video_vae": _VideoVAE(),
+        "sampler": _Sampler(),
+    }
+    default_contract, default_safe, default_reasons = _sampling_contract(**common)
+    explicit_reference, reference_safe, reference_reasons = _sampling_contract(
+        **common,
+        execution_semantics=None,
+    )
+    masked_contract, masked_safe, masked_reasons = _sampling_contract(
+        **common,
+        execution_semantics={
+            "continuation_transport": "masked_av_prefix_22_v1",
+        },
+    )
+
+    assert default_safe, default_reasons
+    assert reference_safe, reference_reasons
+    assert masked_safe, masked_reasons
+    assert "execution_semantics" not in default_contract["global"]
+    assert revision_identity(default_contract) == revision_identity(explicit_reference)
+    assert masked_contract["global"]["execution_semantics"] == {
+        "continuation_transport": "masked_av_prefix_22_v1",
+    }
+    assert revision_identity(masked_contract) != revision_identity(default_contract)
+
+
+def test_run_storage_resume_session_preserves_execution_semantics():
+    contract = {
+        "global": {
+            "execution_semantics": {
+                "flf_execution": "terminal_merged_10s_seed_v2",
+                "terminal_seed_policy": "physical_window_seed_v2",
+                "continuation_transport": "masked_av_prefix_22_v1",
+            }
+        }
+    }
+    settings = _resume_session_settings(
+        contract=contract,
+        revision_id="revision-a",
+        first_frame_hash="first-a",
+        last_frame_hash="last-a",
+    )
+
+    assert settings == {
+        "run_storage_validated_prefix": True,
+        "revision_id": "revision-a",
+        "first_frame_hash": "first-a",
+        "last_frame_hash": "last-a",
+        "flf_execution": "terminal_merged_10s_seed_v2",
+        "terminal_seed_policy": "physical_window_seed_v2",
+        "continuation_transport": "masked_av_prefix_22_v1",
+    }
 
 
 def test_terminal_seed_v2_revision_identity_is_deterministic():
