@@ -786,6 +786,7 @@ class H3ContinuumMaskedPrefixR1Diagnostic:
         required["continuation_transport"] = (
             (
                 "reference_context_v1",
+                "reference_context_audio40_research_v1",
                 "masked_video_prefix_v1",
                 "masked_av_prefix_22_v1",
                 "masked_av_prefix_39_v1",
@@ -827,6 +828,7 @@ class H3ContinuumMaskedPrefixR1Diagnostic:
         transport = str(continuation_transport)
         if transport not in (
             "reference_context_v1",
+            "reference_context_audio40_research_v1",
             "masked_video_prefix_v1",
             "masked_av_prefix_22_v1",
             "masked_av_prefix_39_v1",
@@ -836,6 +838,12 @@ class H3ContinuumMaskedPrefixR1Diagnostic:
         modules = _resolve_continuum_modules()
         production_class = _diagnostic_public_v35_class()
         original_sample = modules.sequence.sample_chunk
+        original_select_context = modules.sequence.select_context
+        production_transport = (
+            "reference_context_v1"
+            if transport == "reference_context_audio40_research_v1"
+            else transport
+        )
         continuity = str(kwargs.get("continuity", ""))
         context_frames = int(
             modules.constants.CONTINUITY_FRAMES.get(continuity, 22)
@@ -860,6 +868,7 @@ class H3ContinuumMaskedPrefixR1Diagnostic:
             effective_audio_continuity = True
         diagnostic: dict[str, Any] = {
             "transport": transport,
+            "production_transport": production_transport,
             "context_frames": context_frames,
             "video_prefix_slots": video_prefix_slots,
             "audio_prefix_steps": audio_prefix_steps,
@@ -869,6 +878,8 @@ class H3ContinuumMaskedPrefixR1Diagnostic:
             "diagnostic_nonce": int(diagnostic_nonce),
             "sample_calls": [],
         }
+        if transport == "reference_context_audio40_research_v1":
+            diagnostic["reference_audio_steps"] = 40
         sample_number = 0
         previous_output_tail = None
         previous_output_audio_tail = None
@@ -893,6 +904,11 @@ class H3ContinuumMaskedPrefixR1Diagnostic:
             evidence["minimax_frame_count"] = metadata.get("minimax_frame_count")
             evidence["minimax_ref_kinds"] = [
                 item.get("kind") for item in (metadata.get("minimax_refs") or [])
+            ]
+            evidence["minimax_ref_audio_steps"] = [
+                int(item.get("ref_audio_t", 0))
+                for item in (metadata.get("minimax_refs") or [])
+                if int(item.get("ref_audio_t", 0)) > 0
             ]
             evidence["minimax_keyframe_indices"] = [
                 int(item.get("resolved_frame_index"))
@@ -1059,14 +1075,41 @@ class H3ContinuumMaskedPrefixR1Diagnostic:
 
         kwargs["audio_continuity"] = effective_audio_continuity
 
+        def select_context_with_research_audio40(
+            state,
+            requested_context_frames,
+            *,
+            include_audio,
+        ):
+            video, audio, grid_offset = original_select_context(
+                state,
+                requested_context_frames,
+                include_audio=include_audio,
+            )
+            if (
+                transport == "reference_context_audio40_research_v1"
+                and include_audio
+                and int(requested_context_frames) == 22
+            ):
+                checked = modules.state.validate_state(state)
+                retained = checked["audio_tail"]
+                if int(retained.shape[-1]) < 40:
+                    raise ValueError(
+                        "Audio40 research requires at least 40 retained audio ticks"
+                    )
+                audio = retained[..., -40:].contiguous()
+            return video, audio, grid_offset
+
         modules.sequence.sample_chunk = sampled_with_evidence
+        modules.sequence.select_context = select_context_with_research_audio40
         try:
             outputs = production_class().run(
-                continuation_transport=transport,
+                continuation_transport=production_transport,
                 **kwargs,
             )
         finally:
             modules.sequence.sample_chunk = original_sample
+            modules.sequence.select_context = original_select_context
 
         video_latents = outputs[0]
         audio_latents = outputs[1]

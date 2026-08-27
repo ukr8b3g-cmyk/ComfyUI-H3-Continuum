@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.6.1
+
+- Added non-blocking mixed Prompt syntax diagnostics. Timeline mode now ignores standalone `---` separator lines with `H3C-P105`, while preserving existing uncovered-chunk fallback and Fixed-prompt fail-open behavior.
+- Prevented V3.6 Standard continuation from stopping when Audio Continuity is enabled with Fast 5, Strong 39, or Auto. These modes now resolve to the accepted Reference Context transport before Run Storage identity is created; Balanced 22 continues to use Masked AV.
+- Kept Standard with Audio Continuity disabled on Masked Video, and kept Compatibility on Reference Context for every Continuity mode.
+- Added explicit resolved-transport diagnostics without rewriting the user's Backend or Continuity selections.
+- Preserved V3.5.3/V3.4 nodes, Sampling, Terminal Merge, Assembly, Seam, Run Storage schema, and saved-workflow compatibility.
+
 ## 3.6.0
 
 - Added `H3 Continuum Sampler V3.6` with Standard Masked AV continuation. Prior finalized Video/Audio prefixes are preserved inside the next H3 target with Core noise masks instead of being appended as duplicate Reference rows.

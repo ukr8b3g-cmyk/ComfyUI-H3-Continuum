@@ -1,6 +1,11 @@
-ComfyUI-H3-Continuum V3.6.0
+ComfyUI-H3-Continuum V3.6.1
 
 MiniMax H3の5秒ChunkをAV latent contextで継続し、長尺映像として組み立てるComfyUIカスタムノードです。
+
+V3.6.1:
+- Timeline/List混在PromptへH3C-P105警告を追加し、Timelineではstandalone --- 行だけを除去
+- Standard＋Audio Continuity ONのFast 5／Strong 39／Autoを、実行開始時からReference Contextへ安全にfallback
+- Balanced 22 Masked AV、Audio OFF Masked Video、Compatibility、Run Storage schema、旧Node／Workflow互換を維持
 
 V3.6.0:
 - H3 Continuum Sampler V3.6を追加

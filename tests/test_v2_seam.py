@@ -1,6 +1,7 @@
 import torch
 
 from ComfyUI_H3_Continuum_Join.v2.seam_guard import (
+    analyze_audio_seam,
     apply_color_guard,
     choose_adaptive_cut,
     choose_video_blend,
@@ -102,3 +103,25 @@ def test_audio_seam_uses_one_offset_for_all_stereo_channels_and_keeps_a_local_pa
     if patch is not None:
         assert patch.shape[1] == 2
         assert patch.shape[-1] == fade_samples
+
+
+def test_audio_seam_diagnostics_do_not_modify_input_waveforms():
+    sample_rate = 1000
+    time = torch.arange(800, dtype=torch.float32) / sample_rate
+    signal = torch.sin(2.0 * torch.pi * 20.0 * time)
+    previous = torch.stack((signal[:500], signal[:500]), dim=0).unsqueeze(0)
+    current = torch.stack((signal, signal), dim=0).unsqueeze(0)
+    previous_before = previous.clone()
+    current_before = current.clone()
+
+    metrics = analyze_audio_seam(
+        previous,
+        current,
+        sample_rate=sample_rate,
+        cut_sample=500,
+    )
+
+    assert -1.0 <= metrics.correlation_before <= 1.0
+    assert isinstance(metrics.offset_samples, int)
+    assert torch.equal(previous, previous_before)
+    assert torch.equal(current, current_before)

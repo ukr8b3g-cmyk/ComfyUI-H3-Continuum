@@ -20,7 +20,7 @@ def _video_times(origin: float):
     return [origin + value * 5.0 / 3.0 for value in offsets]
 
 
-def _fake_layout(*, with_last_keyframe=False):
+def _fake_layout(*, with_last_keyframe=False, audio_steps=37):
     # text=3, optional one stock keyframe, a 22-frame video/audio context ref,
     # target audio=10 steps, target video=7 slots x 2 rows.
     row = 0
@@ -29,9 +29,9 @@ def _fake_layout(*, with_last_keyframe=False):
     if with_last_keyframe:
         segments.append((row, row + 2, "cond"))
         row += 2
-    audio_ref = (row, row + 74)
+    audio_ref = (row, row + audio_steps * 2)
     segments.append((*audio_ref, "ref_audio"))
-    row += 74
+    row += audio_steps * 2
     video_ref = (row, row + 14)
     segments.append((*video_ref, "ref_img"))
     row += 14
@@ -49,17 +49,24 @@ def _fake_layout(*, with_last_keyframe=False):
         pos[3:5, 0] = 3.0 + 35.0
     # Stock context ref lives in its own pre-target coordinate span.
     a0, a1 = audio_ref
-    pos[a0 : a0 + 37, 0] = torch.arange(37, dtype=torch.float64) + 3.0
-    pos[a0 + 37 : a1, 0] = torch.arange(37, dtype=torch.float64) + 3.0
+    pos[a0 : a0 + audio_steps, 0] = (
+        torch.arange(audio_steps, dtype=torch.float64) + 3.0
+    )
+    pos[a0 + audio_steps : a1, 0] = (
+        torch.arange(audio_steps, dtype=torch.float64) + 3.0
+    )
     v0, _v1 = video_ref
     for slot, value in enumerate(_video_times(3.0)):
         pos[v0 + slot * 2 : v0 + (slot + 1) * 2, 0] = value
-    # Target origin = text 3 + max(audio 37, video span 36 2/3) = 40.
+    # Target origin follows Core's longest reference span.
+    target_origin = 3.0 + max(float(audio_steps), 22.0 * 5.0 / 3.0)
     ta0, ta1 = target_audio
-    pos[ta0 : ta0 + 10, 0] = torch.arange(10, dtype=torch.float64) + 40.0
-    pos[ta0 + 10 : ta1, 0] = torch.arange(10, dtype=torch.float64) + 40.0
+    pos[ta0 : ta0 + 10, 0] = torch.arange(10, dtype=torch.float64) + target_origin
+    pos[ta0 + 10 : ta1, 0] = (
+        torch.arange(10, dtype=torch.float64) + target_origin
+    )
     tv0, _tv1 = target_video
-    for slot, value in enumerate(_video_times(40.0)):
+    for slot, value in enumerate(_video_times(target_origin)):
         pos[tv0 + slot * 2 : tv0 + (slot + 1) * 2, 0] = value
     # Give every target video row distinct h/w values so the full-coordinate
     # copy (not only time) is tested.
@@ -157,4 +164,25 @@ def test_negative_audio_grid_offset_places_context_before_target_origin():
     assert torch.isclose(
         layout.position_ids[audio_start, 0],
         torch.tensor(40.0 - 2.0 / 3.0, dtype=torch.float64),
+    )
+
+
+def test_audio40_research_window_is_end_aligned_without_layout_changes():
+    layout, _video_ref_span, target_video_span = _fake_layout(audio_steps=40)
+    video = torch.zeros(1, 24, 7, 2, 2)
+    audio = torch.zeros(1, 32, 2, 40)
+    ref = _context_ref(video, audio)
+    ref["ref_audio_t"] = 40
+    payload = {"layout": layout, "keyframes": [], "refs": [ref]}
+
+    normalize_condition_latents(payload)
+    patch_layout_in_place(payload)
+
+    audio_start = next(a for a, _b, kind in layout.segments if kind == "ref_audio")
+    target_origin = float(layout.position_ids[target_video_span[0], 0])
+    # The extra three ticks precede the ordinary 37T window; both end at the
+    # same source-grid phase beside the 22-frame video context.
+    assert torch.isclose(
+        layout.position_ids[audio_start, 0],
+        torch.tensor(target_origin - 3.0, dtype=torch.float64),
     )

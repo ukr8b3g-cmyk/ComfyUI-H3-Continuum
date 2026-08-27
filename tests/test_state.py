@@ -39,6 +39,20 @@ def test_capture_and_select():
     assert abs(grid_offset - 1.0 / 3.0) < 1e-6
 
 
+def test_research_audio40_window_is_available_without_changing_state_schema():
+    state = capture_state(_latent(), source_frame_count=124, clip_index=1)
+    _video, baseline_audio, _grid_offset = select_context(
+        state, 22, include_audio=True
+    )
+    experimental_audio = state["audio_tail"][..., -40:].contiguous()
+
+    assert state["capacity_frames"] == 39
+    assert state["audio_tail"].shape[-1] == 65
+    assert baseline_audio.shape[-1] == 37
+    assert experimental_audio.shape[-1] == 40
+    assert torch.equal(experimental_audio[..., -37:], baseline_audio)
+
+
 def test_plan_validation():
     plan = {
         "magic": PLAN_MAGIC,

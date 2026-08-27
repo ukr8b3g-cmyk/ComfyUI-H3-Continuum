@@ -3,11 +3,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from ComfyUI_H3_Continuum_Join import nodes as root_nodes
 from ComfyUI_H3_Continuum_Join.v2.sequence import (
     MASKED_AV_PREFIX_22_V1,
     MASKED_VIDEO_PREFIX_V1,
     REFERENCE_CONTEXT_V1,
+    _continuation_transport_identity,
 )
 from ComfyUI_H3_Continuum_Join.v3.driving_nodes import (
     CONTINUATION_BACKEND_COMPATIBILITY,
@@ -17,6 +20,10 @@ from ComfyUI_H3_Continuum_Join.v3.driving_nodes import (
     H3ContinuumSamplerV36,
     NODE_CLASS_MAPPINGS,
     NODE_DISPLAY_NAME_MAPPINGS,
+)
+from ComfyUI_H3_Continuum_Join.constants import (
+    CONTINUITY_OPTIONS,
+    V2_CONTINUITY_AUTO,
 )
 from ComfyUI_H3_Continuum_Join.v3.nodes import H3ContinuumSamplerProduction
 
@@ -89,6 +96,103 @@ def test_v36_maps_public_backend_and_audio_policy_to_internal_transport(monkeypa
         MASKED_VIDEO_PREFIX_V1,
         REFERENCE_CONTEXT_V1,
     ]
+
+
+@pytest.mark.parametrize(
+    "continuity",
+    (
+        CONTINUITY_OPTIONS[1],
+        CONTINUITY_OPTIONS[2],
+        V2_CONTINUITY_AUTO,
+    ),
+)
+def test_v36_non_balanced_audio_standard_falls_back_before_execution(
+    monkeypatch,
+    continuity,
+):
+    captured = {}
+
+    def fake_production_run(_self, **kwargs):
+        captured.update(kwargs)
+        return "video", "audio", {"plan": True}, "base status", "context"
+
+    monkeypatch.setattr(H3ContinuumSamplerProduction, "run", fake_production_run)
+    outputs = H3ContinuumSamplerV36().run(
+        chunks=3,
+        chunk_seconds=5.0,
+        width=96,
+        height=64,
+        continuity=continuity,
+        audio_continuity=True,
+        continuation_backend=CONTINUATION_BACKEND_STANDARD,
+    )
+
+    assert captured["continuation_transport"] == REFERENCE_CONTEXT_V1
+    assert "Continuation Backend: Standard" in outputs[3]
+    assert "Resolved transport: Reference Context" in outputs[3]
+    assert "requires Balanced 22" in outputs[3]
+    assert outputs[3].endswith("base status")
+
+
+def test_v36_balanced_audio_and_audio_off_routes_remain_unchanged(monkeypatch):
+    captured = []
+
+    def fake_production_run(_self, **kwargs):
+        captured.append(kwargs["continuation_transport"])
+        return "video", "audio", {"plan": True}, "base status", "context"
+
+    monkeypatch.setattr(H3ContinuumSamplerProduction, "run", fake_production_run)
+    balanced = H3ContinuumSamplerV36().run(
+        chunks=3,
+        chunk_seconds=5.0,
+        width=96,
+        height=64,
+        continuity=CONTINUITY_OPTIONS[0],
+        audio_continuity=True,
+        continuation_backend=CONTINUATION_BACKEND_STANDARD,
+    )
+    video_only = H3ContinuumSamplerV36().run(
+        chunks=3,
+        chunk_seconds=5.0,
+        width=96,
+        height=64,
+        continuity=CONTINUITY_OPTIONS[2],
+        audio_continuity=False,
+        continuation_backend=CONTINUATION_BACKEND_STANDARD,
+    )
+    compatibility = H3ContinuumSamplerV36().run(
+        chunks=3,
+        chunk_seconds=5.0,
+        width=96,
+        height=64,
+        continuity=CONTINUITY_OPTIONS[2],
+        audio_continuity=True,
+        continuation_backend=CONTINUATION_BACKEND_COMPATIBILITY,
+    )
+
+    assert captured == [
+        MASKED_AV_PREFIX_22_V1,
+        MASKED_VIDEO_PREFIX_V1,
+        REFERENCE_CONTEXT_V1,
+    ]
+    assert balanced[3] == "base status"
+    assert video_only[3] == "base status"
+    assert compatibility[3] == "base status"
+
+
+def test_v36_non_balanced_fallback_uses_legacy_reference_revision_identity():
+    base_identity = "a" * 64
+    reference_identity = _continuation_transport_identity(
+        base_identity,
+        REFERENCE_CONTEXT_V1,
+    )
+    masked_identity = _continuation_transport_identity(
+        base_identity,
+        MASKED_AV_PREFIX_22_V1,
+    )
+
+    assert reference_identity == base_identity
+    assert masked_identity != reference_identity
 
 
 def test_v36_template_uses_standard_backend_and_v35_template_is_unchanged():

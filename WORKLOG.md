@@ -1,5 +1,16 @@
 # Work Log
 
+## 2026-08-28 - README ComfyUI compatibility requirement
+
+- Added a concise English/Japanese installation note: ComfyUI `>=0.32.0` is required, package validation passed on `0.33.3`, V3.6.1 GPU Smoke passed on `0.34.0`, and the latest ComfyUI release is not mandatory.
+- Updated the README entries in `MANIFEST.sha256`. Validation passed with `552 passed`, the ComfyUI_W V3.6.1 runtime verifier, native PackedLayout, Fixed 3x5 Prompt Plan, and `git diff --check`. The initial validation attempts were environment-only failures caused by the system Python lacking pytest and the known default pytest temp-directory ACL; the accepted run used the established ComfyUI_W Python and a writable dedicated `--basetemp`.
+
+## 2026-08-27 - V3.6.1 Strong 39 fallback GPU Smoke
+
+- Ran the synchronized ComfyUI_W runtime at `127.0.0.6:8188` on ComfyUI 0.34.0 / RTX 5060 Ti 16 GiB with Sage Attention and `--disable-pinned-memory`. The public V3.6 node used Standard, Audio Continuity ON, Strong 39, T2VA 2x5 seconds, 576x576, 20 steps, fixed seed `361039`, Run Storage OFF, and Detailed Report.
+- API prompt `f5d5c36c-fa5b-4031-ba0e-349cf70ff64f` completed in `412.034s`. The report explicitly resolved `Reference Context` before execution with the expected Balanced-22 requirement reason; chunk 2 used 39 frames of fixed Reference Context, and no schema, Sampling, finite-validation, Decode, Assemble, save, OOM, or queue error occurred.
+- Output `D:\output\video\comfy_video\video\V361_Strong39_Fallback_Smoke_00001_.mp4` is H.264 `576x576`, `240f`, `24fps`, exactly `10.000s`, with AAC 32 kHz stereo audio of exactly `10.000s`. The queue returned to empty. V3.6.1 GPU Smoke is PASS; commit/push remain pending.
+
 ## 2026-08-27 - V3.6.1 mixed Prompt syntax parser hotfix (unreleased)
 
 - Preserved all existing tracked/untracked work and created verified snapshot `pre-v361-prompt-parser-hotfix-accepted-20260827_190257` at revision `0d18e3abe0923502171f47f24769e957057eaf15` (214 files, zero SHA-256 mismatch). The standard snapshot attempt stopped only on the known `.pytest_cache` ACL before any edit.
@@ -655,3 +666,29 @@ D:\Codex\_snapshots\ComfyUI-H3-Continuum\pre-rollback-after-00038-fail-20260821_
 - GitHub review found a valid alternative pattern in rgthree's dedicated Seed node: it removes the native control, finalizes the Prompt/Workflow seed immediately before queueing, and exposes an explicit `Use Last Queued Seed` button. That design is materially different from transparently intercepting an existing Sampler's Randomize-to-Fixed transition and was not added to Continuum.
 - Accepted exact-file snapshots are `pre-remove-last-queued-seed-source-files-20260825_184039` (10 files) and `pre-remove-last-queued-seed-runtime-files-20260825_184039` (4 files). The standard snapshot attempt stopped only on the known ACL-inaccessible `.pytest_cache` before any edit.
 - Focused compact/reference-audio/release validation is `8 passed`; full source pytest is `450 passed` with only the known `pynvml` FutureWarning. JavaScript syntax and runtime verification pass; the seed-only removal is synchronized to ComfyUI_W. Commit/push were still pending at this checkpoint.
+
+## 2026-08-27 - V3.6.1 non-Balanced Audio Continuity fallback
+
+- Confirmed the public V3.6 contract mismatch: Standard selected the 22-frame-only Masked AV transport whenever Audio Continuity was ON, while Fast, Strong, and Auto could resolve to 5 or 39 frames and reach an internal contract stop; Strong 39 also had an explicit Long Terminal Merge rejection.
+- Added pre-execution routing in `v3/driving_nodes.py`: Balanced 22 stays Masked AV, Audio Continuity OFF stays Masked Video, and Fast 5 / Strong 39 / Auto with Audio Continuity ON use accepted Reference Context from the start. Compatibility is unchanged. Status and tooltip diagnostics describe the resolved transport without rewriting UI values.
+- Added routing, report, unchanged-path, and legacy Reference Run Storage identity regressions. Focused validation is `108 passed`; final full source pytest is `543 passed`; all 178 Manifest entries, compileall, and `git diff --check` pass. V3.6.1 version/README/CHANGELOG/package metadata now include this fix together with the already-pushed Prompt Parser hotfix.
+- Pre-change snapshots are `pre-v361-continuity-fallback-source-accepted-20260827_194154-e626053` (598 source files) and `pre-v361-runtime-w-sync-accepted-20260827_195452` (350 runtime files). Synchronized `v2/prompts.py`, `v3/driving_nodes.py`, and `version.py` match ComfyUI_W by SHA-256; the V3.6.1 runtime verifier passes. Representative GPU Smoke remains pending; commit/push were not performed.
+
+## 2026-08-27 - Issue #13 contrast / oily drift investigation
+
+- Preserved all existing V3.6.1 release/fallback changes. The standard snapshot attempt encountered only the known ACL-inaccessible `.pytest_cache`; accepted source snapshot is `pre-issue13-drift-investigation-accepted-20260827_204413-e626053` with 598 files at revision `e62605389302192394446645cf3483fff08dfbf2`.
+- Added two non-Production diagnostic tools: `tools/issue13_drift_gate_runner.py` for matched five-case ComfyUI API execution and `tools/issue13_drift_analyze.py` for 25-frame-per-chunk color metrics and a contact sheet. They are not imported or registered by the package.
+- GPU matrix completed on ComfyUI_W 0.34.0 / RTX 5060 Ti 16 GB: Fixed Standard, same-text List Standard, same-text Timeline Standard, varied List Standard, and Fixed Compatibility. Every case produced 600 frames / 25 seconds at 384x384 without execution error, NaN/Inf, or OOM.
+- Fixed, same-text List, and same-text Timeline are decoded-stream bit-identical and use identical resolved prompt hashes. Prompt Format itself and repeating the same text through a different parser mode are rejected as the cause.
+- Compatibility / Reference Context reproduced cumulative contrast and high-saturation-tail growth; Standard Masked AV did not. This supports legacy Reference Context visual self-conditioning as the most likely cause under the controlled condition. The exact reporter workflow is still unavailable, and model/sampler/seed generality was not claimed.
+- Evidence is under `D:\Codex\_test_results\ComfyUI-H3-Continuum\issue13-drift-20260827_204827`, including `ISSUE_13_INVESTIGATION_REPORT.md`, five-case prompts/histories, `analysis.json`, `chunk_metrics.csv`, and `contact_sheet.png`.
+- Diagnostic `py_compile` passes; full pytest is `543 passed` with only the known `pynvml` FutureWarning; the ComfyUI_W V3.6.1 runtime verifier and `git diff --check` pass. Production, frontend, schema, version, commit, push, and release were unchanged.
+
+## 2026-08-27/28 - Audio Continuity Research Gate
+
+- Preserved all existing V3.6.1 working-tree changes and created accepted snapshot `pre-audio-continuity-research-gate-accepted-20260827_231806-e626053` (602 files, excluding `.git` and the inherited ACL-inaccessible `.pytest_cache`).
+- Added tests for 24 fps / 40 Hz grid offsets, cumulative PCM boundaries, 39f/65T State retention, Audio40 end alignment, and non-mutating Seam diagnostics. No Production implementation was changed.
+- Added private research-only Audio40 routing to the diagnostic node plus API/output analysis tools. Ran six 3x5-second GPU outputs: music, dialogue, and ambient, each at 37T and 40T with fixed seed, 576x576, 20 steps, Balanced 22, Audio Continuity ON, and Seam OFF.
+- All outputs completed and retained 360f / 15.000s / 32 kHz stereo contracts with finite latents. 40T added only six packed rows but did not improve audio boundaries consistently: Ambient improved, Dialogue was mixed, and Music immediate jumps worsened. Production remains at Audio37T.
+- Generated machine-readable summaries, finalized-output metrics, boundary contact sheets, and 12 listening clips under `D:\Codex\_test_results\ComfyUI-H3-Continuum\audio-continuity-research-20260827_2335`. The detailed report is `AUDIO_CONTINUITY_RESEARCH_REPORT.md`.
+- Final validation: focused `33 passed`, related `115 passed`, full `552 passed`; compileall, V3.6.1 ComfyUI_W runtime verifier, diagnostic source/runtime SHA-256, empty queue, and `git diff --check` PASS. No commit/push/version/release was performed; ComfyUI_W remains running.

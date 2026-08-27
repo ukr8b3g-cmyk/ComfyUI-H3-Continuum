@@ -4,6 +4,7 @@ from ComfyUI_H3_Continuum_Join.temporal import (
     align_frame_count_nearest,
     audio_grid_offset,
     audio_latent_t,
+    audio_latent_t_from_grid_offset,
     context_slots,
     latent_slot_offsets,
     largest_context_capacity,
@@ -48,6 +49,20 @@ def test_audio_grid_offset_is_signed_and_bounded_on_valid_h3_lengths():
     assert all(-0.500001 <= value <= 0.500001 for value in offsets)
     assert any(value < 0 for value in offsets)
     assert any(value > 0 for value in offsets)
+
+
+@pytest.mark.parametrize(
+    ("frames", "ticks", "offset"),
+    (
+        (124, 207, 1.0 / 3.0),
+        (141, 235, 0.0),
+        (260, 433, -1.0 / 3.0),
+    ),
+)
+def test_representative_audio_grid_phases_round_trip(frames, ticks, offset):
+    assert audio_latent_t(frames) == ticks
+    assert audio_grid_offset(frames, ticks) == pytest.approx(offset)
+    assert audio_latent_t_from_grid_offset(frames, offset) == ticks
 
 
 def test_native_context_window_uses_source_av_grid_and_cycle_phase():

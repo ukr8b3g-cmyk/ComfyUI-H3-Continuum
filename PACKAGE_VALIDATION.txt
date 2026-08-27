@@ -1,6 +1,6 @@
-ComfyUI-H3-Continuum V3.6.0 package validation
+ComfyUI-H3-Continuum V3.6.1 package validation
 
-Status: V3.6 Production release. Standard continuation uses Masked AV; Advanced Compatibility retains the V3.5 Reference Context route. Run Storage revisions are backend-scoped, Terminal Merge remains physical-group atomic, and all V3.5.3/V3.4 public node IDs and saved-workflow contracts remain available. Integrated Hi-Res Fix remains Experimental.
+Status: V3.6.1 Production hotfix. Standard uses Masked AV for Balanced 22 with Audio Continuity, Reference Context fallback for Fast 5 / Strong 39 / Auto with Audio Continuity, and Masked Video when Audio Continuity is disabled. Advanced Compatibility retains the V3.5 Reference Context route. Run Storage identity is resolved before execution, Terminal Merge remains physical-group atomic, and all V3.5.3/V3.4 public node IDs and saved-workflow contracts remain available. Integrated Hi-Res Fix remains Experimental.
 
 Required automated checks:
 - python -m compileall -q .
@@ -8,6 +8,9 @@ Required automated checks:
 - python tools/verify_runtime.py --comfy-root <runtime-path>
 
 Validated runtime paths include:
+- V3.6.1 mixed Timeline/List Prompt diagnostics and fail-open normalization
+- V3.6.1 non-Balanced Audio Continuity fallback routing before Run Storage identity creation
+- V3.6.1 public-node Strong 39 / Audio Continuity fallback GPU Smoke on ComfyUI_W: 2x5 seconds, 576x576, 240 frames, 10.000-second video and audio
 - H3 Continuum Sampler V3.6 Standard / Compatibility backend mapping without exposing internal transport identifiers
 - Masked AV protected Video/Audio prefix bit-exact finalization
 - Run Storage Save, Auto Resume, and Regenerate From with backend-scoped revisions and atomic Terminal Merge reuse
@@ -36,7 +39,7 @@ Validated runtime paths include:
 - Audio Seam Auto
 - Video Seam Auto guarded transient and micro-flash correction
 
-Latest verified automated result: 527 passed.
+Latest verified automated result: 543 passed.
 
 Hi-Res Fix and Auto 2 remain experimental. Main 3x5 2x is not accepted on the tested RTX 5060 Ti 16 GiB because the terminal 77T Second Pass group exceeded VRAM; longer Reference/Hybrid acceptance remains pending.
 

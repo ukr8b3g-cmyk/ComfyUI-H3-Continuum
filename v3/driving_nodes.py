@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 
-from ..constants import FPS
+from ..constants import CONTINUITY_OPTIONS, FPS
 from ..driving_audio import prepare_driving_audio_source
 from ..hardening import diagnostics_is_full
 from ..reference_video import (
@@ -272,6 +272,46 @@ CONTINUATION_BACKEND_OPTIONS = (
     CONTINUATION_BACKEND_COMPATIBILITY,
 )
 
+_V36_BALANCED_CONTINUITY = CONTINUITY_OPTIONS[0]
+_V36_NON_BALANCED_AUDIO_FALLBACK_REASON = (
+    "Masked AV Standard currently requires Balanced 22 when Audio Continuity "
+    "is enabled."
+)
+
+
+def _resolve_v36_continuation_transport(
+    *,
+    continuation_backend,
+    audio_continuity,
+    continuity,
+):
+    from ..v2.sequence import (
+        MASKED_AV_PREFIX_22_V1,
+        MASKED_VIDEO_PREFIX_V1,
+        REFERENCE_CONTEXT_V1,
+    )
+
+    backend = str(continuation_backend)
+    if backend == CONTINUATION_BACKEND_COMPATIBILITY:
+        return REFERENCE_CONTEXT_V1, None
+    if not bool(audio_continuity):
+        return MASKED_VIDEO_PREFIX_V1, None
+    if str(continuity) == _V36_BALANCED_CONTINUITY:
+        return MASKED_AV_PREFIX_22_V1, None
+    return REFERENCE_CONTEXT_V1, _V36_NON_BALANCED_AUDIO_FALLBACK_REASON
+
+
+def _prepend_v36_transport_report(outputs, fallback_reason):
+    if fallback_reason is None:
+        return outputs
+    status = (
+        "Continuation Backend: Standard\n"
+        "Resolved transport: Reference Context\n"
+        f"Reason: {fallback_reason}\n"
+        f"{str(outputs[3])}"
+    )
+    return (*outputs[:3], status, *outputs[4:])
+
 
 class H3ContinuumSamplerV36(H3ContinuumSamplerV35):
     """V3.6 sampler with Masked continuation and a legacy fallback."""
@@ -281,7 +321,9 @@ class H3ContinuumSamplerV36(H3ContinuumSamplerV35):
     DESCRIPTION = (
         "H3 Continuum V3.6 sampler. Standard continuation preserves prior Video/Audio "
         "inside the next H3 target with native noise masks; Compatibility retains the "
-        "V3.5 Reference Context transport."
+        "V3.5 Reference Context transport. With Audio Continuity enabled, Standard "
+        "uses Masked AV for Balanced 22 and safely falls back to Reference Context "
+        "for Fast 5, Strong 39, and Auto."
     )
     SEARCH_ALIASES = [
         "H3 Continuum Sampler V3.6",
@@ -300,9 +342,11 @@ class H3ContinuumSamplerV36(H3ContinuumSamplerV35):
                 "advanced": True,
                 "tooltip": (
                     "Standard uses the V3.6 target-preserving continuation path. "
+                    "With Audio Continuity enabled, Masked AV currently uses Balanced "
+                    "22; Fast 5, Strong 39, and Auto safely use Reference Context. "
                     "Compatibility restores the V3.5 Reference Context path for "
-                    "older workflows or comparison. Run Storage keeps the two "
-                    "backends in separate revisions."
+                    "older workflows or comparison. Run Storage identity follows "
+                    "the resolved transport before execution begins."
                 ),
             },
         )
@@ -315,28 +359,18 @@ class H3ContinuumSamplerV36(H3ContinuumSamplerV35):
         continuation_backend=CONTINUATION_BACKEND_STANDARD,
         **kwargs,
     ):
-        from ..v2.sequence import (
-            MASKED_AV_PREFIX_22_V1,
-            MASKED_VIDEO_PREFIX_V1,
-            REFERENCE_CONTEXT_V1,
+        audio_continuity = kwargs.get("audio_continuity")
+        if audio_continuity is None:
+            audio_continuity = True
+        continuity = kwargs.get("continuity", _V36_BALANCED_CONTINUITY)
+        transport, fallback_reason = _resolve_v36_continuation_transport(
+            continuation_backend=continuation_backend,
+            audio_continuity=audio_continuity,
+            continuity=continuity,
         )
-
-        backend = str(continuation_backend)
-        if backend == CONTINUATION_BACKEND_COMPATIBILITY:
-            transport = REFERENCE_CONTEXT_V1
-        else:
-            audio_continuity = kwargs.get("audio_continuity")
-            if audio_continuity is None and len(args) > 13:
-                audio_continuity = args[13]
-            if audio_continuity is None:
-                audio_continuity = True
-            transport = (
-                MASKED_AV_PREFIX_22_V1
-                if bool(audio_continuity)
-                else MASKED_VIDEO_PREFIX_V1
-            )
         kwargs["continuation_transport"] = transport
-        return super().run(*args, **kwargs)
+        outputs = super().run(*args, **kwargs)
+        return _prepend_v36_transport_report(outputs, fallback_reason)
 
 
 class H3ContinuumAssembleSeamV34(H3ContinuumAssembleSeamExperimental):

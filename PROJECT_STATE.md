@@ -12,6 +12,17 @@
 
 Updated: 2026-08-27
 
+## V3.6.1 Continuity fallback hotfix (2026-08-27)
+
+- V3.6 Standard now resolves its continuation transport before Production execution and Run Storage identity creation. With Audio Continuity ON, Balanced 22 remains `masked_av_prefix_22_v1`; Fast 5, Strong 39, and Auto resolve to the accepted legacy `reference_context_v1` transport instead of reaching the incompatible 22-frame Masked AV contract.
+- Standard with Audio Continuity OFF remains the dynamic `masked_video_prefix_v1` path for 5/22/39-frame Continuity. Compatibility remains `reference_context_v1` for every mode. User Backend and Continuity widget values are never rewritten.
+- Non-Balanced Standard fallback reports `Continuation Backend: Standard`, `Resolved transport: Reference Context`, and the reason before the normal status. Run Storage follows the resolved transport: fallback and explicit Compatibility safely share the identical legacy Reference identity, while Balanced Masked AV stays revision-separated.
+- No V3.5.3/V3.4 routing, Sampling, Conditioning payload, Terminal Merge, Assembly, Seam, Run Storage schema, Node ID, socket, or workflow serialization contract changed. Dynamic 5f/39f Masked AV remains a separate V3.6.2-or-later research item.
+- Focused routing/Masked/Run Storage/Prompt/release validation is `108 passed`; final full source pytest is `543 passed`; all 178 Manifest entries, compileall, and `git diff --check` pass with only the known `pynvml` FutureWarning and inaccessible `.pytest_cache` listing notice. `v2/prompts.py`, `v3/driving_nodes.py`, and `version.py` are synchronized to ComfyUI_W with exact SHA-256 equality, and the V3.6.1 runtime verifier passes.
+- The representative GPU Smoke is PASS on ComfyUI_W 0.34.0 / RTX 5060 Ti 16 GiB with Sage Attention and `--disable-pinned-memory`: public `H3ContinuumSamplerV36`, Standard, Audio Continuity ON, Strong 39, T2VA 2x5 seconds, 576x576, 20 steps. Prompt `f5d5c36c-fa5b-4031-ba0e-349cf70ff64f` completed in `412.034s`; the report begins with the expected `Resolved transport: Reference Context` and fallback reason, retained `124f + (158f - 39f) = 243f`, and reported no execution, finite-validation, Decode, Assembly, or save failure. Output `D:\output\video\comfy_video\video\V361_Strong39_Fallback_Smoke_00001_.mp4` is `576x576`, `240f`, `24fps`, exactly `10.000s`, with 32 kHz stereo audio of the same duration.
+- Accepted pre-change snapshot: `pre-v361-continuity-fallback-source-accepted-20260827_194154-e626053` (598 files excluding `.git` and the known ACL-inaccessible `.pytest_cache`, source revision `e62605389302192394446645cf3483fff08dfbf2`).
+- Accepted runtime snapshot: `pre-v361-runtime-w-sync-accepted-20260827_195452` (350 files excluding `.git` and the known ACL-inaccessible `.pytest_cache`).
+
 ## V3.6.1 Prompt Parser hotfix implementation (unreleased, 2026-08-27)
 
 - Shared `v2/prompts.py` now detects mixed Timeline headers and standalone `---` List separators without stopping generation. Auto and explicit Timeline keep Timeline assignment, remove only standalone separator lines, emit `H3C-P105`, and retain the existing `H3C-P101` previous-prompt fallback for uncovered chunks. Text after a removed separator is not reassigned to another chunk.
@@ -19,7 +30,7 @@ Updated: 2026-08-27
 - Reports with parser warnings now begin with `PROMPT PREFLIGHT WARNING`; Timeline source/fallback diagnostics and explicit-List section mappings expose the resolved per-chunk assignment. Prompt Plan Preview uses the same Python parser and report. No Frontend/JavaScript parser or Toast was added.
 - Run Storage schema is unchanged. A dedicated regression confirms that hashes from the legacy mixed Prompt text and the normalized resolved Prompt produce distinct revision identities, preventing incorrect reuse.
 - Validation: parser plus Run Storage focused `71 passed`; related public/schema/workflow suite `94 passed`; full pytest `538 passed`; compileall, V3.6.0 source runtime verifier against ComfyUI_WAN, and `git diff --check` pass. Only the known `pynvml` FutureWarning appeared. GPU testing was intentionally not run.
-- Accepted pre-change snapshot: `pre-v361-prompt-parser-hotfix-accepted-20260827_190257` (214 Git-visible/untracked nonignored files, SHA-256 mismatch 0, revision `0d18e3abe0923502171f47f24769e957057eaf15`). Frontend, version metadata, release files, runtime copies, commit, and push remain unchanged.
+- Accepted pre-change snapshot: `pre-v361-prompt-parser-hotfix-accepted-20260827_190257` (214 Git-visible/untracked nonignored files, SHA-256 mismatch 0, revision `0d18e3abe0923502171f47f24769e957057eaf15`). Frontend remains unchanged. This parser hotfix is now included in the local V3.6.1 metadata and synchronized ComfyUI_W runtime together with the Continuity fallback; commit and push remain pending.
 
 ## V3.6.0 public release implementation (2026-08-27)
 
@@ -538,3 +549,24 @@ Static checks do not replace a real GPU generation. Record workflow, prompt, med
 - `psutil` is now an Actions-only test dependency. Runtime `requirements.txt` remains dependency-free.
 - `tests/test_v35_hires_fix.py` provides a file-local `comfy_extras.nodes_minimax_h3` stub containing only Core's `CANVAS_MULTIPLE = 32`. Production Core imports and Hi-Res Fix behavior are unchanged.
 - Focused Hi-Res Fix/P25 validation is `16 passed`; full validation is `450 passed` with only the known `pynvml` FutureWarning. The first full local run encountered only the existing Windows global pytest temp ACL error; the accepted rerun used a dedicated writable `--basetemp`.
+
+## Issue #13 contrast / oily drift investigation (2026-08-27)
+
+- Controlled 5x5-second I2VA GPU comparison used one fixed First Image, base seed `130013`, 384x384, Balanced 22, Audio Continuity ON, `res_multistep` / `simple` 8 steps, Sage Attention, no LoRA, Spectrum OFF, Run Storage OFF, and both seams OFF.
+- Fixed, same-text List, and same-text Timeline resolved to the same five prompt strings and SHA-256 `9d95f563bf519ff548ac61f65d4f232d584f3531fdc4c3d2468199921b806326`. Their decoded RGB video MD5 (`1e655f35cfb7b93082831d275e3ee6b5`) and PCM audio MD5 (`0dc94fcd389e2e0da5342a88d2978327`) are identical. Fixed mode is not the cause.
+- V3.6 Standard Masked AV did not reproduce the reported cumulative contrast/saturation pattern. Chunk 5 minus Chunk 1 was luma `+0.0688`, saturation mean `-0.0493`, saturation p95 `-0.4833`, and contrast `+0.0039`.
+- Compatibility / Reference Context did reproduce the relevant pattern under the matched condition: luma std `+0.0472` (about 25.9%), saturation mean `+0.0207` (about 16.7%), saturation p95 `+0.0773`, and contrast `+0.0940` (about 14.9%) from Chunk 1 to 5, while mean luma stayed nearly stable.
+- A varied List requesting restrained contrast/color changed the output but did not improve the measured drift over the same-text Standard case. The evidence therefore points to legacy Reference Context visual self-conditioning rather than Prompt Format or repeated identical text itself.
+- Current workaround: use V3.6 Standard + Balanced 22 for the accepted Masked AV transport; avoid Compatibility for long runs showing oily/contrast drift. V3.6.1 non-Balanced Audio Continuity fallback still intentionally uses Reference Context, so the same model-side risk can remain for Fast 5 / Strong 39 / Auto.
+- No Production change is justified in V3.6.1. Further Reference Context normalization or dynamic 5f/39f Masked AV belongs to V3.6.2-or-later research with separate quality gates.
+- Evidence root: `D:\Codex\_test_results\ComfyUI-H3-Continuum\issue13-drift-20260827_204827`; report `ISSUE_13_INVESTIGATION_REPORT.md`, five-case contact sheet, full CSV/JSON metrics, prompts, histories, and videos are retained. Diagnostic tools are isolated under `tools/` and not imported by Production.
+- Validation: diagnostic `py_compile` PASS; full pytest `543 passed` with the known `pynvml` FutureWarning; ComfyUI_W V3.6.1 runtime verifier PASS; `git diff --check` PASS. No commit/push/release was performed.
+
+## Audio Continuity Research Gate (2026-08-27/28)
+
+- Audited the existing 24 fps / 40 Hz timeline contract without changing Production. Regression coverage now fixes 124f/207T (+1/3 tick), 141f/235T (0), 260f/433T (-1/3 tick), 2/3/5-chunk cumulative PCM alignment, State 39f/65T capacity, Audio40 end alignment, and Seam diagnostic non-interference.
+- A private tools/diagnostic-only A/B compared the accepted Balanced 22 Reference Context (Audio 37T) with an independently end-aligned 40T audio history. Three fixed-seed 3x5-second T2VA pairs covered music, dialogue, and ambient sound at 576x576 / 20 steps / Seam OFF. All six completed with finite latents, 360f / 15.000s / 32 kHz stereo output, empty final queue, and no visible video regression.
+- 40T adds six packed rows (+0.036%) and showed no material VRAM regression. Continuation Sampling deltas were -5.41%, -0.51%, and -1.82%, but no speed claim is accepted because the larger layout cannot explain that direction and execution-order/system variance remains.
+- Final audio-boundary metrics were content-dependent: Ambient improved, Dialogue mixed immediate-jump improvement with RMS/floor regressions, and Music worsened both immediate boundary jumps (including 0.33319 -> 0.44815 at 243f). Therefore 40T did not meet the cross-content promotion criterion.
+- Final decisions: **KEEP CURRENT 37 TICKS**; adopt Seam diagnostics only as research tooling and keep them out of Production UI; adopt timeline-hardening tests without a new Production abstraction. Evidence and the detailed report are under `D:\Codex\_test_results\ComfyUI-H3-Continuum\audio-continuity-research-20260827_2335`.
+- Validation: focused `33 passed`, related contract suite `115 passed`, full pytest `552 passed`, compileall/runtime verifier/diagnostic source-runtime SHA/`git diff --check` PASS. Production, frontend, schema, version, commit, push, and release were unchanged. ComfyUI_W remains running.

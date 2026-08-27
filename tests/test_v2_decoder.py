@@ -1,4 +1,5 @@
 import torch
+import pytest
 
 from ComfyUI_H3_Continuum_Join.v2.decoder import (
     _slice_audio_for_timeline,
@@ -27,6 +28,33 @@ def test_cumulative_audio_boundaries_do_not_accumulate_rounding_error():
         assert piece.shape[-1] == round(stop / 24 * 32000) - round(cursor / 24 * 32000)
         cursor = stop
     assert sum(piece.shape[-1] for piece in pieces) == round(362 / 24 * 32000) - round(124 / 24 * 32000)
+
+
+@pytest.mark.parametrize("chunks", (2, 3, 5))
+def test_long_audio_timeline_uses_cumulative_sample_boundaries(chunks):
+    audio = _audio(samples=1_000_000)
+    frame_starts = [0]
+    for index in range(chunks):
+        frame_starts.append(124 + 119 * index)
+
+    total_samples = 0
+    for index in range(chunks):
+        frame_start = frame_starts[index]
+        frame_stop = frame_starts[index + 1]
+        trim_frames = 0 if index == 0 else 22
+        piece = _slice_audio_for_timeline(
+            audio,
+            trim_frames=trim_frames,
+            frame_start=frame_start,
+            frame_stop=frame_stop,
+        )
+        expected = round(frame_stop / 24 * 32000) - round(
+            frame_start / 24 * 32000
+        )
+        assert piece.shape[-1] == expected
+        total_samples += expected
+
+    assert total_samples == round(frame_starts[-1] / 24 * 32000)
 
 
 def test_exact_duration_aligns_video_and_audio():

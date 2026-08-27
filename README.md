@@ -1,9 +1,15 @@
-# ComfyUI-H3-Continuum 3.6.0
+# ComfyUI-H3-Continuum 3.6.1
 
 <img width="1536" height="1024" alt="Clip_95" src="https://github.com/user-attachments/assets/4cf97e5d-27e3-40e5-aefd-6a54ab035461" />
 
 
 Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pass refinement, optional Hi-Res Fix, low-memory disk-backed assembly, restartable chunks, persistent references, and optional Spectrum interoperability.
+
+## V3.6.1 Maintenance Hotfix
+
+V3.6.1 fixes two fail-open/compatibility issues without changing the accepted Balanced 22 Masked AV path. Mixed Timeline/List prompts now report `H3C-P105`; Timeline parsing ignores only standalone `---` lines, keeps existing uncovered-chunk fallback, and never stops generation because of prompt syntax.
+
+With `Continuation Backend = Standard` and Audio Continuity enabled, `Balanced — 22 frames` continues to use Masked AV. `Fast — 5 frames`, `Strong — 39 frames`, and `Auto — conservative` now resolve to the accepted Reference Context transport before Run Storage identity is created. The selected UI values are not rewritten, and the status report states the resolved transport and reason. Standard with Audio Continuity disabled remains Masked Video; Compatibility remains Reference Context.
 
 ## V3.6 Masked AV Continuation
 
@@ -11,10 +17,10 @@ V3.6 adds **H3 Continuum Sampler V3.6**. Its Standard continuation backend place
 
 | Continuation Backend | Purpose |
 |---|---|
-| `Standard` | Recommended V3.6 path. Preserves prior Video/Audio in the next target; when Audio Continuity is off, only Video is preserved. |
+| `Standard` | Recommended V3.6 path. Balanced 22 + Audio Continuity uses Masked AV; Fast 5, Strong 39, and Auto safely fall back to Reference Context. When Audio Continuity is off, Masked Video is used. |
 | `Compatibility` | Advanced fallback using the accepted V3.5 Reference Context behavior. |
 
-Internal transport identifiers are not exposed in the UI. Run Storage keeps Standard and Compatibility revisions separate, and `Regenerate From` treats the Long Terminal Merge logical pair `[2,3]` as one atomic physical sample.
+Internal transport identifiers are not exposed in the UI. Run Storage identity follows the resolved transport: Balanced 22 Masked AV stays separate from Reference Context, while a non-Balanced Standard fallback safely shares the identical accepted Reference contract. `Regenerate From` treats the Long Terminal Merge logical pair `[2,3]` as one atomic physical sample.
 
 ### Accepted behavior
 
@@ -59,7 +65,7 @@ Prompt/CLIP figures measure only the conditioning subphase, not total generation
 
 The measured Sage-only production baselines on the tested RTX 5060 Ti 16 GB / 64 GB system were 168.069 seconds for 1×5-second 576×576 T2VA and 379.765 seconds for 3×5-second 640×640 FL2VA Long Terminal Merge. These are configuration-specific baselines, not universal speed guarantees. Sampling remained the dominant cost; Continuum Assemble + Seam stayed below 1%.
 
-> **V3.6.0 is the current release.** V3.5.3 remains the maintenance/compatibility baseline, and V3.5.2 remains the accepted Stabilization & Optimization baseline. Older Node IDs, backend socket keys, and saved-workflow loading remain intentionally supported. The withdrawn experimental Last Queued Seed override is not included.
+> **V3.6.1 is the current release.** V3.5.3 remains the maintenance/compatibility baseline, and V3.5.2 remains the accepted Stabilization & Optimization baseline. Older Node IDs, backend socket keys, and saved-workflow loading remain intentionally supported. The withdrawn experimental Last Queued Seed override is not included.
 
 ## V3.5.1 Reference Audio & Compatibility Update
 
@@ -342,6 +348,8 @@ The public nodes focus on normal production controls. Developer diagnostics and 
 Experimental Timeline Video and earlier timeline-audio paths are no longer public V3.4 inputs. They are hidden rather than destructively removed. Existing V3.3 workflows can continue through legacy nodes, but new stable workflows should use `Driving Audio` and `Video Guide Frames`.
 
 ## Installation
+
+Requires ComfyUI 0.32.0 or later. Package validation passed on ComfyUI 0.33.3, and the V3.6.1 GPU smoke test passed on ComfyUI 0.34.0; the latest ComfyUI release is not required.
 
 ### Updating an existing installation
 

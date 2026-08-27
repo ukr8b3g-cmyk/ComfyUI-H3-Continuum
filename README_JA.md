@@ -1,6 +1,12 @@
-# ComfyUI-H3-Continuum 3.6.0
+# ComfyUI-H3-Continuum 3.6.1
 
 MiniMax H3を複数チャンクで連続生成し、直前チャンク末尾の**映像latent / 音声latentを直接**次チャンクへ継承するComfyUIカスタムノードです。チャンク間でVideo/Audio VAEのDecode→Encodeは行いません。
+
+## V3.6.1 Maintenance Hotfix
+
+V3.6.1は、受入済みBalanced 22 Masked AV経路を変更せず、2件のfail-open／互換性問題を修正します。Timeline/List記法が混在したPromptは`H3C-P105`を表示し、Timeline解析ではstandalone `---`行だけを除去します。未指定Chunkの既存fallbackとFixed Promptのfail-open動作は維持し、Prompt構文だけを理由に生成を停止しません。
+
+`Continuation Backend = Standard`かつAudio Continuity ONでは、`Balanced — 22 frames`が引き続きMasked AVを使用します。`Fast — 5 frames`、`Strong — 39 frames`、`Auto — conservative`はRun Storage identity作成前に、受入済みReference Contextへ解決します。UIの選択値は書き換えず、status reportへ解決結果と理由を表示します。Audio Continuity OFFのStandardはMasked Video、Compatibilityは常にReference Contextのままです。
 
 ## V3.6 Masked AV Continuation
 
@@ -8,10 +14,10 @@ V3.6では`H3 Continuum Sampler V3.6`を追加しました。標準backendは、
 
 | Continuation Backend | 用途 |
 |---|---|
-| `Standard` | 推奨V3.6経路。次Target内でVideo／Audioを保持します。Audio Continuity OFF時はVideoだけを保持します。 |
+| `Standard` | 推奨V3.6経路。Balanced 22＋Audio ContinuityはMasked AV、Fast 5／Strong 39／Autoは安全にReference Contextへfallbackします。Audio Continuity OFF時はMasked Videoです。 |
 | `Compatibility` | 受入済みV3.5 Reference Context動作へ戻すAdvanced fallbackです。 |
 
-内部transport識別子はUIへ表示しません。Run Storage revisionはStandard／Compatibilityで分離し、`Regenerate From`でもLong Terminal Mergeのlogical `[2,3]`を1つのphysical sampleとして再利用・再生成します。
+内部transport識別子はUIへ表示しません。Run Storage identityは実行前に解決したtransportへ従います。Balanced 22 Masked AVはReference Contextと分離し、非Balanced Standard fallbackは同一動作のReference contractを安全に共有します。`Regenerate From`でもLong Terminal Mergeのlogical `[2,3]`を1つのphysical sampleとして再利用・再生成します。
 
 ### 受入結果
 
@@ -56,7 +62,7 @@ Prompt/CLIPの数値はconditioning区間だけで、総生成時間ではあり
 
 RTX 5060 Ti 16 GB／RAM 64 GBの検証環境で測定したSage-only Production baselineは、576×576 T2VA 1×5秒が168.069秒、640×640 FL2VA Long Terminal Merge 3×5秒が379.765秒です。環境・設定固有の測定値であり、すべての環境に対する速度保証ではありません。Samplingが最大コストで、Continuum Assemble + Seamは1%未満でした。
 
-**V3.6.0が現在の公開版です。** V3.5.3はmaintenance／compatibility baseline、V3.5.2は受入済みStabilization & Optimization baselineとして維持します。旧Node ID、backend socket key、保存済みWorkflow読込は維持します。撤回済みの実験的Last Queued Seed overrideは含まれていません。
+**V3.6.1が現在の公開版です。** V3.5.3はmaintenance／compatibility baseline、V3.5.2は受入済みStabilization & Optimization baselineとして維持します。旧Node ID、backend socket key、保存済みWorkflow読込は維持します。撤回済みの実験的Last Queued Seed overrideは含まれていません。
 
 ## V3.5.1 Reference Audio／互換性更新
 
@@ -271,6 +277,8 @@ UNET -> SageAttention -> Sol-Attn -> LoRA -> Spectrum -> H3 Continuum Sampler
 まず`chunks=2 / chunk_seconds=5 / Balanced 22f / Seam Correction=Off`でNative Continuityを確認し、その後`Seam Correction=Auto`を比較してください。
 
 ## インストール
+
+ComfyUI 0.32.0以上が必要です。ComfyUI 0.33.3でパッケージ検証、0.34.0でV3.6.1 GPU Smoke検証済みで、ComfyUIの最新版は必須ではありません。
 
 ZIPを展開して、`ComfyUI-H3-Continuum`フォルダーを`ComfyUI/custom_nodes/`へ置き、ComfyUIを再起動します。
 
