@@ -1,5 +1,12 @@
 # Work Log
 
+## 2026-08-27 - V3.6.1 mixed Prompt syntax parser hotfix (unreleased)
+
+- Preserved all existing tracked/untracked work and created verified snapshot `pre-v361-prompt-parser-hotfix-accepted-20260827_190257` at revision `0d18e3abe0923502171f47f24769e957057eaf15` (214 files, zero SHA-256 mismatch). The standard snapshot attempt stopped only on the known `.pytest_cache` ACL before any edit.
+- Updated only the shared Python Prompt planner and tests: Auto/Timeline now ignore standalone `---` lines when Timeline syntax is active, issue `H3C-P105`, keep following text in the current Timeline section, and preserve `H3C-P101` fallback. Explicit List keeps List parsing with a mixed-syntax warning; Explicit Fixed and invalid-Timeline Fixed fallback remain literal/fail-open.
+- Warning reports now lead with `PROMPT PREFLIGHT WARNING` and retain resolved Timeline or List source mappings. Prompt Preview consumes the same plan/report; no Frontend Toast, JavaScript parser duplication, schema bump, or Production Sampling/Masked AV/Reference/Terminal/Assembly/Seam change was introduced.
+- Added mixed Auto/Timeline/List/Fixed, shared-preamble separator, five-chunk trailing separator, missing-chunk fallback, report, Preview, invalid fallback, and Run Storage revision-separation regressions. Results: focused `71 passed`, related `94 passed`, full `538 passed`, compileall PASS, V3.6.0 source runtime verifier against ComfyUI_WAN PASS, and `git diff --check` PASS. GPU, runtime synchronization, version metadata, release, commit, and push were intentionally not performed.
+
 ## 2026-08-27 - V3.6.0 public release implementation and GPU smoke
 
 - Added `H3 Continuum Sampler V3.6` as a new public Node ID while preserving V3.5.3/V3.4 nodes and widget sequences. Public backend choices are only `Standard` and `Compatibility`: Standard maps to Masked AV or Masked Video according to Audio Continuity, while Compatibility maps to the original Reference Context path. Internal transport names remain private.

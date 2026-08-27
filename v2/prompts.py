@@ -37,18 +37,20 @@ def _parse_list(script,chunks):
     values=_parse_json_list(script)
     if values is None: values=[_normalize_prompt(part,label=f"prompt {index+1}") for index,part in enumerate(_LIST_SEPARATOR.split(script)) if part.strip()]
     if not values: values=[str(script)]
-    notes=[]
+    source_count=len(values); notes=[]
     if len(values)<chunks: notes.append(f"repeated the last prompt for {chunks-len(values)} chunk(s)"); values.extend([values[-1]]*(chunks-len(values)))
     elif len(values)>chunks: notes.append(f"ignored {len(values)-chunks} extra prompt(s)"); values=values[:chunks]
-    return values,notes
-def _timeline_preamble(script):
+    sources=[min(index+1,source_count) for index in range(len(values))]
+    return values,notes,sources
+def _timeline_preamble(script,*,ignore_list_separators=False):
     body=[]
     for line in str(script).splitlines():
         if _TIMELINE_HEADER.match(line) or _CHUNK_HEADER.match(line): break
+        if ignore_list_separators and _LIST_SEPARATOR.fullmatch(line): continue
         body.append(line)
     return "\n".join(body).strip()
-def _parse_timeline_sections(script,*,allow_preamble=True):
-    preamble=_timeline_preamble(script)
+def _parse_timeline_sections(script,*,allow_preamble=True,ignore_list_separators=False):
+    preamble=_timeline_preamble(script,ignore_list_separators=ignore_list_separators)
     sections=[]; current=None; body=[]
     def finish():
         nonlocal current,body
@@ -75,6 +77,8 @@ def _parse_timeline_sections(script,*,allow_preamble=True):
             continue
         if _TIMELINE_LIKE_HEADER.match(line):
             _prompt_error("H3C-P001","invalid timeline header",line_number=line_number,source=line.strip(),suggested_fix="use [0-5s] or [Chunk 1]")
+        if ignore_list_separators and _LIST_SEPARATOR.fullmatch(line):
+            continue
         body.append(line)
     finish()
     if not sections: raise PromptPlanError("timeline contains no sections")
@@ -97,9 +101,9 @@ def validate_sparse_prompt_overrides(overrides,*,chunks):
         validated[index]=_normalize_prompt(prompt,label=f"Clip {index} Override")
     if not validated: raise PromptPlanError("Sparse Clip Overrides contains no overrides")
     return validated
-def _parse_timeline(script,chunks,chunk_seconds):
-    sections=_parse_timeline_sections(script); prompts=[]; notes=[]; diagnostics=[]
-    if _timeline_preamble(script): notes.append("applied timeline preamble to all chunks")
+def _parse_timeline(script,chunks,chunk_seconds,*,ignore_list_separators=False):
+    sections=_parse_timeline_sections(script,ignore_list_separators=ignore_list_separators); prompts=[]; notes=[]; diagnostics=[]
+    if _timeline_preamble(script,ignore_list_separators=ignore_list_separators): notes.append("applied timeline preamble to all chunks")
     seen_chunks={}; total_end=chunks*chunk_seconds; usable=[]
     for item in sections:
         if item["kind"]=="chunk":
@@ -140,6 +144,14 @@ def _parse_timeline(script,chunks,chunk_seconds):
         diagnostics.append({"level":"info","code":"H3C-P000","message":f"Chunk {chunk_index} source: {previous_source}"})
         if len(scored)>1 and abs(scored[0][0]-scored[1][0])<1e-9: notes.append(f"chunk {chunk_index} had an equal-overlap timeline tie; used the earlier section")
     return prompts,notes,diagnostics
+def _has_timeline_header(script):
+    return any(_TIMELINE_HEADER.match(line) or _CHUNK_HEADER.match(line) for line in str(script).splitlines())
+def _has_list_separator(script):
+    return _LIST_SEPARATOR.search(str(script)) is not None
+def _mixed_syntax_diagnostic(*,timeline_active):
+    message="Mixed Timeline and List prompt syntax detected. Use either [Chunk N] / [0-5s] sections or --- separators, not both."
+    if timeline_active: message+=" Standalone --- separators were ignored because Timeline syntax is active."
+    return {"level":"warning","code":"H3C-P105","message":message}
 def detect_prompt_mode(script):
     text=str(script)
     for line in text.splitlines():
@@ -163,8 +175,15 @@ def make_prompt_plan(*,mode,script,chunks,chunk_seconds):
         if mode==PROMPT_FORMAT_AUTO:
             detected={PROMPT_MODE_FIXED:PROMPT_FORMAT_FIXED,PROMPT_MODE_LIST:PROMPT_FORMAT_LIST,PROMPT_MODE_TIMELINE:PROMPT_FORMAT_TIMELINE}[resolved_mode]; notes.append(f"Auto detected {detected}")
         if resolved_mode==PROMPT_MODE_FIXED: prompt=_normalize_prompt(script,label="fixed prompt"); prompts=[prompt]*chunks
-        elif resolved_mode==PROMPT_MODE_LIST: prompts,parse_notes=_parse_list(script,chunks); notes.extend(parse_notes)
-        elif resolved_mode==PROMPT_MODE_TIMELINE: prompts,parse_notes,diagnostics=_parse_timeline(script,chunks,chunk_seconds); notes.extend(parse_notes)
+        elif resolved_mode==PROMPT_MODE_LIST:
+            prompts,parse_notes,list_sources=_parse_list(script,chunks); notes.extend(parse_notes)
+            if _has_timeline_header(script):
+                diagnostics.append(_mixed_syntax_diagnostic(timeline_active=False))
+                diagnostics.extend({"level":"info","code":"H3C-P000","message":f"Chunk {index+1} source: List section {source}"} for index,source in enumerate(list_sources))
+        elif resolved_mode==PROMPT_MODE_TIMELINE:
+            mixed_syntax=_has_list_separator(script)
+            prompts,parse_notes,diagnostics=_parse_timeline(script,chunks,chunk_seconds,ignore_list_separators=mixed_syntax); notes.extend(parse_notes)
+            if mixed_syntax: diagnostics.insert(0,_mixed_syntax_diagnostic(timeline_active=True))
         else: raise PromptPlanError(f"unknown prompt mode: {resolved_mode!r}")
     except (PromptPlanError,TypeError,ValueError) as exc:
         resolved_mode=PROMPT_MODE_FIXED; prompts=[_normalize_prompt(script,label="fixed prompt")]*chunks
@@ -215,8 +234,18 @@ def prompt_plan_report(plan):
     if note: result+=" "+note+"."
     diagnostics=list(plan.get("diagnostics") or [])
     if not diagnostics: return result+"\nPrompt Preflight: OK."
-    lines=[result,"Prompt Preflight:"]
-    for item in diagnostics:
+    warnings=[item for item in diagnostics if str(item.get("level","info")).lower()=="warning"]
+    info=[item for item in diagnostics if str(item.get("level","info")).lower()!="warning"]
+    lines=[]
+    if warnings:
+        lines.append("PROMPT PREFLIGHT WARNING")
+        for item in warnings:
+            code=str(item.get("code","H3C-P000")); message=str(item.get("message",""))
+            lines.append(f"- WARNING {code}: {message}")
+        lines.append("")
+    lines.extend([result,"Prompt Preflight:"])
+    for item in info:
         level=str(item.get("level","info")).upper(); code=str(item.get("code","H3C-P000")); message=str(item.get("message",""))
         lines.append(f"- {level} {code}: {message}")
+    if not info: lines.append("- See warning(s) above.")
     return "\n".join(lines)

@@ -12,6 +12,15 @@
 
 Updated: 2026-08-27
 
+## V3.6.1 Prompt Parser hotfix implementation (unreleased, 2026-08-27)
+
+- Shared `v2/prompts.py` now detects mixed Timeline headers and standalone `---` List separators without stopping generation. Auto and explicit Timeline keep Timeline assignment, remove only standalone separator lines, emit `H3C-P105`, and retain the existing `H3C-P101` previous-prompt fallback for uncovered chunks. Text after a removed separator is not reassigned to another chunk.
+- Explicit List retains its existing separator parsing and only reports `H3C-P105` when valid Timeline headers are present. Explicit Fixed remains literal and warning-free. Invalid Timeline still fails open to the original Fixed text with `H3C-P100`.
+- Reports with parser warnings now begin with `PROMPT PREFLIGHT WARNING`; Timeline source/fallback diagnostics and explicit-List section mappings expose the resolved per-chunk assignment. Prompt Plan Preview uses the same Python parser and report. No Frontend/JavaScript parser or Toast was added.
+- Run Storage schema is unchanged. A dedicated regression confirms that hashes from the legacy mixed Prompt text and the normalized resolved Prompt produce distinct revision identities, preventing incorrect reuse.
+- Validation: parser plus Run Storage focused `71 passed`; related public/schema/workflow suite `94 passed`; full pytest `538 passed`; compileall, V3.6.0 source runtime verifier against ComfyUI_WAN, and `git diff --check` pass. Only the known `pynvml` FutureWarning appeared. GPU testing was intentionally not run.
+- Accepted pre-change snapshot: `pre-v361-prompt-parser-hotfix-accepted-20260827_190257` (214 Git-visible/untracked nonignored files, SHA-256 mismatch 0, revision `0d18e3abe0923502171f47f24769e957057eaf15`). Frontend, version metadata, release files, runtime copies, commit, and push remain unchanged.
+
 ## V3.6.0 public release implementation (2026-08-27)
 
 - Added the new public `H3ContinuumSamplerV36` / `H3 Continuum Sampler V3.6` without replacing or redirecting V3.5.3/V3.4 nodes. Its final required widget is `Continuation Backend` with only `Standard` and `Compatibility`; internal transport identifiers are not exposed.

@@ -30,6 +30,7 @@ from ComfyUI_H3_Continuum_Join.graph_contract import (
     classify_h3_checkpoint,
 )
 from ComfyUI_H3_Continuum_Join.state import make_plan
+from ComfyUI_H3_Continuum_Join.v2.prompts import make_prompt_plan, prompt_hash
 from ComfyUI_H3_Continuum_Join.v2.session import make_chunk_entry
 from ComfyUI_H3_Continuum_Join.v3.nodes import _validate_regenerate_storage
 
@@ -295,7 +296,7 @@ def _sampling_contract(
     upstream_graph_reasons=None,
     execution_semantics=None,
     reference_audio_contract=None,
-    reference_audio_vae=None,
+    reference_audio_vae=None, prompt_hashes=None,
 ):
     return build_sampling_contract(
         model=model or _Model(),
@@ -306,7 +307,7 @@ def _sampling_contract(
         sigmas=torch.tensor([1.0, 0.0]),
         prompt_plan={
             "chunks": 3,
-            "hashes": ["1" * 64, "2" * 64, "3" * 64],
+            "hashes": list(prompt_hashes or ["1" * 64, "2" * 64, "3" * 64]),
             "mode": "list",
         },
         width=96,
@@ -329,6 +330,25 @@ def _sampling_contract(
         reference_audio_contract=reference_audio_contract,
         reference_audio_vae=reference_audio_vae,
     )
+
+
+def test_mixed_timeline_normalization_separates_run_storage_revision():
+    script = "[Chunk 1]\nA\n[Chunk 2]\nB\n---\nC"
+    normalized = make_prompt_plan(
+        mode="Auto",
+        script=script,
+        chunks=3,
+        chunk_seconds=5,
+    )
+    legacy_hashes = [prompt_hash("A"), prompt_hash("B\n---\nC"), prompt_hash("B\n---\nC")]
+
+    legacy_contract, legacy_safe, legacy_reasons = _sampling_contract(prompt_hashes=legacy_hashes)
+    normalized_contract, normalized_safe, normalized_reasons = _sampling_contract(prompt_hashes=normalized["hashes"])
+
+    assert legacy_safe, legacy_reasons
+    assert normalized_safe, normalized_reasons
+    assert normalized["prompts"] == ["A", "B\nC", "B\nC"]
+    assert revision_identity(legacy_contract) != revision_identity(normalized_contract)
 
 
 def test_reference_audio_revision_separates_changes_and_restores_on_disconnect():

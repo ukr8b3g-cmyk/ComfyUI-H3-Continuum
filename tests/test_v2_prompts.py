@@ -3,6 +3,8 @@ import pytest
 from ComfyUI_H3_Continuum_Join.constants import (
     PROMPT_FORMAT_AUTO,
     PROMPT_FORMAT_FIXED,
+    PROMPT_FORMAT_LIST,
+    PROMPT_FORMAT_TIMELINE,
     PROMPT_MODE_FIXED,
     PROMPT_MODE_LIST,
     PROMPT_MODE_TIMELINE,
@@ -18,6 +20,7 @@ from ComfyUI_H3_Continuum_Join.v2.prompts import (
     validate_sparse_prompt_overrides,
     validate_prompt_plan,
 )
+from ComfyUI_H3_Continuum_Join.v2.nodes import H3ContinuumPromptPlanPreview
 
 
 def test_fixed_prompt_repeats_without_mutation():
@@ -71,6 +74,126 @@ def test_timeline_prompt_maps_ranges_and_chunk_headers():
         chunk_seconds=5,
     )
     assert plan["prompts"] == ["one", "two", "three"]
+    assert not any(item["code"] == "H3C-P105" for item in plan.get("diagnostics", []))
+
+
+def test_clean_list_keeps_assignments_without_mixed_syntax_warning():
+    plan = make_prompt_plan(
+        mode=PROMPT_FORMAT_LIST,
+        script="A\n---\nB\n---\nC",
+        chunks=3,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == ["A", "B", "C"]
+    assert not any(item["code"] == "H3C-P105" for item in plan.get("diagnostics", []))
+
+
+@pytest.mark.parametrize("mode", [PROMPT_FORMAT_AUTO, PROMPT_FORMAT_TIMELINE])
+def test_timeline_mixed_with_list_separator_warns_and_ignores_separator(mode):
+    plan = make_prompt_plan(
+        mode=mode,
+        script="[Chunk 1]\nA\n[Chunk 2]\nB\n---\nC",
+        chunks=3,
+        chunk_seconds=5,
+    )
+    assert plan["mode"] == PROMPT_MODE_TIMELINE
+    assert plan["prompts"] == ["A", "B\nC", "B\nC"]
+    assert all("---" not in prompt for prompt in plan["prompts"])
+    assert any(item["code"] == "H3C-P105" for item in plan["diagnostics"])
+    assert any(item["code"] == "H3C-P101" for item in plan["diagnostics"])
+
+
+def test_timeline_mixed_separator_is_removed_from_shared_preamble():
+    plan = make_prompt_plan(
+        mode=PROMPT_FORMAT_AUTO,
+        script="Shared preamble\n---\n[Chunk 1]\nA\n[Chunk 2]\nB",
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == ["Shared preamble\n\nA", "Shared preamble\n\nB"]
+    assert all("---" not in prompt for prompt in plan["prompts"])
+    assert any(item["code"] == "H3C-P105" for item in plan["diagnostics"])
+
+
+def test_five_chunk_timeline_with_trailing_separator_preserves_all_assignments():
+    script = "\n".join(
+        [
+            "[Chunk 1]", "A", "[Chunk 2]", "B", "[Chunk 3]", "C",
+            "[Chunk 4]", "D", "[Chunk 5]", "E", "---",
+        ]
+    )
+    plan = make_prompt_plan(
+        mode=PROMPT_FORMAT_AUTO,
+        script=script,
+        chunks=5,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == ["A", "B", "C", "D", "E"]
+    assert any(item["code"] == "H3C-P105" for item in plan["diagnostics"])
+
+
+def test_explicit_list_with_timeline_header_warns_but_keeps_list_parsing():
+    plan = make_prompt_plan(
+        mode=PROMPT_FORMAT_LIST,
+        script="[Chunk 1]\nA\n---\nB\n---\nC",
+        chunks=3,
+        chunk_seconds=5,
+    )
+    assert plan["mode"] == PROMPT_MODE_LIST
+    assert plan["prompts"] == ["[Chunk 1]\nA", "B", "C"]
+    assert any(item["code"] == "H3C-P105" for item in plan["diagnostics"])
+    assert [item["message"] for item in plan["diagnostics"] if item["code"] == "H3C-P000"] == [
+        "Chunk 1 source: List section 1",
+        "Chunk 2 source: List section 2",
+        "Chunk 3 source: List section 3",
+    ]
+
+
+def test_explicit_fixed_keeps_all_special_syntax_literal_without_warning():
+    script = "[Chunk 1]\nA\n[0-5s]\nB\n---\nC"
+    plan = make_prompt_plan(
+        mode=PROMPT_FORMAT_FIXED,
+        script=script,
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == [script, script]
+    assert "diagnostics" not in plan
+
+
+def test_mixed_syntax_report_leads_with_warning_and_resolved_chunk_sources():
+    plan = make_prompt_plan(
+        mode=PROMPT_FORMAT_AUTO,
+        script="[Chunk 1]\nA\n[Chunk 2]\nB\n---\nC",
+        chunks=3,
+        chunk_seconds=5,
+    )
+    report = prompt_plan_report(plan)
+    assert report.startswith("PROMPT PREFLIGHT WARNING")
+    assert "H3C-P105" in report
+    assert "H3C-P101" in report
+    assert "Chunk 1 source:" in report
+    assert "Chunk 3 source:" in report
+
+
+def test_prompt_preview_uses_the_same_mixed_syntax_resolution():
+    script = "[Chunk 1]\nA\n[Chunk 2]\nB\n---\nC"
+    expected = make_prompt_plan(
+        mode=PROMPT_FORMAT_AUTO,
+        script=script,
+        chunks=3,
+        chunk_seconds=5,
+    )
+    preview_plan, preview_report = H3ContinuumPromptPlanPreview().build(
+        PROMPT_FORMAT_AUTO,
+        script,
+        3,
+        5,
+    )
+    assert preview_plan == expected
+    assert preview_report.startswith("PROMPT PREFLIGHT WARNING")
+    assert "Chunk 2:\nB\nC" in preview_report
+    assert "Chunk 3:\nB\nC" in preview_report
 
 
 def test_timeline_preamble_is_applied_to_every_chunk():
@@ -138,6 +261,19 @@ def test_invalid_timeline_falls_back_with_actionable_diagnostic(script, code):
     assert plan["prompts"] == [script.strip(), script.strip()]
     assert plan["diagnostics"][0]["code"] == "H3C-P100"
     assert code in plan["diagnostics"][0]["message"]
+
+
+def test_invalid_mixed_timeline_fallback_preserves_original_text():
+    script = "[Chunk 0]\nA\n---\nB"
+    plan = make_prompt_plan(
+        mode=PROMPT_FORMAT_TIMELINE,
+        script=script,
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["mode"] == PROMPT_MODE_FIXED
+    assert plan["prompts"] == [script, script]
+    assert plan["diagnostics"][0]["code"] == "H3C-P100"
 
 
 def test_duplicate_chunk_section_falls_back_without_blocking():
