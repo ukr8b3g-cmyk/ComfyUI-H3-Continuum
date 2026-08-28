@@ -1,5 +1,18 @@
 # Work Log
 
+## 2026-08-28 - Current V3.6 sampler README images
+
+- Replaced the English README's obsolete V3.4 combined workflow screenshot with separate current `H3 Continuum Sampler V3.6` and `H3 Continuum Assemble + Seam V3.5` node images, and added the same images to the Japanese recommended-template section.
+- Clarified that the current Production path combines the V3.6 sampler with the V3.5 low-memory assembler. No node, workflow, schema, or runtime behavior changed.
+- Snapshot: `pre-readme-v36-node-images-20260828_121500-8dec0b7` (219 tracked files, zero missing or SHA-256 mismatches, revision `8dec0b7ceb961102e36de4dfa735eb40c4cfa4c1`).
+- Validation: all 180 Manifest entries PASS, all 13 unique README image links resolve, focused README/release/workflow tests `11 passed`, and `git diff --check` PASS.
+
+## 2026-08-28 - Run Storage partial-regeneration README guide
+
+- Expanded the English and Japanese Run Storage documentation with a concrete normal T2VA/I2VA `2 chunks x 5 seconds` procedure: enable `Save + Auto Resume` before the first run, retain the Run Name and generation contract, select `Regenerate From = Chunk 2`, and confirm `1 reused, 1 generated`.
+- Documented that Prompt Plan or other contract changes can create a new revision, `Run Storage = Off` cannot be reused retroactively, regeneration operates at chunk boundaries, reassembly reevaluates Seam processing, and FL2VA Long Terminal Merge regenerates its final atomic pair together. No Production code, UI, workflow, or schema changed.
+- Snapshot: `pre-readme-run-storage-regenerate-guide-20260828_115840-8dec0b7` (630 files, mismatch 0, revision `8dec0b7ceb961102e36de4dfa735eb40c4cfa4c1`). Validation: 178 Manifest entries PASS, focused README/release/workflow tests `11 passed`, and `git diff --check` PASS.
+
 ## 2026-08-28 - README ComfyUI compatibility requirement
 
 - Added a concise English/Japanese installation note: ComfyUI `>=0.32.0` is required, package validation passed on `0.33.3`, V3.6.1 GPU Smoke passed on `0.34.0`, and the latest ComfyUI release is not mandatory.

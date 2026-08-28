@@ -187,7 +187,11 @@ Hi-Res Fixを接続しなければV3.4 Sampling経路は変わりません。強
 - [V3.5互換テンプレート](examples/workflows/MiniMax_H3_Continuum_V35.json)
 - [V3.5.1 LBH＋Conditioning Bridge接続例](examples/workflows/MiniMax_H3_Continuum_V351_LBH_Conditioning_Bridge.json)
 
-V3.6テンプレートはContinuation BackendがStandard、Hi-Res Fixが初期OFF、AssembleのBuffer BackendがAutoです。First Frame、Last Frame、Reference Image 1～3は1つのmegapixel設定を共有します。`Video Guide Size`は`Video Guide Frames`に使うframe batchを調整し、decodeとframe-rate変換はVideo loader側で行います。V3.5テンプレートは互換用として変更せず維持します。
+V3.6テンプレートはContinuation BackendがStandard、Hi-Res Fixが初期OFF、AssembleのBuffer BackendがAutoです。First Frame、Last Frame、Reference Image 1～3は1つのmegapixel設定を共有します。`Video Guide Size`は`Video Guide Frames`に使うframe batchを調整し、decodeとframe-rate変換はVideo loader側で行います。現在のProduction構成はV3.6 SamplerとV3.5の低メモリAssembleを組み合わせます。V3.5テンプレートは互換用として変更せず維持します。
+
+![H3 Continuum Sampler V3.6](docs/images/v36-sampler-node.png)
+
+![H3 Continuum Assemble + Seam V3.5](docs/images/v35-assemble-seam-node.png)
 
 ## V3.4互換
 
@@ -209,6 +213,28 @@ V3.5のCompact UIでは、対応する入力を接続した時だけSize項目�
 したがって、新規ノードで見えないSize項目は欠落ではなく、未接続のため非表示になっています。Reference ImageとVideo Guide FramesはVAE Encode前に内部Resizeされます。Video Guide Framesはアスペクト比を維持してH3 canvasへ整列し、縮小が必要な場合はLanczosを使用します。小さい入力を自動的に拡大はしません。通常は外部Resizeノードを必要としませんが、意図的なcrop、小さい素材の強制upscale、独自のresize／upscale方式を使う場合には外部処理を利用できます。動画のdecodeとframe-rate変換は引き続きloader側の責任です。
 
 Reference入力のバイパスされたソケットは無視され、有効な画像だけがPicture 1から連続採番されます。空欄や不完全なプロンプトも停止せず、警告とFixed fallbackで生成を続行します。未知のモデル、ノード、プロンプト形式を独自判断で拒否する制限も撤廃しました。
+
+## Run Storage：第2部分だけを再生成
+
+通常のT2VA／I2VAを`2 chunks x 5 seconds`にした場合、Chunk 1が最初の5秒、Chunk 2が次の5秒です。
+
+初回生成前に次を設定します。
+
+1. `Run Storage`を`Save + Auto Resume`にします。
+2. 固定の`Run Name`を選び、Base Seedも固定します。
+3. まず10秒全体を一度生成します。Continuumは完了した各Chunkのraw Video／Audio latentを保存します。
+
+最初の5秒を保持して、第2部分だけを作り直す手順は次のとおりです。
+
+1. Run Name、Base Seed、model、LoRA、解像度、sampler、SIGMAS／steps、Reference、Continuity設定を初回と同じに保ちます。
+2. `Regenerate From`を`Chunk 2`にします。
+3. Workflowをもう一度Queueします。
+
+Continuumは保存済みChunk 1を再Samplingせずに読み込み、その確定済み末尾をContinuation contextとして新しいChunk 2をSamplingします。Reportの目安は`1 reused, 1 generated`です。その後、10秒全体を再Decode／Assemblyします。第1ChunkのSampling結果は再利用され、境界のSeam処理は新しいAssembly時に再評価されます。
+
+第1部分と第2部分で異なる指示を使う場合は、初回生成前にListまたはTimeline Promptとして分けておきます。保存後にPrompt Planや生成Contractの入力を変更すると新しいRevisionになり、以前のChunk 1を再利用できない場合があります。初回を`Run Storage = Off`で生成した場合も、後から遡って再利用することはできません。`Regenerate From`はChunk境界単位であり、1つのChunk内部の任意領域を編集する機能ではありません。
+
+FL2VA Long Terminal Mergeは重要な例外です。最後の2つのlogical Chunkを1つのatomicなphysical Samplingとして扱うため、その2つは一緒に再生成されます。
 
 Run Storageの保存契約にはDriving AudioとVideo Guide Framesのidentityを含め、入力変更後に古いChunkを誤再利用しないようにしています。
 

@@ -339,9 +339,11 @@ Hard stops remain only for states that cannot execute safely, including corrupt 
 
 ### Cleaner interface
 
-The public nodes focus on normal production controls. Developer diagnostics and detailed reports are available through ComfyUI settings.
+The public nodes focus on normal production controls. Developer diagnostics and detailed reports are available through ComfyUI settings. The current production path uses the V3.6 sampler with the V3.5 low-memory assembler.
 
-![V3.4 sampler, Spectrum, and assembler](docs/images/v34-sampler-spectrum-assemble.png)
+![H3 Continuum Sampler V3.6](docs/images/v36-sampler-node.png)
+
+![H3 Continuum Assemble + Seam V3.5](docs/images/v35-assemble-seam-node.png)
 
 ### Timeline paths
 
@@ -567,6 +569,28 @@ If Timeline syntax cannot be parsed, V3.4 reports a warning and falls back to an
 Run Storage preserves completed chunks and can reuse them after restarting ComfyUI. Regenerate From selects the first chunk to regenerate; earlier compatible chunks remain unchanged.
 
 ![Regenerate From](docs/images/v34-regenerate-from.png)
+
+### Keep the first part and regenerate the second part
+
+For a normal T2VA or I2VA run configured as `2 chunks x 5 seconds`, Chunk 1 is the first five seconds and Chunk 2 is the second five seconds.
+
+Before the first generation:
+
+1. Set `Run Storage` to `Save + Auto Resume`.
+2. Choose a fixed `Run Name` and keep the Base Seed fixed.
+3. Generate the complete ten-second video once. Continuum stores the raw Video/Audio latent for each completed chunk.
+
+To generate a different second part while keeping the first part:
+
+1. Keep the same Run Name, Base Seed, model, LoRA, resolution, sampler, SIGMAS/steps, references, and Continuation settings.
+2. Set `Regenerate From` to `Chunk 2`.
+3. Queue the workflow again.
+
+Continuum loads the stored Chunk 1 instead of Sampling it again, uses its finalized end as the continuation context, and Samples a new Chunk 2. The report should show `1 reused, 1 generated`. The complete output is then decoded and assembled again; the saved first chunk is reused, while boundary Seam processing is evaluated during the new assembly.
+
+If the two parts need different instructions, define them with List or Timeline Prompt syntax before the first generation. Changing the Prompt Plan or other generation-contract inputs after a stored run can create a new revision, in which case the previous Chunk 1 may not be reusable. A run originally generated with `Run Storage = Off` cannot be reused retroactively. `Regenerate From` works at chunk boundaries; it does not edit an arbitrary region inside one chunk.
+
+FL2VA Long Terminal Merge is an important exception: its final two logical chunks are one atomic physical Sampling unit, so those two chunks are regenerated together.
 
 - Use a fixed seed for reproducible resume.
 - Changing persistent models, LoRAs, references, prompts, resolution, or sampling settings can create a new revision.
