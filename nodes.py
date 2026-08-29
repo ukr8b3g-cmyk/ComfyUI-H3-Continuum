@@ -423,6 +423,8 @@ _primary_node_ids = {
     "H3ContinuumSamplerV34",
     "H3ContinuumSamplerV35",
     "H3ContinuumSamplerV36",
+    "H3ContinuumStillImageGuideV37",
+    "H3ContinuumSamplerV37",
     "H3ContinuumAssembleSeamV34",
     "H3ContinuumAssembleSeamV35",
     "H3ContinuumHiResFixV35",

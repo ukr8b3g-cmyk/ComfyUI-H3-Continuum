@@ -63,6 +63,15 @@ def _hash(value: Any) -> str:
     return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
 
 
+def _canonical_optional_hash(value: Any) -> str:
+    """Normalize legacy absent-value spellings without changing real hashes."""
+
+    if value is None:
+        return ""
+    text = str(value).strip()
+    return "" if text.lower() in {"", "none", "null"} else text
+
+
 def sanitize_run_name(value: str) -> str:
     name = str(value)
     if not name or name != name.strip() or len(name) > 96:
@@ -512,6 +521,9 @@ def _apply_nonce_contract(
     contract: dict[str, Any], *, requested_nonce: int, effective_nonce: int,
 ) -> dict[str, Any]:
     result = dict(contract)
+    result["last_frame_hash"] = _canonical_optional_hash(
+        result.get("last_frame_hash")
+    )
     boundary = int(result["reroll_from_chunk"])
     if boundary <= 0:
         mode = "inactive"
@@ -553,6 +565,45 @@ def _apply_nonce_contract(
     return result
 
 
+def _legacy_absent_last_frame_compatible(
+    *,
+    stored_contract: dict[str, Any],
+    current_contract: dict[str, Any],
+    position: int,
+    stored_hash: str,
+    current_hash: str,
+) -> bool:
+    """Accept only the V3.6.1 ``none`` versus ``""`` Last Frame mismatch."""
+
+    if not isinstance(stored_contract, dict) or not isinstance(current_contract, dict):
+        return False
+    if _canonical_optional_hash(stored_contract.get("last_frame_hash")):
+        return False
+    if _canonical_optional_hash(current_contract.get("last_frame_hash")):
+        return False
+    stored_chunks = stored_contract.get("chunk_contracts") or []
+    current_chunks = current_contract.get("chunk_contracts") or []
+    if position >= len(stored_chunks) or position >= len(current_chunks):
+        return False
+    stored_chunk = stored_chunks[position]
+    current_chunk = current_chunks[position]
+    if not isinstance(stored_chunk, dict) or not isinstance(current_chunk, dict):
+        return False
+    if _hash(stored_chunk) != str(stored_hash):
+        return False
+    if _hash(current_chunk) != str(current_hash):
+        return False
+    stored_normalized = dict(stored_chunk)
+    current_normalized = dict(current_chunk)
+    stored_normalized["last_frame_hash"] = _canonical_optional_hash(
+        stored_normalized.get("last_frame_hash")
+    )
+    current_normalized["last_frame_hash"] = _canonical_optional_hash(
+        current_normalized.get("last_frame_hash")
+    )
+    return stored_normalized == current_normalized
+
+
 def build_sampling_contract(
     *, model: Any, model_fingerprint_value: str, clip: Any, video_vae: Any,
     sampler: Any,
@@ -571,8 +622,10 @@ def build_sampling_contract(
     driving_audio_vae: Any = None,
     reference_video_contract: dict[str, Any] | None = None,
     timeline_video_contract: dict[str, Any] | None = None,
+    guide_contract: dict[str, Any] | None = None,
     execution_semantics: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], bool, list[str]]:
+    last_frame_hash = _canonical_optional_hash(last_frame_hash)
     model_value, model_safe = _model_signature(model, model_fingerprint_value)
     clip_value, clip_safe = _clip_signature(clip)
     has_first = str(first_frame_hash).lower() not in {"", "none", "null"}
@@ -594,6 +647,7 @@ def build_sampling_contract(
         conditioning_mode_uses_video_vae(conditioning_mode)
         or reference_video_contract is not None
         or timeline_video_contract is not None
+        or guide_contract is not None
     )
     if uses_video_vae:
         video_vae_value, video_vae_safe = _video_vae_signature(
@@ -693,6 +747,8 @@ def build_sampling_contract(
         global_contract["driving_audio_vae"] = driving_audio_vae_value
     if reference_video_contract is not None:
         global_contract["reference_video"] = dict(reference_video_contract)
+    if guide_contract is not None:
+        global_contract["guide"] = dict(guide_contract)
     timeline_chunk_contracts = []
     if timeline_video_contract is not None:
         timeline_value = dict(timeline_video_contract)
@@ -970,11 +1026,23 @@ class RunStorageController:
         return validate_chunk_entry(entry)
 
     def _valid_prefix(self, manifest: dict[str, Any], hashes: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        stored = list((manifest.get("contract") or {}).get("chunk_contract_hashes") or [])
+        stored_contract = manifest.get("contract") or {}
+        stored = list(stored_contract.get("chunk_contract_hashes") or [])
         records = list(manifest.get("chunks") or [])
         entries, accepted = [], []
         for position, current in enumerate(hashes):
-            if position >= len(stored) or stored[position] != current:
+            if position >= len(stored):
+                break
+            compatible_absent_last_frame = False
+            if stored[position] != current:
+                compatible_absent_last_frame = _legacy_absent_last_frame_compatible(
+                    stored_contract=stored_contract,
+                    current_contract=self.contract or {},
+                    position=position,
+                    stored_hash=stored[position],
+                    current_hash=current,
+                )
+            if stored[position] != current and not compatible_absent_last_frame:
                 break
             if position >= len(records) or int(records[position].get("sequence_index", -1)) != position:
                 break
@@ -985,6 +1053,11 @@ class RunStorageController:
                 break
             entries.append(entry)
             accepted.append(records[position])
+            if compatible_absent_last_frame:
+                self.notes.append(
+                    f"stored chunk {position + 1} reused through V3.6.1 absent "
+                    "Last Frame compatibility"
+                )
         return entries, accepted
 
     def _resolve_effective_nonce(
@@ -1039,6 +1112,7 @@ class RunStorageController:
         driving_audio_vae: Any = None,
         reference_video_contract: dict[str, Any] | None = None,
         timeline_video_contract: dict[str, Any] | None = None,
+        guide_contract: dict[str, Any] | None = None,
         execution_semantics: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         if existing_session is not None:
@@ -1052,6 +1126,7 @@ class RunStorageController:
                 conditioning_mode_uses_video_vae(str(conditioning_mode))
                 or reference_video_contract is not None
                 or timeline_video_contract is not None
+                or guide_contract is not None
             ),
             require_reference_audio_vae=reference_audio_contract is not None,
             require_audio_vae=driving_audio_contract is not None,
@@ -1077,6 +1152,7 @@ class RunStorageController:
             driving_audio_vae=driving_audio_vae,
             reference_video_contract=reference_video_contract,
             timeline_video_contract=timeline_video_contract,
+            guide_contract=guide_contract,
             execution_semantics=execution_semantics,
         )
         effective_nonce, nonce_decision = self._resolve_effective_nonce(

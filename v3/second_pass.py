@@ -21,6 +21,12 @@ from .refine_context import (
     adapt_group_conditioning,
     validate_refine_context,
 )
+from .refine_schedule import (
+    RefineSchedule,
+    RefineScheduleError,
+    resolve_refine_schedule,
+    serializable_schedule_contract,
+)
 from .refine_sampling import sample_refine_chunk
 
 
@@ -387,10 +393,17 @@ def run_second_pass_groups(
     clone_model_fn=None,
     validate_refine_context_fn=None,
     adapt_group_conditioning_fn=None,
+    refine_schedule: RefineSchedule | None = None,
 ) -> tuple[list[dict[str, Any]], list[Any], dict[str, Any], str]:
     """Refine complete physical groups while preserving first-pass audio exactly."""
 
     validation = validate_second_pass_inputs(video_latents, audio_latents, assembly_plan)
+    try:
+        resolved_schedule = resolve_refine_schedule(sigmas, refine_schedule)
+    except RefineScheduleError as exc:
+        raise SecondPassContractError(f"refine schedule is invalid: {exc}") from exc
+    effective_sigmas = resolved_schedule.sigmas
+    schedule_contract = serializable_schedule_contract(resolved_schedule)
     groups = _contract_groups(assembly_plan)
     latent_builder = latent_builder or latent_from_cpu
     sample_fn = sample_fn or sample_refine_chunk
@@ -424,7 +437,7 @@ def run_second_pass_groups(
             conditioning=conditioning,
             latent=nested_latent,
             sampler=sampler,
-            sigmas=sigmas,
+            sigmas=effective_sigmas,
             seed=physical_seed,
             enable_preview=bool(enable_preview),
         )
@@ -456,6 +469,7 @@ def run_second_pass_groups(
                 f"{group_index + 1} target conditioning: "
                 f"keyframes_resized={int(adaptation_stats.get('keyframes_resized', 0))}, "
                 f"keyframes_reencoded={int(adaptation_stats.get('keyframes_reencoded', 0))}, "
+                f"guide_keyframes_reencoded={int(adaptation_stats.get('guide_keyframes_reencoded', 0))}, "
                 f"context_refs_resized={int(adaptation_stats.get('context_refs_resized', 0))}"
             )
             group_report_lines.extend(
@@ -484,7 +498,14 @@ def run_second_pass_groups(
         "refine_context is available.",
         f"Physical groups: {validation['physical_group_count']}.",
         "Sampling contract: video random noise/mask=1; audio zero noise/mask=0; "
-        "workflow SIGMAS are applied directly by Core.",
+        "the resolved RefineSchedule SIGMAS are applied directly by Core.",
+        "RefineSchedule: "
+        f"schema={schedule_contract['schema_version']}, "
+        f"mode={schedule_contract['mode']}, "
+        f"evaluations={schedule_contract['evaluation_count']}, "
+        f"start_sigma={schedule_contract['start_sigma']}, "
+        f"end_sigma={schedule_contract['end_sigma']}, "
+        f"sigma_hash={schedule_contract['sigma_hash']}.",
         *prepared["warnings"],
         *group_report_lines,
     ]
@@ -505,6 +526,8 @@ def run_second_pass_groups(
     contract["refine_group_seeds"] = group_seeds
     contract["audio_output"] = "bit_exact_first_pass_passthrough"
     contract["audio_sampling"] = "zero_noise_mask_locked"
+    contract["refine_schedule"] = schedule_contract
+    contract["refine_schedule_identity"] = schedule_contract["schedule_hash"]
     report_lines.append(
         "Audio output: first-pass physical audio LATENT objects returned bit-exact; "
         "temporary refined audio discarded."

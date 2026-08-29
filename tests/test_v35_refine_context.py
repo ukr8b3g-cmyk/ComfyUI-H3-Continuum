@@ -6,6 +6,7 @@ import pytest
 import torch
 
 from ComfyUI_H3_Continuum_Join.constants import MARK_VIDEO_CONTEXT
+from ComfyUI_H3_Continuum_Join.guide_timeline import MARK_STILL_IMAGE_GUIDE
 from ComfyUI_H3_Continuum_Join.v3 import refine_context as rc
 
 
@@ -168,6 +169,71 @@ def test_keyframes_reencode_images_with_core_first_last_crop_rules(monkeypatch):
     assert stats["keyframes_reencoded"] == 2
     assert stats["keyframes_latent_fallback"] == 0
     assert stats["warnings"] == ()
+
+
+def test_arbitrary_guide_keyframe_reencodes_from_owned_source_image(monkeypatch):
+    calls = []
+
+    def upscale(samples, width, height, method, crop):
+        calls.append((width, height, method, crop, samples.clone()))
+        return torch.nn.functional.interpolate(samples, size=(height, width), mode="nearest")
+
+    monkeypatch.setattr(rc, "_common_upscale", upscale)
+    conditioning = _conditioning()
+    conditioning[0][1]["minimax_keyframes"].append(
+        {
+            "resolved_frame_index": 60,
+            "latent": torch.zeros((1, 24, 1, 2, 3)),
+            MARK_STILL_IMAGE_GUIDE: True,
+        }
+    )
+    guide_image = torch.full((1, 20, 30, 3), 0.625)
+    group = _group(
+        conditioning=conditioning,
+        guide_images={60: guide_image},
+    )
+    vae = _FakeVAE()
+
+    adapted, stats = rc.adapt_group_conditioning(group, 4, 6, video_vae=vae)
+
+    guide_keyframe = adapted[0][1]["minimax_keyframes"][2]
+    assert torch.all(guide_keyframe["latent"] == 3)
+    assert calls[2][:4] == (96, 64, "lanczos", "center")
+    assert torch.all(calls[2][4] == 0.625)
+    assert stats["keyframes_reencoded"] == 3
+    assert stats["guide_keyframes_reencoded"] == 1
+    assert stats["keyframes_latent_fallback"] == 0
+    assert group["guide_images"][60].device.type == "cpu"
+    assert group["guide_images"][60].data_ptr() != guide_image.data_ptr()
+
+
+@pytest.mark.parametrize("frame_index", [0, 123])
+def test_guide_role_wins_when_guide_shares_first_or_last_frame(monkeypatch, frame_index):
+    monkeypatch.setattr(rc, "_common_upscale", _upscale)
+    conditioning = _conditioning()
+    conditioning[0][1]["minimax_keyframes"].append(
+        {
+            "resolved_frame_index": frame_index,
+            "latent": torch.full((1, 24, 1, 2, 3), 9.0),
+            MARK_STILL_IMAGE_GUIDE: True,
+        }
+    )
+    guide_image = torch.full((1, 32, 48, 3), 0.75)
+    vae = _FakeVAE()
+
+    adapted, stats = rc.adapt_group_conditioning(
+        _group(conditioning=conditioning, guide_images={frame_index: guide_image}),
+        4,
+        6,
+        video_vae=vae,
+    )
+
+    keyframes = adapted[0][1]["minimax_keyframes"]
+    assert torch.all(keyframes[2]["latent"] == 3)
+    assert torch.all(vae.inputs[2] == 0.75)
+    assert not torch.equal(vae.inputs[2], vae.inputs[0])
+    assert not torch.equal(vae.inputs[2], vae.inputs[1])
+    assert stats["guide_keyframes_reencoded"] == 1
 
 
 def test_context_validation_matches_physical_group_assembly_contract():

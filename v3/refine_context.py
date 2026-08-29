@@ -15,6 +15,7 @@ from typing import Any
 import torch
 
 from ..constants import MARK_VIDEO_CONTEXT
+from ..guide_timeline import MARK_STILL_IMAGE_GUIDE
 
 
 MAGIC = "H3_CONTINUUM_REFINE_CONTEXT"
@@ -100,6 +101,32 @@ def _validate_optional_image(value: Any, name: str) -> None:
         )
 
 
+def _guide_image_map(value: Any) -> Mapping[int, torch.Tensor]:
+    if value is None:
+        return MappingProxyType({})
+    if not isinstance(value, Mapping):
+        raise RefineContextError("guide_images must be a frame-to-IMAGE mapping")
+    output: dict[int, torch.Tensor] = {}
+    for frame_index, image in value.items():
+        if type(frame_index) is not int or frame_index < 0:
+            raise RefineContextError("guide_images frame indices must be non-negative integers")
+        prepared = _optional_image(image, f"guide_images[{frame_index}]")
+        assert prepared is not None
+        output[frame_index] = prepared
+    return MappingProxyType(output)
+
+
+def _validate_guide_images(value: Any, *, physical_frames: int) -> None:
+    if value is None:
+        return
+    if not isinstance(value, Mapping):
+        raise RefineContextError("refine group guide_images is invalid")
+    for frame_index, image in value.items():
+        if type(frame_index) is not int or not 0 <= frame_index < physical_frames:
+            raise RefineContextError("refine group guide image frame is outside the physical group")
+        _validate_optional_image(image, f"guide_images[{frame_index}]")
+
+
 def make_refine_group(
     *,
     conditioning: Any,
@@ -113,6 +140,7 @@ def make_refine_group(
     context_frames: int,
     first_image: torch.Tensor | None = None,
     last_image: torch.Tensor | None = None,
+    guide_images: Mapping[int, torch.Tensor] | None = None,
 ) -> dict[str, Any]:
     """Capture one physical First Pass sampling group's effective conditioning."""
 
@@ -138,7 +166,7 @@ def make_refine_group(
         raise RefineContextError("refine group physical clip index is invalid")
     if context_frames < 0:
         raise RefineContextError("refine group context frame count is invalid")
-    return {
+    output = {
         "group_id": group_id,
         "logical_chunks": chunks,
         "physical_frames": physical_frames,
@@ -151,6 +179,10 @@ def make_refine_group(
         "first_image": _optional_image(first_image, "first_image"),
         "last_image": _optional_image(last_image, "last_image"),
     }
+    frozen_guides = _guide_image_map(guide_images)
+    if frozen_guides:
+        output["guide_images"] = frozen_guides
+    return output
 
 
 def make_refine_context(
@@ -271,6 +303,10 @@ def validate_refine_context(
         _validate_frozen_conditioning(group.get("conditioning"), group_id=expected_id)
         _validate_optional_image(group.get("first_image"), "first_image")
         _validate_optional_image(group.get("last_image"), "last_image")
+        _validate_guide_images(
+            group.get("guide_images"),
+            physical_frames=int(group["physical_frames"]),
+        )
 
     if assembly_plan is not None:
         if not isinstance(assembly_plan, Mapping):
@@ -448,6 +484,7 @@ def adapt_group_conditioning(
         "keyframes_resized": 0,
         "keyframes_reencoded": 0,
         "keyframes_latent_fallback": 0,
+        "guide_keyframes_reencoded": 0,
         "context_refs_resized": 0,
     }
     output: list[list[Any]] = []
@@ -474,7 +511,12 @@ def adapt_group_conditioning(
                     frame_index = int(keyframe.get("resolved_frame_index", -1))
                     image = None
                     crop = "disabled"
-                    if frame_index == 0:
+                    if bool(keyframe.get(MARK_STILL_IMAGE_GUIDE)):
+                        guide_images = group.get("guide_images")
+                        if isinstance(guide_images, Mapping):
+                            image = guide_images.get(frame_index)
+                        crop = "center"
+                    elif frame_index == 0:
                         image = group.get("first_image")
                     elif frame_index == physical_frames - 1:
                         image = group.get("last_image")
@@ -488,6 +530,8 @@ def adapt_group_conditioning(
                             video_vae=video_vae,
                         )
                         stats["keyframes_reencoded"] += 1
+                        if bool(keyframe.get(MARK_STILL_IMAGE_GUIDE)):
+                            stats["guide_keyframes_reencoded"] += 1
                     else:
                         keyframe["latent"] = _resize_latent(
                             latent,

@@ -1,15 +1,33 @@
-# ComfyUI-H3-Continuum 3.6.1
+# ComfyUI-H3-Continuum 3.7.0
 
 <img width="1536" height="1024" alt="Clip_95" src="https://github.com/user-attachments/assets/4cf97e5d-27e3-40e5-aefd-6a54ab035461" />
 
 
 Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pass refinement, optional Hi-Res Fix, low-memory disk-backed assembly, restartable chunks, persistent references, and optional Spectrum interoperability.
 
+## V3.7 High-Resolution Refinement Foundation
+
+V3.7 adds **H3 Continuum Sampler V3.7** and completes two foundations for resolution-changing Second Pass workflows without changing V3.6 Production defaults or the existing SIGMAS socket.
+
+### Conditioning survives a resolution change
+
+The Conditioning Adapter rebuilds First/Last images, continuation context, and an owned Still Image Guide at the target latent geometry. Physical-group ownership, Long Terminal Merge, Core PackedLayout/RoPE reconstruction, and first-pass Audio passthrough are preserved. Correctness gates passed at 704×704 and 1152×1152; larger canvases still require substantially more memory and processing time.
+
+### RefineSchedule gives refinement ranges explicit meaning
+
+The internal, versioned `RefineSchedule` contract supports `External`, `Full`, `Tail`, and `Partial`. `External` preserves the incoming SIGMAS tensor exactly, while `Tail` and `Partial` select exact ranges from the same source schedule. The accepted internal Tail 6 gate reproduced the six-evaluation suffix and preserved decoded Audio PCM bit-exact. This contract is an implementation foundation rather than a new public widget, and Production defaults remain unchanged.
+
+### Still Image Guide remains Experimental
+
+V3.7 can map one Still Image Guide from an absolute frame to its owning physical group and rebuild it from the original image during a high-resolution Second Pass. Its positioning, Terminal Merge ownership, Run Storage identity, and non-owner isolation passed correctness testing. Core Add Guide uses hard-anchor semantics, however, so a Guide can cause an abrupt trajectory change at the anchor and can redirect later motion. **Still Image Guide is Experimental and remains on Production HOLD.** It should not be treated as a smooth transition control.
+
 ## V3.6.1 Maintenance Hotfix
 
-V3.6.1 fixes two fail-open/compatibility issues without changing the accepted Balanced 22 Masked AV path. Mixed Timeline/List prompts now report `H3C-P105`; Timeline parsing ignores only standalone `---` lines, keeps existing uncovered-chunk fallback, and never stops generation because of prompt syntax.
+V3.6.1 fixes focused fail-open/compatibility issues without changing the accepted Balanced 22 Masked AV path. Mixed Timeline/List prompts now report `H3C-P105`; Timeline parsing ignores only standalone `---` lines, keeps existing uncovered-chunk fallback, and never stops generation because of prompt syntax.
 
 With `Continuation Backend = Standard` and Audio Continuity enabled, `Balanced — 22 frames` continues to use Masked AV. `Fast — 5 frames`, `Strong — 39 frames`, and `Auto — conservative` now resolve to the accepted Reference Context transport before Run Storage identity is created. The selected UI values are not rewritten, and the status report states the resolved transport and reason. Standard with Audio Continuity disabled remains Masked Video; Compatibility remains Reference Context.
+
+Run Storage now treats every absent Last Frame spelling as the same empty identity. A normal no-Last-Frame run can therefore extend from two to three chunks as `2 reused, 1 generated`, including narrowly compatible V3.6.1 caches whose former final chunk stored `none`. A real connected Last Frame and the Long Terminal Merge atomic pair remain strict. Turning Run Storage Off also resets the hidden Regenerate From and Variation Nonce values to `Auto` and `0` before queueing.
 
 ## V3.6 Masked AV Continuation
 
@@ -65,7 +83,7 @@ Prompt/CLIP figures measure only the conditioning subphase, not total generation
 
 The measured Sage-only production baselines on the tested RTX 5060 Ti 16 GB / 64 GB system were 168.069 seconds for 1×5-second 576×576 T2VA and 379.765 seconds for 3×5-second 640×640 FL2VA Long Terminal Merge. These are configuration-specific baselines, not universal speed guarantees. Sampling remained the dominant cost; Continuum Assemble + Seam stayed below 1%.
 
-> **V3.6.1 is the current release.** V3.5.3 remains the maintenance/compatibility baseline, and V3.5.2 remains the accepted Stabilization & Optimization baseline. Older Node IDs, backend socket keys, and saved-workflow loading remain intentionally supported. The withdrawn experimental Last Queued Seed override is not included.
+> **V3.7.0 is the current release.** V3.6.1 remains the maintenance/compatibility baseline. Older Node IDs, backend socket keys, and saved-workflow loading remain intentionally supported. Production defaults are unchanged, and Still Image Guide remains Experimental.
 
 ## V3.5.1 Reference Audio & Compatibility Update
 
@@ -351,7 +369,7 @@ Experimental Timeline Video and earlier timeline-audio paths are no longer publi
 
 ## Installation
 
-Requires ComfyUI 0.32.0 or later. Package validation passed on ComfyUI 0.33.3, and the V3.6.1 GPU smoke test passed on ComfyUI 0.34.0; the latest ComfyUI release is not required.
+Requires ComfyUI 0.32.0 or later. Package validation passed on ComfyUI 0.33.3, the V3.6.1 GPU smoke test passed on ComfyUI 0.34.0, and the V3.7 Conditioning/RefineSchedule correctness gates passed on ComfyUI 0.34.2; the latest ComfyUI release is not required.
 
 ### Updating an existing installation
 

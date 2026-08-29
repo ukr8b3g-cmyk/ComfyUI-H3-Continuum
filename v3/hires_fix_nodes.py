@@ -404,6 +404,7 @@ class H3ContinuumHiResFixV35:
         refine_seed,
         refine_context=None,
         video_vae=None,
+        refine_schedule=None,
     ):
         plan = _single_list_input("assembly_plan", assembly_plan)
         if not _enabled_value(enabled):
@@ -495,6 +496,7 @@ class H3ContinuumHiResFixV35:
             ),
             video_vae=vae,
             conditioning_upscale_method=_CONDITIONING_UPSCALE_METHOD,
+            refine_schedule=refine_schedule,
         )
         return (
             refined_video,

@@ -1,12 +1,30 @@
-# ComfyUI-H3-Continuum 3.6.1
+# ComfyUI-H3-Continuum 3.7.0
 
 MiniMax H3を複数チャンクで連続生成し、直前チャンク末尾の**映像latent / 音声latentを直接**次チャンクへ継承するComfyUIカスタムノードです。チャンク間でVideo/Audio VAEのDecode→Encodeは行いません。
 
+## V3.7 高解像度Refinement基盤
+
+V3.7では`H3 Continuum Sampler V3.7`を追加し、解像度を変更するSecond Passに必要な2つの基盤を完成させました。V3.6のProduction初期値と既存SIGMAS socketは変更していません。
+
+### 解像度変更後もConditioningを再構築
+
+Conditioning Adapterは、First／Last Image、Continuation context、Still Image Guideの元画像をtarget latent geometryに合わせて再構築します。Physical group ownership、Long Terminal Merge、Core側のPackedLayout／RoPE再構築、First Pass Audioのpassthroughは維持します。704×704と1152×1152のCorrectness GateはPASSしていますが、大きなcanvasほどmemory使用量と処理時間は増えます。
+
+### RefineScheduleでRefinement範囲を明示
+
+内部のversioned contractである`RefineSchedule`は、`External`、`Full`、`Tail`、`Partial`に対応します。`External`は入力SIGMAS tensorをそのまま維持し、`Tail`と`Partial`は同じsource scheduleから範囲を正確に切り出します。内部Tail 6 Gateでは、6 evaluationのsuffix再現とdecoded Audio PCMのbit-exact passthroughを確認しました。現時点では実装基盤として内部で扱い、公開widgetは追加していません。Production初期値も変更していません。
+
+### Still Image GuideはExperimental
+
+V3.7では、Still Image Guide 1枚をabsolute frameからowner physical groupへ割り当て、高解像度Second Passでも元画像から再encodeできます。位置変換、Terminal Merge ownership、Run Storage identity、non-owner groupの非干渉はCorrectness PASSです。一方、Core Add Guideはhard anchorとして働くため、anchor位置で急なtrajectory変化が起き、その後のmotionも別の軌道へ分岐する場合があります。**Still Image GuideはExperimentalで、Production昇格はHOLDです。** 滑らかなtransition制御としては扱わないでください。
+
 ## V3.6.1 Maintenance Hotfix
 
-V3.6.1は、受入済みBalanced 22 Masked AV経路を変更せず、2件のfail-open／互換性問題を修正します。Timeline/List記法が混在したPromptは`H3C-P105`を表示し、Timeline解析ではstandalone `---`行だけを除去します。未指定Chunkの既存fallbackとFixed Promptのfail-open動作は維持し、Prompt構文だけを理由に生成を停止しません。
+V3.6.1は、受入済みBalanced 22 Masked AV経路を変更せず、限定的なfail-open／互換性問題を修正します。Timeline/List記法が混在したPromptは`H3C-P105`を表示し、Timeline解析ではstandalone `---`行だけを除去します。未指定Chunkの既存fallbackとFixed Promptのfail-open動作は維持し、Prompt構文だけを理由に生成を停止しません。
 
 `Continuation Backend = Standard`かつAudio Continuity ONでは、`Balanced — 22 frames`が引き続きMasked AVを使用します。`Fast — 5 frames`、`Strong — 39 frames`、`Auto — conservative`はRun Storage identity作成前に、受入済みReference Contextへ解決します。UIの選択値は書き換えず、status reportへ解決結果と理由を表示します。Audio Continuity OFFのStandardはMasked Video、Compatibilityは常にReference Contextのままです。
+
+Run Storageは、Last Frame未接続を表す値をすべて同じ空identityとして扱います。通常のLast Frameなし2チャンク生成を3チャンクへ延長すると、旧最終Chunkが`none`だったV3.6.1 cacheを含めて`2 reused, 1 generated`になります。実Last Frame接続時とLong Terminal Mergeのatomic pairは従来どおり厳密です。Run StorageをOffへ変更した場合は、Queue前にhiddenのRegenerate FromとVariation Nonceも`Auto`と`0`へ戻します。
 
 ## V3.6 Masked AV Continuation
 
@@ -62,7 +80,7 @@ Prompt/CLIPの数値はconditioning区間だけで、総生成時間ではあり
 
 RTX 5060 Ti 16 GB／RAM 64 GBの検証環境で測定したSage-only Production baselineは、576×576 T2VA 1×5秒が168.069秒、640×640 FL2VA Long Terminal Merge 3×5秒が379.765秒です。環境・設定固有の測定値であり、すべての環境に対する速度保証ではありません。Samplingが最大コストで、Continuum Assemble + Seamは1%未満でした。
 
-**V3.6.1が現在の公開版です。** V3.5.3はmaintenance／compatibility baseline、V3.5.2は受入済みStabilization & Optimization baselineとして維持します。旧Node ID、backend socket key、保存済みWorkflow読込は維持します。撤回済みの実験的Last Queued Seed overrideは含まれていません。
+**V3.7.0が現在の公開版です。** V3.6.1はmaintenance／compatibility baselineとして維持します。旧Node ID、backend socket key、保存済みWorkflow読込は維持し、Production初期値は変更していません。Still Image GuideはExperimentalです。
 
 ## V3.5.1 Reference Audio／互換性更新
 
@@ -304,7 +322,7 @@ UNET -> SageAttention -> Sol-Attn -> LoRA -> Spectrum -> H3 Continuum Sampler
 
 ## インストール
 
-ComfyUI 0.32.0以上が必要です。ComfyUI 0.33.3でパッケージ検証、0.34.0でV3.6.1 GPU Smoke検証済みで、ComfyUIの最新版は必須ではありません。
+ComfyUI 0.32.0以上が必要です。ComfyUI 0.33.3でパッケージ検証、0.34.0でV3.6.1 GPU Smoke、0.34.2でV3.7 Conditioning／RefineSchedule Correctness Gateを検証済みです。ComfyUIの最新版は必須ではありません。
 
 ZIPを展開して、`ComfyUI-H3-Continuum`フォルダーを`ComfyUI/custom_nodes/`へ置き、ComfyUIを再起動します。
 

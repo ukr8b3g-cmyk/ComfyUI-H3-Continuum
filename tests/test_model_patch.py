@@ -12,6 +12,7 @@ from ComfyUI_H3_Continuum_Join.constants import (
     MARK_VIDEO_CONTEXT,
 )
 from ComfyUI_H3_Continuum_Join.model_patch import (
+    LayoutValidationProfiler,
     _wrapper_factory,
     clone_model_for_chunk,
     patch_model,
@@ -133,6 +134,75 @@ def test_apply_model_wrapper_fails_when_actual_topology_changes():
     payload["layout"].position_ids[-1, 1] = 1.0
     with pytest.raises(RuntimeError, match="topology changed"):
         wrapper(Executor(), torch.zeros(1), transformer_options=options, minimax_payload=payload)
+
+
+def test_layout_validation_profiler_records_full_calls_groups_and_step_contribution():
+    profiler = LayoutValidationProfiler(route_markers="Sage + Sol + Spectrum")
+    token = profiler.begin_sampling_group(
+        physical_group=2,
+        logical_chunks=(2,),
+        sampling_steps=20,
+    )
+    profiler.record_validation(
+        {"status": "baseline_created"},
+        0.01,
+        full_validation=True,
+    )
+    profiler.record_validation(
+        {"status": "baseline_matched"},
+        0.03,
+        full_validation=True,
+    )
+    profiler.finish_sampling_group(token)
+
+    report = "\n".join(profiler.report_lines())
+    assert "route_markers=Sage + Sol + Spectrum" in report
+    assert "validation_calls=2" in report
+    assert "full_validation_count=2" in report
+    assert "cumulative_wall_including_existing_device_to_host_sync=0.040000s" in report
+    assert "sampling_steps_total=20" in report
+    assert "validated_sampling_steps=20" in report
+    assert "calls_per_validated_step=0.100" in report
+    assert "wall_per_validated_step=2.000ms" in report
+    assert "physical_group=2" in report
+
+
+def test_apply_model_wrapper_reports_validator_status_without_changing_payload():
+    video = torch.zeros(1, 24, 1, 1, 1)
+    audio = torch.zeros(1, 32, 2, 1)
+    ref = {
+        "kind": "video_audio",
+        "latent_t": 1,
+        "latent_h": 1,
+        "latent_w": 1,
+        "ref_audio_t": 1,
+        "latent": video,
+        "audio_latent": audio,
+        MARK_VIDEO_CONTEXT: True,
+        MARK_CONTEXT_FRAMES: 1,
+        MARK_AUDIO_CONTEXT: True,
+        MARK_AUDIO_END_FRAME: 1.0,
+        MARK_AUDIO_OVERHANG: 0.0,
+    }
+    payload = {"layout": _layout(), "keyframes": [], "refs": [ref]}
+    profiler = LayoutValidationProfiler(route_markers="Sage")
+    wrapper = _wrapper_factory(
+        strict=True,
+        debug=False,
+        validation_profiler=profiler,
+    )
+
+    first = wrapper(Executor(), torch.zeros(1), minimax_payload=payload)
+    second = wrapper(Executor(), torch.zeros(1), minimax_payload=payload)
+
+    assert first["cond_video_latents"] == [video]
+    assert second["cond_audio_latents"] == [audio]
+    assert profiler.validation_calls == 2
+    assert profiler.full_validation_count == 2
+    assert profiler.status_counts == {
+        "baseline_created": 1,
+        "baseline_matched": 1,
+    }
 
 
 class FakeModelPatcher:

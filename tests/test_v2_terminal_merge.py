@@ -11,6 +11,7 @@ from ComfyUI_H3_Continuum_Join.v2.sequence import (
     _terminal_physical_seed_plan,
     _terminal_pair_contract,
     _terminal_sampling_plan,
+    _terminal_strategy_mismatch,
 )
 from ComfyUI_H3_Continuum_Join.v2.seeds import derive_chunk_seed
 
@@ -97,11 +98,55 @@ def test_rerolling_final_chunk_regenerates_both_terminal_chunks():
     assert reset is True
 
 
+def test_two_chunk_terminal_cache_extended_to_three_reuses_one_generates_two():
+    preserved = [{"chunk": 1}, {"chunk": 2}]
+
+    reusable, reset = _atomic_terminal_prefix(
+        preserved,
+        chunks=3,
+        reroll_from_chunk=3,
+    )
+    normal, terminal = _terminal_sampling_plan(
+        chunks=3,
+        completed=len(reusable),
+        merge_enabled=True,
+    )
+
+    assert reusable == preserved[:1]
+    assert reset is True
+    assert normal == ()
+    assert terminal is True
+    assert (len(reusable), 2) == (1, 2)
+
+
 def test_complete_terminal_pair_remains_reusable_without_reroll():
     preserved = [{"chunk": 1}, {"chunk": 2}, {"chunk": 3}]
     result, reset = _atomic_terminal_prefix(preserved, chunks=3, reroll_from_chunk=0)
     assert result == preserved
     assert reset is False
+
+
+def test_non_terminal_flf_keeps_run_storage_validated_prefix_without_terminal_strategy():
+    session = {"settings": {"run_storage_validated_prefix": True}}
+
+    assert not _terminal_strategy_mismatch(session, merge_enabled=False)
+
+
+def test_terminal_merge_rejects_prefix_without_matching_strategy():
+    session = {"settings": {"run_storage_validated_prefix": True}}
+
+    assert _terminal_strategy_mismatch(session, merge_enabled=True)
+
+
+def test_terminal_merge_keeps_prefix_with_matching_strategy():
+    session = {
+        "settings": {
+            "run_storage_validated_prefix": True,
+            "flf_execution": "terminal_merged_10s_seed_v2",
+        }
+    }
+
+    assert not _terminal_strategy_mismatch(session, merge_enabled=True)
 
 
 @pytest.mark.parametrize("base_seed", [42, 123456789])

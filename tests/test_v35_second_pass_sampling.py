@@ -14,6 +14,7 @@ from ComfyUI_H3_Continuum_Join.v3.refine_context import (
     MAGIC as REFINE_CONTEXT_MAGIC,
     RefineConditioningAdaptationError,
 )
+from ComfyUI_H3_Continuum_Join.v3.refine_schedule import make_tail_schedule
 from ComfyUI_H3_Continuum_Join.v3.second_pass_nodes import (
     H3ContinuumSecondPassV35,
 )
@@ -81,6 +82,7 @@ def _run_fixture(groups: list[dict]):
     def sample(**kwargs):
         calls[-1]["seed"] = kwargs["seed"]
         calls[-1]["conditioning"] = kwargs["conditioning"]
+        calls[-1]["sigmas"] = kwargs["sigmas"]
         nested = kwargs["latent"]
         return {
             "video": nested["video"] + 1,
@@ -151,10 +153,61 @@ def test_second_pass_uses_plan_prompts_one_seed_per_physical_group_and_audio_pas
     assert updated["second_pass_contract"]["audio_sampling"] == (
         "zero_noise_mask_locked"
     )
+    schedule = updated["second_pass_contract"]["refine_schedule"]
+    assert schedule["mode"] == "external"
+    assert schedule["evaluation_count"] == 1
+    assert updated["second_pass_contract"]["refine_schedule_identity"] == (
+        schedule["schedule_hash"]
+    )
+    assert all(call["sigmas"] is calls[0]["sigmas"] for call in calls)
     assert "temporary_audio_discarded=true" in report
     assert "audio zero noise/mask=0" in report
     assert "refine_seed=" in report
     assert videos[1]["samples"].shape[2] == 65
+
+
+def test_internal_tail_schedule_passes_the_exact_suffix_and_records_identity():
+    group = _group(0, temporal=31, prompt="physical prompt")
+    video = _latent(torch.zeros((1, 24, 31, 48, 48)))
+    audio = _latent(torch.ones(tuple(group["source_audio_shape"])))
+    base_sigmas = torch.tensor([1.0, 0.75, 0.5, 0.25, 0.0])
+    tail = make_tail_schedule(base_sigmas, evaluation_count=2)
+    captured = {}
+
+    def sample(**kwargs):
+        captured.update(kwargs)
+        return kwargs["latent"]
+
+    _video, output_audio, updated, report = run_second_pass_groups(
+        model=object(),
+        clip=object(),
+        sampler=object(),
+        sigmas=base_sigmas,
+        video_latents=[video],
+        audio_latents=[audio],
+        assembly_plan=_plan([group]),
+        refine_seed=17,
+        refine_schedule=tail,
+        encode_prompt_fn=lambda *_args, **_kwargs: ["conditioning"],
+        latent_builder=lambda video_samples, audio_samples: {
+            "video": video_samples,
+            "audio": audio_samples,
+        },
+        sample_fn=sample,
+        stream_extractor=lambda sampled: (sampled["video"], sampled["audio"]),
+        clone_model_fn=lambda source, **_kwargs: source,
+    )
+
+    assert captured["sigmas"] is tail.sigmas
+    assert torch.equal(captured["sigmas"], base_sigmas[2:])
+    schedule = updated["second_pass_contract"]["refine_schedule"]
+    assert schedule["mode"] == "tail"
+    assert schedule["evaluation_count"] == 2
+    assert schedule["start_index"] == 2
+    assert schedule["noise_mode"] == "video_random_mask_1_audio_zero_mask_0"
+    assert schedule["audio_policy"] == "locked_first_pass_bit_exact_passthrough"
+    assert output_audio[0] is audio
+    assert "mode=tail" in report
 
 
 def test_second_pass_defaults_to_audio_locked_refine_sampler(monkeypatch):
@@ -469,6 +522,7 @@ def test_second_pass_node_forwards_optional_refine_context_and_video_vae(monkeyp
     )
     context = {"context": True}
     video_vae = object()
+    schedule = object()
     result = H3ContinuumSecondPassV35().refine(
         ["model"],
         ["clip"],
@@ -480,11 +534,13 @@ def test_second_pass_node_forwards_optional_refine_context_and_video_vae(monkeyp
         [7],
         [context],
         [video_vae],
+        schedule,
     )
 
     assert result == sentinel
     assert captured["refine_context"] is context
     assert captured["video_vae"] is video_vae
+    assert captured["refine_schedule"] is schedule
 
 
 def test_second_pass_node_is_registered_and_not_deprecated():

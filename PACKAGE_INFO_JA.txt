@@ -1,6 +1,14 @@
-ComfyUI-H3-Continuum V3.6.1
+ComfyUI-H3-Continuum V3.7.0
 
 MiniMax H3の5秒ChunkをAV latent contextで継続し、長尺映像として組み立てるComfyUIカスタムノードです。
+
+V3.7.0:
+- H3 Continuum Sampler V3.7と、1枚のStill Image Guide用optional入力を追加
+- Conditioning AdapterでFirst／Last、Continuation context、Still Guide元画像をSecond Passのtarget解像度へ再構築
+- 内部RefineSchedule v1としてExternal／Full／Tail／Partialを定義し、既存SIGMAS socketとの互換性を維持
+- 704×704 Internal Tail 6と1152×1152 Guide再ConditioningのGPU Correctness GateをPASS
+- Still Image GuideはCorrectness PASS、Experimental／Production HOLD。hard anchorによる急なtrajectory変化が起きる場合あり
+- V3.6 Production初期値、旧Node ID、保存済みWorkflow、Core PackedLayout／RoPE、First Pass Audio passthroughを維持
 
 V3.6.1:
 - Timeline/List混在PromptへH3C-P105警告を追加し、Timelineではstandalone --- 行だけを除去
@@ -47,10 +55,13 @@ V3.5.0:
 - Assemble + Seam V3.5のRAM / Disk-backed / Auto
 
 Experimental:
+- Still Image Guide V3.7（Correctness PASS、hard-anchor qualityはProduction HOLD）
 - Main Hi-Res Fix V3.5
 - Main Hi-Res Fix 3x5 2x（RTX 5060 Ti 16 GiBではTerminal 77TでCUDA OOM）
 
 GPU受入済み:
+- Internal Tail 6 704×704（外部Tail 6比Video SSIM 0.982936、decoded Audio PCM bit-exact）
+- Still Guide元画像の1152×1152再Conditioning（Correctnessのみ。品質はProduction HOLD）
 - Main Hi-Res Fix 1x5、576から1152
 - Hybrid FL2VA + Reference 1x5の統合Hi-Res FixとAdvanced Second Pass
 

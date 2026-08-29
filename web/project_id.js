@@ -8,6 +8,7 @@ const V34_NODE_CLASS = "H3ContinuumSamplerV34";
 const V34_ASSEMBLE_SEAM_NODE_CLASS = "H3ContinuumAssembleSeamV34";
 const V35_NODE_CLASS = "H3ContinuumSamplerV35";
 const V36_NODE_CLASS = "H3ContinuumSamplerV36";
+const V37_NODE_CLASS = "H3ContinuumSamplerV37";
 const V35_ASSEMBLE_SEAM_NODE_CLASS = "H3ContinuumAssembleSeamV35";
 const PROJECT_WIDGET = "project_id";
 const LEGACY_RUN_NAME_WIDGET = "run_name";
@@ -165,13 +166,30 @@ function attachRefresh(widget, key, refresh) {
     widget[key] = true;
 }
 
+function normalizeRunStorageState(node, apiInputs = null) {
+    const storageWidget = findWidget(node, RUN_STORAGE_WIDGET);
+    const storageEnabled = storageWidget?.value === "Save + Auto Resume";
+    if (storageEnabled) {
+        return true;
+    }
+    const regenerateWidget = findWidget(node, REGENERATE_WIDGET);
+    const nonceWidget = findWidget(node, REROLL_NONCE_WIDGET);
+    if (regenerateWidget) regenerateWidget.value = "Auto";
+    if (nonceWidget) nonceWidget.value = 0;
+    if (apiInputs) {
+        apiInputs[REGENERATE_WIDGET] = "Auto";
+        apiInputs[REROLL_NONCE_WIDGET] = 0;
+    }
+    return false;
+}
+
 function configureConditionalWidgets(node) {
     const storageWidget = findWidget(node, RUN_STORAGE_WIDGET);
     const regenerateWidget = findWidget(node, REGENERATE_WIDGET);
     const nonceWidget = findWidget(node, REROLL_NONCE_WIDGET);
     const runNameWidget = findWidget(node, LEGACY_RUN_NAME_WIDGET);
     const refresh = () => {
-        const storageEnabled = storageWidget?.value === "Save + Auto Resume";
+        const storageEnabled = normalizeRunStorageState(node);
         const explicitRegeneration = storageEnabled
             && regenerateWidget?.value !== "Auto"
             && Number.parseInt(String(regenerateWidget?.value).replace(/^Chunk\s+/, ""), 10) > 0;
@@ -229,19 +247,20 @@ function configureNode(node) {
     const isV34 = node.comfyClass === V34_NODE_CLASS;
     const isV35 = node.comfyClass === V35_NODE_CLASS;
     const isV36 = node.comfyClass === V36_NODE_CLASS;
-    if (!isProduction && !isTimeline && !isV34 && !isV35 && !isV36) {
+    const isV37 = node.comfyClass === V37_NODE_CLASS;
+    if (!isProduction && !isTimeline && !isV34 && !isV35 && !isV36 && !isV37) {
         configureAssembler(node);
         return null;
     }
     const projectWidget = findWidget(node, PROJECT_WIDGET);
-    if (isProduction || isV34 || isV35 || isV36) {
+    if (isProduction || isV34 || isV35 || isV36 || isV37) {
         if (projectWidget && !String(projectWidget.value || "").trim()) {
             projectWidget.value = createProjectId();
         }
         removeUnusedInput(node, PROMPT_OVERRIDES_INPUT);
     }
     applyRuntimeSettings(node);
-    if (isV35 || isV36) {
+    if (isV35 || isV36 || isV37) {
         normalizeReferenceAudioLabels(node);
     }
     hidePersistentWidget(findWidget(node, "diagnostics"));
@@ -319,7 +338,9 @@ app.registerExtension({
                     || node.comfyClass === V34_NODE_CLASS
                     || node.comfyClass === V35_NODE_CLASS
                     || node.comfyClass === V36_NODE_CLASS
+                    || node.comfyClass === V37_NODE_CLASS
                 ) {
+                    normalizeRunStorageState(node, apiNode.inputs);
                     apiNode.inputs.diagnostics = settingValue(SETTINGS.detailedReport, false)
                         ? "Detailed Report"
                         : "Basic";

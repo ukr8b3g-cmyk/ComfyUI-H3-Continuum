@@ -125,6 +125,7 @@ def test_enabled_pixel_vae_roundtrip_then_reuses_second_pass_contract(monkeypatc
         "sampled",
     )
     calls = []
+    schedule = object()
 
     def fake_roundtrip(video_latents, assembly_plan, **kwargs):
         calls.append(("roundtrip", video_latents, assembly_plan, kwargs))
@@ -161,6 +162,7 @@ def test_enabled_pixel_vae_roundtrip_then_reuses_second_pass_contract(monkeypatc
         [17],
         [{"context": True}],
         ["video-vae"],
+        schedule,
     )
 
     assert result[:3] == sentinel[:3]
@@ -190,6 +192,7 @@ def test_enabled_pixel_vae_roundtrip_then_reuses_second_pass_contract(monkeypatc
     assert second_pass["refine_context"] == {"context": True}
     assert second_pass["video_vae"] == "video-vae"
     assert second_pass["conditioning_upscale_method"] == "bilinear"
+    assert second_pass["refine_schedule"] is schedule
 
 
 @pytest.mark.parametrize(

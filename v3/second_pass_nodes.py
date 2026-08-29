@@ -78,6 +78,7 @@ class H3ContinuumSecondPassV35:
         refine_seed,
         refine_context=None,
         video_vae=None,
+        refine_schedule=None,
     ):
         return run_second_pass_groups(
             model=_single_list_input("model", model),
@@ -98,6 +99,7 @@ class H3ContinuumSecondPassV35:
                 if video_vae is None
                 else _single_list_input("video_vae", video_vae)
             ),
+            refine_schedule=refine_schedule,
         )
 
 

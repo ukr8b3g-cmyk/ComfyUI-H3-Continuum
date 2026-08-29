@@ -10,6 +10,7 @@ import ctypes
 
 from ComfyUI_H3_Continuum_Join.run_storage import (
     RunStorageController,
+    _hash,
     _resume_session_settings,
     _apply_nonce_contract,
     _fsync_file,
@@ -297,7 +298,9 @@ def _sampling_contract(
     execution_semantics=None,
     reference_audio_contract=None,
     reference_audio_vae=None, prompt_hashes=None,
+    chunks=3, reroll_from_chunk=2,
 ):
+    default_hashes = [str(index) * 64 for index in range(1, int(chunks) + 1)]
     return build_sampling_contract(
         model=model or _Model(),
         model_fingerprint_value="f" * 64,
@@ -306,8 +309,8 @@ def _sampling_contract(
         sampler=sampler or _Sampler(),
         sigmas=torch.tensor([1.0, 0.0]),
         prompt_plan={
-            "chunks": 3,
-            "hashes": list(prompt_hashes or ["1" * 64, "2" * 64, "3" * 64]),
+            "chunks": int(chunks),
+            "hashes": list(prompt_hashes or default_hashes),
             "mode": "list",
         },
         width=96,
@@ -316,7 +319,7 @@ def _sampling_contract(
         continuity="Balanced",
         audio_continuity=True,
         base_seed=1,
-        reroll_from_chunk=2,
+        reroll_from_chunk=int(reroll_from_chunk),
         reroll_nonce=reroll_nonce,
         first_frame_hash=first_frame_hash,
         last_frame_hash=last_frame_hash,
@@ -330,6 +333,194 @@ def _sampling_contract(
         reference_audio_contract=reference_audio_contract,
         reference_audio_vae=reference_audio_vae,
     )
+
+
+def _persist_contract_prefix(tmp_path, contract, *, count):
+    controller = RunStorageController("extend-prefix")
+    controller.revisions_root = tmp_path / "revisions"
+    controller.revision_id, controller.contract_sha256 = revision_identity(contract)
+    controller.revision_root = controller.revisions_root / controller.revision_id
+    controller.contract = contract
+    controller.prompts = [f"prompt {index + 1}" for index in range(int(count))]
+    controller.manifest = {
+        "contract": contract,
+        "chunks": [],
+        "status": "in_progress",
+    }
+    for position in range(int(count)):
+        controller.commit_chunk(
+            _entry(position, prompt=controller.prompts[position]),
+            position=position,
+        )
+    return controller
+
+
+def _load_compatible_prefix(tmp_path, stored, current):
+    controller = RunStorageController("extend-prefix")
+    controller.revisions_root = tmp_path / "revisions"
+    controller.contract = current
+    controller.prompts = [
+        f"prompt {index + 1}" for index in range(int(current["chunk_count"]))
+    ]
+    entries, records = controller._valid_prefix(
+        stored.manifest, current["chunk_contract_hashes"]
+    )
+    return controller, entries, records
+
+
+def _legacy_none_final_contract(contract):
+    legacy = copy.deepcopy(contract)
+    legacy["last_frame_hash"] = "none"
+    legacy["chunk_contracts"][-1]["last_frame_hash"] = "none"
+    legacy["chunk_contract_hashes"][-1] = _hash(legacy["chunk_contracts"][-1])
+    return legacy
+
+
+@pytest.mark.parametrize("absent", [None, "", "none", "null", " NONE ", " NULL "])
+def test_absent_last_frame_hash_is_canonical_for_every_chunk(absent):
+    contract, safe, reasons = _sampling_contract(
+        last_frame_hash=absent,
+        chunks=3,
+        reroll_from_chunk=3,
+    )
+
+    assert safe, reasons
+    assert contract["last_frame_hash"] == ""
+    assert [item["last_frame_hash"] for item in contract["chunk_contracts"]] == [
+        "",
+        "",
+        "",
+    ]
+
+
+def test_i2va_two_to_three_reuses_both_canonical_prefix_chunks(tmp_path):
+    model, clip, video_vae, sampler = _Model(), _Clip(), _VideoVAE(), _Sampler()
+    common = {
+        "model": model,
+        "clip": clip,
+        "video_vae": video_vae,
+        "sampler": sampler,
+    }
+    stored_contract, safe, reasons = _sampling_contract(
+        **common, chunks=2, reroll_from_chunk=0, last_frame_hash=""
+    )
+    assert safe, reasons
+    current_contract, safe, reasons = _sampling_contract(
+        **common, chunks=3, reroll_from_chunk=3, last_frame_hash=""
+    )
+    assert safe, reasons
+    stored = _persist_contract_prefix(tmp_path, stored_contract, count=2)
+
+    controller, entries, records = _load_compatible_prefix(
+        tmp_path, stored, current_contract
+    )
+
+    assert len(entries) == len(records) == 2
+    assert not controller.notes
+
+
+def test_i2va_two_to_three_reuses_legacy_none_final_chunk(tmp_path):
+    model, clip, video_vae, sampler = _Model(), _Clip(), _VideoVAE(), _Sampler()
+    common = {
+        "model": model,
+        "clip": clip,
+        "video_vae": video_vae,
+        "sampler": sampler,
+    }
+    canonical_stored, safe, reasons = _sampling_contract(
+        **common, chunks=2, reroll_from_chunk=0, last_frame_hash=""
+    )
+    assert safe, reasons
+    legacy_stored = _legacy_none_final_contract(canonical_stored)
+    current_contract, safe, reasons = _sampling_contract(
+        **common, chunks=3, reroll_from_chunk=3, last_frame_hash=""
+    )
+    assert safe, reasons
+    stored = _persist_contract_prefix(tmp_path, legacy_stored, count=2)
+
+    controller, entries, records = _load_compatible_prefix(
+        tmp_path, stored, current_contract
+    )
+
+    assert len(entries) == len(records) == 2
+    assert controller.notes == [
+        "stored chunk 2 reused through V3.6.1 absent Last Frame compatibility"
+    ]
+
+
+def test_legacy_none_cache_exact_resume_reuses_every_chunk(tmp_path):
+    model, clip, video_vae, sampler = _Model(), _Clip(), _VideoVAE(), _Sampler()
+    common = {
+        "model": model,
+        "clip": clip,
+        "video_vae": video_vae,
+        "sampler": sampler,
+    }
+    canonical, safe, reasons = _sampling_contract(
+        **common, chunks=2, reroll_from_chunk=0, last_frame_hash=""
+    )
+    assert safe, reasons
+    legacy = _legacy_none_final_contract(canonical)
+    current, safe, reasons = _sampling_contract(
+        **common, chunks=2, reroll_from_chunk=0, last_frame_hash=""
+    )
+    assert safe, reasons
+    stored = _persist_contract_prefix(tmp_path, legacy, count=2)
+
+    _, entries, records = _load_compatible_prefix(tmp_path, stored, current)
+
+    assert len(entries) == len(records) == 2
+
+
+def test_real_last_frame_two_to_three_invalidates_old_final_chunk(tmp_path):
+    model, clip, video_vae, sampler = _Model(), _Clip(), _VideoVAE(), _Sampler()
+    common = {
+        "model": model,
+        "clip": clip,
+        "video_vae": video_vae,
+        "sampler": sampler,
+        "conditioning_mode": "fl2va",
+        "last_frame_hash": "b" * 64,
+    }
+    stored_contract, safe, reasons = _sampling_contract(
+        **common, chunks=2, reroll_from_chunk=0
+    )
+    assert safe, reasons
+    current_contract, safe, reasons = _sampling_contract(
+        **common, chunks=3, reroll_from_chunk=3
+    )
+    assert safe, reasons
+    stored = _persist_contract_prefix(tmp_path, stored_contract, count=2)
+
+    _, entries, records = _load_compatible_prefix(tmp_path, stored, current_contract)
+
+    assert len(entries) == len(records) == 1
+
+
+def test_absent_last_frame_compatibility_rejects_any_other_chunk_difference(tmp_path):
+    model, clip, video_vae, sampler = _Model(), _Clip(), _VideoVAE(), _Sampler()
+    common = {
+        "model": model,
+        "clip": clip,
+        "video_vae": video_vae,
+        "sampler": sampler,
+    }
+    canonical, safe, reasons = _sampling_contract(
+        **common, chunks=2, reroll_from_chunk=0, last_frame_hash=""
+    )
+    assert safe, reasons
+    legacy = _legacy_none_final_contract(canonical)
+    legacy["chunk_contracts"][1]["prompt_hash"] = "f" * 64
+    legacy["chunk_contract_hashes"][1] = _hash(legacy["chunk_contracts"][1])
+    current, safe, reasons = _sampling_contract(
+        **common, chunks=3, reroll_from_chunk=3, last_frame_hash=""
+    )
+    assert safe, reasons
+    stored = _persist_contract_prefix(tmp_path, legacy, count=2)
+
+    _, entries, records = _load_compatible_prefix(tmp_path, stored, current)
+
+    assert len(entries) == len(records) == 1
 
 
 def test_mixed_timeline_normalization_separates_run_storage_revision():

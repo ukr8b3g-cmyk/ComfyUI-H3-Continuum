@@ -6,6 +6,11 @@ import torch
 
 from ..constants import CONTINUITY_OPTIONS, FPS
 from ..driving_audio import prepare_driving_audio_source
+from ..guide_timeline import (
+    GUIDE_TYPE,
+    make_still_image_guide,
+    prepare_still_image_guide_source,
+)
 from ..hardening import diagnostics_is_full
 from ..reference_video import (
     REFERENCE_VIDEO_SIZE_EFFICIENT,
@@ -373,6 +378,90 @@ class H3ContinuumSamplerV36(H3ContinuumSamplerV35):
         return _prepend_v36_transport_report(outputs, fallback_reason)
 
 
+class H3ContinuumStillImageGuideV37:
+    """One frame-based image anchor for the V3.7 sampler."""
+
+    DEPRECATED = False
+    CATEGORY = CONTINUUM_CATEGORY
+    DESCRIPTION = (
+        "Prepare one Still Image Guide at an absolute 24 fps output frame. "
+        "The V3.7 sampler resolves it to the owning physical group and Core frame_idx."
+    )
+    SEARCH_ALIASES = [
+        "H3 Continuum Still Image Guide",
+        "MiniMax H3 Add Guide timeline",
+    ]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "absolute_frame": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": 0,
+                        "max": 0x7FFFFFFF,
+                        "step": 1,
+                        "display_name": "Absolute Frame (24 fps)",
+                        "tooltip": (
+                            "Zero-based frame on the final visible Continuum timeline."
+                        ),
+                    },
+                ),
+            }
+        }
+
+    RETURN_TYPES = (GUIDE_TYPE,)
+    RETURN_NAMES = ("guide",)
+    FUNCTION = "pack"
+    CATEGORY = CONTINUUM_CATEGORY
+
+    def pack(self, image, absolute_frame):
+        return (make_still_image_guide(image, absolute_frame),)
+
+
+class H3ContinuumSamplerV37(H3ContinuumSamplerV36):
+    """V3.6-compatible sampler with one physical-group Still Image Guide."""
+
+    DEPRECATED = False
+    CATEGORY = CONTINUUM_CATEGORY
+    DESCRIPTION = (
+        "H3 Continuum V3.7 Stage 2 sampler. It preserves V3.6 behavior and can "
+        "inject one Still Image Guide into only its resolved physical sampling group."
+    )
+    SEARCH_ALIASES = [
+        "H3 Continuum Sampler V3.7",
+        "MiniMax H3 absolute frame guide",
+    ]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        schema = super().INPUT_TYPES()
+        optional = dict(schema.get("optional", {}))
+        optional["guide"] = (
+            GUIDE_TYPE,
+            {
+                "display_name": "Still Image Guide (Optional)",
+                "tooltip": (
+                    "Optional V3.7 Still Image Guide. Only the owning physical "
+                    "sampling group receives the Core minimax_keyframes entry."
+                ),
+            },
+        )
+        schema["optional"] = optional
+        return schema
+
+    def run(self, guide=None, **kwargs):
+        guide_source = prepare_still_image_guide_source(
+            guide,
+            output_width=int(kwargs["width"]),
+            output_height=int(kwargs["height"]),
+        )
+        return super().run(guide_source=guide_source, **kwargs)
+
+
 class H3ContinuumAssembleSeamV34(H3ContinuumAssembleSeamExperimental):
     """Assemble decoded chunks and select original Driving Audio when connected."""
 
@@ -553,6 +642,8 @@ NODE_CLASS_MAPPINGS = {
     "H3ContinuumSamplerV34": H3ContinuumSamplerV34,
     "H3ContinuumSamplerV35": H3ContinuumSamplerV35,
     "H3ContinuumSamplerV36": H3ContinuumSamplerV36,
+    "H3ContinuumStillImageGuideV37": H3ContinuumStillImageGuideV37,
+    "H3ContinuumSamplerV37": H3ContinuumSamplerV37,
     "H3ContinuumAssembleSeamV34": H3ContinuumAssembleSeamV34,
     "H3ContinuumAssembleSeamV35": H3ContinuumAssembleSeamV35,
 }
@@ -561,6 +652,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "H3ContinuumSamplerV34": "H3 Continuum Sampler V3.4",
     "H3ContinuumSamplerV35": "H3 Continuum Sampler V3.5",
     "H3ContinuumSamplerV36": "H3 Continuum Sampler V3.6",
+    "H3ContinuumStillImageGuideV37": "H3 Continuum Still Image Guide V3.7",
+    "H3ContinuumSamplerV37": "H3 Continuum Sampler V3.7",
     "H3ContinuumAssembleSeamV34": "H3 Continuum Assemble + Seam V3.4",
     "H3ContinuumAssembleSeamV35": "H3 Continuum Assemble + Seam V3.5",
 }

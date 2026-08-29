@@ -4,6 +4,7 @@ from __future__ import annotations
 
 
 import logging
+import time
 from typing import Any, Callable
 
 from .compatibility import CompatibilityError, ensure_native_h3_base_model
@@ -23,7 +24,142 @@ from .layout_adapter import (
 )
 
 
-def _wrapper_factory(*, strict: bool, debug: bool) -> Callable[..., Any]:
+class LayoutValidationProfiler:
+    """Detailed-only wall-time accounting for the current full validator."""
+
+    def __init__(self, *, route_markers: str):
+        self.route_markers = str(route_markers)
+        self.validation_calls = 0
+        self.full_validation_count = 0
+        self.cumulative_wall_seconds = 0.0
+        self.status_counts: dict[str, int] = {}
+        self.failed_validation_count = 0
+        self.sampled_physical_groups = 0
+        self.sampling_steps_total = 0
+        self.validated_sampling_steps = 0
+        self._groups: list[dict[str, Any]] = []
+
+    def record_validation(
+        self,
+        result: dict[str, Any] | None,
+        wall_seconds: float,
+        *,
+        full_validation: bool,
+        failed: bool = False,
+    ) -> None:
+        self.validation_calls += 1
+        self.full_validation_count += int(bool(full_validation))
+        self.cumulative_wall_seconds += max(0.0, float(wall_seconds))
+        if failed:
+            self.failed_validation_count += 1
+            return
+        status = str((result or {}).get("status", "unknown"))
+        self.status_counts[status] = self.status_counts.get(status, 0) + 1
+
+    def begin_sampling_group(
+        self,
+        *,
+        physical_group: int,
+        logical_chunks: tuple[int, ...],
+        sampling_steps: int,
+    ) -> dict[str, Any]:
+        return {
+            "physical_group": int(physical_group),
+            "logical_chunks": tuple(int(value) for value in logical_chunks),
+            "sampling_steps": max(0, int(sampling_steps)),
+            "validation_calls": self.validation_calls,
+            "full_validation_count": self.full_validation_count,
+            "cumulative_wall_seconds": self.cumulative_wall_seconds,
+        }
+
+    def finish_sampling_group(self, token: dict[str, Any]) -> None:
+        sampling_steps = int(token["sampling_steps"])
+        validation_calls = self.validation_calls - int(token["validation_calls"])
+        full_validations = self.full_validation_count - int(
+            token["full_validation_count"]
+        )
+        wall_seconds = self.cumulative_wall_seconds - float(
+            token["cumulative_wall_seconds"]
+        )
+        self.sampled_physical_groups += 1
+        self.sampling_steps_total += sampling_steps
+        if validation_calls:
+            self.validated_sampling_steps += sampling_steps
+        self._groups.append(
+            {
+                "physical_group": int(token["physical_group"]),
+                "logical_chunks": tuple(token["logical_chunks"]),
+                "sampling_steps": sampling_steps,
+                "validation_calls": validation_calls,
+                "full_validation_count": full_validations,
+                "wall_seconds": max(0.0, wall_seconds),
+            }
+        )
+
+    def report_lines(self) -> list[str]:
+        validated_steps = self.validated_sampling_steps
+        calls_per_step = (
+            self.validation_calls / validated_steps if validated_steps else 0.0
+        )
+        wall_ms_per_step = (
+            self.cumulative_wall_seconds * 1000.0 / validated_steps
+            if validated_steps
+            else 0.0
+        )
+        mean_ms_per_call = (
+            self.cumulative_wall_seconds * 1000.0 / self.validation_calls
+            if self.validation_calls
+            else 0.0
+        )
+        status_text = ",".join(
+            f"{name}={count}" for name, count in sorted(self.status_counts.items())
+        ) or "none"
+        route_markers = self.route_markers.replace(";", " |")
+        lines = [
+            "Layout validation profile [V3.6]: "
+            f"route_markers={route_markers}; "
+            f"validation_calls={self.validation_calls}; "
+            f"full_validation_count={self.full_validation_count}; "
+            f"failed_validation_count={self.failed_validation_count}; "
+            f"statuses={status_text}; "
+            "cumulative_wall_including_existing_device_to_host_sync="
+            f"{self.cumulative_wall_seconds:.6f}s; "
+            f"sampled_physical_groups={self.sampled_physical_groups}; "
+            f"sampling_steps_total={self.sampling_steps_total}; "
+            f"validated_sampling_steps={validated_steps}; "
+            f"calls_per_validated_step={calls_per_step:.3f}; "
+            f"wall_per_validated_step={wall_ms_per_step:.3f}ms; "
+            f"mean_wall_per_call={mean_ms_per_call:.3f}ms; "
+            "explicit_cuda_synchronize=not_used."
+        ]
+        for group in self._groups:
+            group_steps = int(group["sampling_steps"])
+            group_calls = int(group["validation_calls"])
+            group_wall = float(group["wall_seconds"])
+            group_calls_per_step = group_calls / group_steps if group_steps else 0.0
+            group_wall_per_step = (
+                group_wall * 1000.0 / group_steps if group_steps else 0.0
+            )
+            lines.append(
+                "Layout validation group [V3.6]: "
+                f"physical_group={group['physical_group']}; "
+                f"logical_chunks={list(group['logical_chunks'])}; "
+                f"sampling_steps={group_steps}; "
+                f"validation_calls={group_calls}; "
+                f"full_validation_count={group['full_validation_count']}; "
+                f"cumulative_wall={group_wall:.6f}s; "
+                f"calls_per_step={group_calls_per_step:.3f}; "
+                f"wall_per_step={group_wall_per_step:.3f}ms."
+            )
+        return lines
+
+
+def _wrapper_factory(
+    *,
+    strict: bool,
+    debug: bool,
+    validation_profiler: LayoutValidationProfiler | None = None,
+) -> Callable[..., Any]:
     branch_baselines: dict[tuple[Any, ...], tuple[Any, ...]] = {}
 
     def apply_model_wrapper(executor, *args, **kwargs):
@@ -49,13 +185,34 @@ def _wrapper_factory(*, strict: bool, debug: bool) -> Callable[..., Any]:
             if has_continuum:
                 patch_layout_in_place(patched_payload, strict=True, debug=debug)
                 transformer_options = kwargs.get("transformer_options")
-                validate_native_continuity_layout(
-                    patched_payload,
-                    transformer_options=(
-                        transformer_options if isinstance(transformer_options, dict) else {}
-                    ),
-                    branch_baselines=branch_baselines,
+                validation_started = (
+                    time.perf_counter() if validation_profiler is not None else None
                 )
+                try:
+                    validation_result = validate_native_continuity_layout(
+                        patched_payload,
+                        transformer_options=(
+                            transformer_options
+                            if isinstance(transformer_options, dict)
+                            else {}
+                        ),
+                        branch_baselines=branch_baselines,
+                    )
+                except Exception:
+                    if validation_profiler is not None and validation_started is not None:
+                        validation_profiler.record_validation(
+                            None,
+                            time.perf_counter() - validation_started,
+                            full_validation=True,
+                            failed=True,
+                        )
+                    raise
+                if validation_profiler is not None and validation_started is not None:
+                    validation_profiler.record_validation(
+                        validation_result,
+                        time.perf_counter() - validation_started,
+                        full_validation=True,
+                    )
                 input_x = args[0] if args else None
                 materialize_continuum_latents(patched_payload, input_x, debug=debug)
             # ComfyUI Core 0.33.1 replaces keyframe condition latents with
@@ -70,7 +227,13 @@ def _wrapper_factory(*, strict: bool, debug: bool) -> Callable[..., Any]:
     return apply_model_wrapper
 
 
-def configure_continuum_model(model: Any, *, strict: bool, debug: bool):
+def configure_continuum_model(
+    model: Any,
+    *,
+    strict: bool,
+    debug: bool,
+    validation_profiler: LayoutValidationProfiler | None = None,
+):
     try:
         from comfy.patcher_extension import WrappersMP
     except Exception as exc:  # pragma: no cover
@@ -97,7 +260,11 @@ def configure_continuum_model(model: Any, *, strict: bool, debug: bool):
     patched.add_wrapper_with_key(
         WrappersMP.APPLY_MODEL,
         MODEL_WRAPPER_KEY,
-        _wrapper_factory(strict=bool(strict), debug=bool(debug)),
+        _wrapper_factory(
+            strict=bool(strict),
+            debug=bool(debug),
+            validation_profiler=validation_profiler,
+        ),
     )
     model_options = dict(getattr(patched, "model_options", None) or {})
     join_options = dict(model_options.get("h3_continuum_join") or {})
@@ -106,13 +273,24 @@ def configure_continuum_model(model: Any, *, strict: bool, debug: bool):
     patched.model_options = model_options
     return patched
 
-def patch_model(model: Any, *, strict: bool, debug: bool):
+def patch_model(
+    model: Any,
+    *,
+    strict: bool,
+    debug: bool,
+    validation_profiler: LayoutValidationProfiler | None = None,
+):
     """Clone once, then install the Continuum wrapper on that clone."""
     if not hasattr(model, "clone"):
         raise RuntimeError(
             "MODEL lacks the wrapper API required by H3 Continuum Join: clone"
         )
-    return configure_continuum_model(model.clone(), strict=strict, debug=debug)
+    return configure_continuum_model(
+        model.clone(),
+        strict=strict,
+        debug=debug,
+        validation_profiler=validation_profiler,
+    )
 
 def continuum_interop_request(*, chunk_index: int, context_frames: int) -> dict[str, Any]:
     return {
@@ -131,6 +309,7 @@ def clone_model_for_chunk(
     debug: bool,
     chunk_index: int,
     context_frames: int | None,
+    validation_profiler: LayoutValidationProfiler | None = None,
 ):
     """Create a call-local MODEL and attach an optional read-only Spectrum hint."""
     if not hasattr(model, "clone"):
@@ -139,7 +318,10 @@ def clone_model_for_chunk(
         )
     chunk_model = model.clone()
     configure_continuum_model(
-        chunk_model, strict=bool(strict), debug=bool(debug)
+        chunk_model,
+        strict=bool(strict),
+        debug=bool(debug),
+        validation_profiler=validation_profiler,
     )
     if debug:
         parent = getattr(chunk_model, "parent", None)

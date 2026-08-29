@@ -1,7 +1,7 @@
 # AGENTS.md
 
 ## Scope
-MiniMax H3 Continuum V3.6.1 for ComfyUI. Treat V3.6 as the current Production baseline; preserve V3.5.3/V3.4 node IDs, public contracts, and saved-workflow loading without letting legacy controls change current behavior.
+MiniMax H3 Continuum V3.7.0 for ComfyUI. Treat the accepted V3.6 generation defaults as the current Production baseline; preserve V3.6.1/V3.5.3/V3.4 node IDs, public contracts, and saved-workflow loading without letting legacy or Experimental controls change current behavior. Still Image Guide remains Experimental / Production HOLD.
 
 ## Non-negotiable rules
 - Follow ComfyUI Core behavior for user-facing validation. Continuum-only prompt restrictions, model allowlists, compatibility gates, and policy-based execution stops are prohibited.
@@ -47,6 +47,7 @@ GPU checks must cover Sage only, Sage+Sol, Sage+Spectrum, and Sage+Sol+Spectrum 
 - Source repository: `D:\Codex\_git_push_work\ComfyUI-H3-Continuum`
 - Primary tested runtime: `D:\StabilityMatrix\Data\Packages\ComfyUI_W\custom_nodes\ComfyUI-H3-Continuum`
 - Secondary runtime: `D:\StabilityMatrix\Data\Packages\ComfyUI_WAN\custom_nodes\ComfyUI-H3-Continuum`
+- Restart ComfyUI_W with `D:\StabilityMatrix\Data\Packages\ComfyUI_W\venv\Scripts\python.exe`. Do not launch the base executable reported by `Get-Process.Path`; it omits the venv dependencies even though it is the resolved process image.
 - Reuse the repository's existing pytest configuration and helper scripts instead of rediscovering paths on every task.
 - Read this file before each task. Record durable project decisions, paths, commands, failure causes, and validation methods here so later work reuses them instead of restarting from zero.
 - GitHub authentication for this repository is already configured. Do not request a new login or token unless an actual authentication command fails.

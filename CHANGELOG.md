@@ -1,7 +1,21 @@
 # Changelog
 
+## 3.7.0
+
+- Added `H3 Continuum Sampler V3.7` with one optional Still Image Guide input while preserving the V3.6 required-input schema, Production defaults, and saved-workflow compatibility.
+- Generalized the Second Pass Conditioning Adapter so First/Last images, continuation context, and an owned Still Image Guide can be rebuilt at target latent geometry. Physical-group and Long Terminal Merge ownership remain intact.
+- Added the internal schema-v1 `RefineSchedule` contract with `External`, `Full`, `Tail`, and `Partial` modes. Existing SIGMAS input remains compatible, and Tail/Partial use exact ranges from the source schedule.
+- GPU-validated the internal Tail 6 suffix at 704×704 against the prior external Tail 6 path, with decoded Video SSIM `0.982936` and bit-exact decoded Audio PCM.
+- Completed a 1152×1152 Conditioning correctness gate in which the original Still Image Guide source was reencoded at target geometry without changing the first-pass Audio contract.
+- Added explicit source-role ownership so a Still Guide sharing the same frame as First/Last is not replaced by the endpoint image, and restricted Still Image Guide input to exactly one IMAGE.
+- Added V3.7 compact-frontend parity for project identity, hidden internal widgets, Run Storage controls, queue normalization, diagnostics, and permanent Reference Audio sockets.
+- Kept Still Image Guide **Experimental / Production HOLD**. Core hard-anchor semantics can cause an abrupt trajectory change at the Guide frame and redirect later motion; it is not a smooth transition control.
+- Preserved V3.6/V3.5/V3.4 node IDs, public Second Pass schemas, Core PackedLayout/RoPE construction, Run Storage compatibility, and Production generation defaults.
+
 ## 3.6.1
 
+- Canonicalized an absent Last Frame hash as `""` and added a narrowly scoped compatibility path for V3.6.1 caches whose old final chunk stored `"none"`. Extending a normal no-Last-Frame run from two to three chunks now reuses both stored chunks, while a real Last Frame and Long Terminal Merge still invalidate/regenerate their required sampling units.
+- When Run Storage is turned Off, the compact frontend now resets hidden `Regenerate From` to `Auto` and `Variation Nonce` to `0`; the backend rejection remains as a non-UI safety check.
 - Added non-blocking mixed Prompt syntax diagnostics. Timeline mode now ignores standalone `---` separator lines with `H3C-P105`, while preserving existing uncovered-chunk fallback and Fixed-prompt fail-open behavior.
 - Prevented V3.6 Standard continuation from stopping when Audio Continuity is enabled with Fast 5, Strong 39, or Auto. These modes now resolve to the accepted Reference Context transport before Run Storage identity is created; Balanced 22 continues to use Masked AV.
 - Kept Standard with Audio Continuity disabled on Masked Video, and kept Compatibility on Reference Context for every Continuity mode.

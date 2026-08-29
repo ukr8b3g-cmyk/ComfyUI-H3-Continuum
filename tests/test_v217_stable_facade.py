@@ -145,4 +145,4 @@ def test_v217_result_pack_expands_legacy_outputs():
 def test_v217_has_no_frontend_display_controller():
     assert not (ROOT / "web" / "h3_continuum_v2.js").exists()
     version_source = (ROOT / "version.py").read_text(encoding="utf-8")
-    assert 'PACKAGE_VERSION = "3.6.1"' in version_source
+    assert 'PACKAGE_VERSION = "3.7.0"' in version_source

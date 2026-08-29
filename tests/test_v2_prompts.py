@@ -16,6 +16,7 @@ from ComfyUI_H3_Continuum_Join.v2.prompts import (
     detect_prompt_mode,
     make_prompt_plan,
     parse_sparse_prompt_overrides,
+    prompt_hash,
     prompt_plan_report,
     validate_sparse_prompt_overrides,
     validate_prompt_plan,
@@ -28,6 +29,140 @@ def test_fixed_prompt_repeats_without_mutation():
     assert plan["prompts"] == ["hello", "hello", "hello"]
     assert len(set(plan["hashes"])) == 1
     assert validate_prompt_plan(plan) is plan
+
+
+def test_prompt_transparency_t1_fixed_passthrough():
+    script = "\n".join(
+        [
+            "<d>Hello world</d>",
+            "embedding:character_style",
+            "<Picture 1>",
+            "<FutureH3Token>",
+            "日本語 text:01",
+            "symbols +=[]{}()",
+        ]
+    )
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_FIXED,
+        script=script,
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == [script, script]
+
+
+def test_prompt_transparency_t2_list_passthrough():
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_LIST,
+        script=(
+            "<d>first dialogue</d>\n"
+            "embedding:style_a\n"
+            "---\n"
+            "<d>second dialogue</d>\n"
+            "<FutureToken>"
+        ),
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == [
+        "<d>first dialogue</d>\nembedding:style_a",
+        "<d>second dialogue</d>\n<FutureToken>",
+    ]
+
+
+def test_prompt_transparency_t3_timeline_passthrough():
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_TIMELINE,
+        script=(
+            "Shared <FutureToken>\n"
+            "embedding:global_style\n\n"
+            "[0-5s]\n"
+            "<d>first line</d>\n\n"
+            "[5-10s]\n"
+            "<d>second line</d>\n"
+            "<Picture 2>"
+        ),
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == [
+        "Shared <FutureToken>\nembedding:global_style\n\n<d>first line</d>",
+        "Shared <FutureToken>\nembedding:global_style\n\n<d>second line</d>\n<Picture 2>",
+    ]
+
+
+def test_prompt_transparency_t4_timeline_preamble_passthrough():
+    preamble = "embedding:character_x\n<FutureToken>\n<d>shared instruction</d>"
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_TIMELINE,
+        script=f"{preamble}\n\n[Chunk 1]\nfirst\n[Chunk 2]\nsecond",
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == [
+        f"{preamble}\n\nfirst",
+        f"{preamble}\n\nsecond",
+    ]
+
+
+def test_prompt_transparency_t5_external_override_passthrough_and_rehash():
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_FIXED,
+        script="base",
+        chunks=2,
+        chunk_seconds=5,
+    )
+    override = "<d>override dialogue</d>\nembedding:new_style\n<UnknownSpecial>"
+    updated = apply_prompt_overrides(plan, [None, override])
+    assert updated["prompts"] == ["base", override]
+    assert updated["hashes"][0] == plan["hashes"][0]
+    assert updated["hashes"][1] == prompt_hash(override)
+    assert updated["hashes"][1] != plan["hashes"][1]
+
+
+def test_prompt_transparency_t6_invalid_timeline_fallback_passthrough():
+    script = "[0 to 5s]\n<d>Hello</d>\nembedding:style\n<UnknownSpecial>"
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_TIMELINE,
+        script=script,
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["mode"] == PROMPT_MODE_FIXED
+    assert plan["prompts"] == [script, script]
+    assert plan["diagnostics"][0]["code"] == "H3C-P100"
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [
+        ("<d>Hello</d>", "<d>hello</d>"),
+        ("embedding:a", "embedding:b"),
+        ("<FutureA>", "<FutureB>"),
+    ],
+)
+def test_prompt_transparency_t7_hash_sensitivity(left, right):
+    assert prompt_hash(left) == prompt_hash(left)
+    assert prompt_hash(left) != prompt_hash(right)
+
+
+def test_prompt_transparency_t8_unknown_future_syntax_is_literal():
+    script = "\n".join(
+        [
+            '<h3_future_control value="1">',
+            "<future:abc>",
+            "[[SPECIAL_X]]",
+            "token://future/value",
+        ]
+    )
+    plan = make_prompt_plan(
+        mode=PROMPT_MODE_FIXED,
+        script=script,
+        chunks=2,
+        chunk_seconds=5,
+    )
+    assert plan["prompts"] == [script, script]
+    assert "diagnostics" not in plan
 
 
 @pytest.mark.parametrize(
