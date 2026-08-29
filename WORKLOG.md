@@ -1,5 +1,12 @@
 # Work Log
 
+## 2026-08-30 - V3.7 Tail 6 README and release images
+
+- Used the V3.6 release infographic `D:\SD_PIC\Neo\Clip_95.png` as the style/layout reference to create `docs/images/v37-tail6-second-pass.png`, a 1536x1024 V3.7 infographic covering the exact Tail 6 suffix, `100.27 s -> 64.18 s` (`-36.0%`), Conditioning Adapter, RefineSchedule v1, Audio bit-exactness, V3.6 default compatibility, and Still Image Guide Production HOLD.
+- Used `docs/images/v36-sampler-node.png` as the edit reference for `docs/images/v37-sampler-node.png`, updating the title to V3.7 and adding the optional `guide` input. The V3.7 infographic replaces the old remote V3.6 hero in the English README; the V3.7 node UI replaces the V3.6 node image in the later interface section.
+- Added the English Tail 6 performance explanation and clarified that RefineSchedule manages the exact range while the speedup comes from six evaluations instead of ten. Both PNGs pass Pillow verification; the 187-entry Manifest has zero missing/mismatch, full regression is `633 passed`, and `git diff --check` passes. Runtime logic, version, release tag, README_JA, commit, and push are unchanged.
+- Accepted pre-change snapshots are `pre-v370-readme-tail6-image-source-approved-20260830_025423` (227 files) and `pre-v370-readme-tail6-image-runtime-w-approved-20260830_025423` (170 files), both at revision `093475dba798f0a24a6d8291ae4b42ec90e86c79` with zero SHA-256 mismatch.
+
 ## 2026-08-30 - V3.7.0 release publication
 
 - Created verified pre-change snapshots of the authoritative source and ComfyUI_W runtime before release-only edits: `pre-v370-release-metadata-source-approved-20260830_022944` (227 files) and `pre-v370-release-metadata-runtime-w-approved-20260830_022944` (170 files), both at revision `ecc72dae9bad1fb909b8e2a003b8e4e5013f4a09` with zero SHA-256 mismatch.

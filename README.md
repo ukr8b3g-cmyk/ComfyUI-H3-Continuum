@@ -1,6 +1,6 @@
 # ComfyUI-H3-Continuum 3.7.0
 
-<img width="1536" height="1024" alt="Clip_95" src="https://github.com/user-attachments/assets/4cf97e5d-27e3-40e5-aefd-6a54ab035461" />
+![H3 Continuum V3.7 Tail 6 Second Pass refinement](docs/images/v37-tail6-second-pass.png)
 
 
 Long-form MiniMax H3 video generation for ComfyUI with Continuum-aware Second Pass refinement, optional Hi-Res Fix, low-memory disk-backed assembly, restartable chunks, persistent references, and optional Spectrum interoperability.
@@ -16,6 +16,20 @@ The Conditioning Adapter rebuilds First/Last images, continuation context, and a
 ### RefineSchedule gives refinement ranges explicit meaning
 
 The internal, versioned `RefineSchedule` contract supports `External`, `Full`, `Tail`, and `Partial`. `External` preserves the incoming SIGMAS tensor exactly, while `Tail` and `Partial` select exact ranges from the same source schedule. The accepted internal Tail 6 gate reproduced the six-evaluation suffix and preserved decoded Audio PCM bit-exact. This contract is an implementation foundation rather than a new public widget, and Production defaults remain unchanged.
+
+### Tail 6 cuts Second Pass time by about one third
+
+The largest practical benefit in V3.7 is a shorter high-resolution Second Pass when the internal schedule uses Tail 6. Instead of evaluating all ten points, Tail 6 runs the exact low-sigma suffix that performs the final refinement work.
+
+| Second Pass range | Sampling time |
+|---|---:|
+| Tail 10 | **100.27 s** |
+| Tail 6 | **64.18 s** |
+| Saved | **36.09 s / 36.0%** |
+
+In this gate, Tail 6 finished in about 64% of the Tail 10 time: roughly 1 minute 4 seconds instead of 1 minute 40 seconds. A separate Learned Latent Upscaler gate measured `121.17 s -> 66.32 s` for Tail 10 versus Tail 6, about 45% lower, while API total changed from `170.70 s` to `119.61 s`, about 30% lower. These measurements are configuration-specific and are not universal speed guarantees.
+
+`RefineSchedule` does not make each model evaluation faster. It gives Continuum an exact, versioned way to manage and execute the Tail 6 range; the speedup comes from running six evaluations instead of ten. Tail 6 is not enabled automatically, and V3.7 does not change Production defaults.
 
 ### Still Image Guide remains Experimental
 
@@ -357,9 +371,9 @@ Hard stops remain only for states that cannot execute safely, including corrupt 
 
 ### Cleaner interface
 
-The public nodes focus on normal production controls. Developer diagnostics and detailed reports are available through ComfyUI settings. The current production path uses the V3.6 sampler with the V3.5 low-memory assembler.
+The public nodes focus on normal production controls. Developer diagnostics and detailed reports are available through ComfyUI settings. The current release path uses the V3.7 sampler with the V3.5 low-memory assembler. With `guide` disconnected, it preserves the V3.6 Production defaults.
 
-![H3 Continuum Sampler V3.6](docs/images/v36-sampler-node.png)
+<img width="389" alt="H3 Continuum Sampler V3.7 with optional Guide input" src="docs/images/v37-sampler-node.png" />
 
 ![H3 Continuum Assemble + Seam V3.5](docs/images/v35-assemble-seam-node.png)
 
