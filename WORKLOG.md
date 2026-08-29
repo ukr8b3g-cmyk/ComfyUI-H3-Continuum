@@ -1,5 +1,11 @@
 # Work Log
 
+## 2026-08-30 - Restore V3.6 Masked AV infographic
+
+- Preserved the supplied `D:\SD_PIC\Neo\Clip_95.png` byte-for-byte as `docs/images/v36-masked-av-continuation.png` (SHA-256 `96395c3682fb0b6375dc23eacabea6ca9ee165078ff04e94458f178eef35c4ae`) and placed it directly below the English README's `V3.6 Masked AV Continuation` heading.
+- Kept the V3.7 Tail 6 hero and V3.7 Sampler UI images unchanged. The restored image is 1536x1024 RGB and passes Pillow verification; the 188-entry Manifest has zero missing/mismatch, full regression is `633 passed`, and `git diff --check` passes.
+- Accepted pre-change snapshots are `pre-v36-infographic-restore-source-approved-20260830_030807` (229 files) and `pre-v36-infographic-restore-runtime-w-approved-20260830_030807` (172 files), both at revision `c8ae126cbed2c194f369741601ef1b81b7a4f86e` with zero SHA-256 mismatch. Runtime logic, version, release tag, commit, and push are unchanged.
+
 ## 2026-08-30 - V3.7 Tail 6 README and release images
 
 - Used the V3.6 release infographic `D:\SD_PIC\Neo\Clip_95.png` as the style/layout reference to create `docs/images/v37-tail6-second-pass.png`, a 1536x1024 V3.7 infographic covering the exact Tail 6 suffix, `100.27 s -> 64.18 s` (`-36.0%`), Conditioning Adapter, RefineSchedule v1, Audio bit-exactness, V3.6 default compatibility, and Still Image Guide Production HOLD.

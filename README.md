@@ -45,6 +45,8 @@ Run Storage now treats every absent Last Frame spelling as the same empty identi
 
 ## V3.6 Masked AV Continuation
 
+![H3 Continuum V3.6 Masked AV Continuation](docs/images/v36-masked-av-continuation.png)
+
 V3.6 adds **H3 Continuum Sampler V3.6**. Its Standard continuation backend places the previous finalized Video and Audio latent prefixes directly inside the next H3 target and protects them with Core noise masks. Unlike the V3.5 Reference Context route, it does not append the same prior frames as a separate Reference block, reducing the packed sequence processed by H3.
 
 | Continuation Backend | Purpose |
