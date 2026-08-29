@@ -1,11 +1,12 @@
 # Work Log
 
-## 2026-08-30 - V3.7.0 release metadata staging
+## 2026-08-30 - V3.7.0 release publication
 
 - Created verified pre-change snapshots of the authoritative source and ComfyUI_W runtime before release-only edits: `pre-v370-release-metadata-source-approved-20260830_022944` (227 files) and `pre-v370-release-metadata-runtime-w-approved-20260830_022944` (170 files), both at revision `ecc72dae9bad1fb909b8e2a003b8e4e5013f4a09` with zero SHA-256 mismatch.
 - Unified `version.py`, `pyproject.toml`, and `metadata.ini` at `3.7.0`; updated English/Japanese release documentation, package information, validation text, and version assertions. The release message centers on the Conditioning Adapter and RefineSchedule foundations and states that Still Image Guide is Experimental / Production HOLD because of hard-anchor trajectory changes.
-- Runtime generation logic, public Production defaults, existing workflows, and the untracked PDD workflow were not changed. Commit, push, and release remain pending until the final Release Gate is reviewed.
+- Runtime generation logic, public Production defaults, existing workflows, and the untracked PDD workflow were not changed.
 - Final local Release Gate passed: `633 passed`, 185 Manifest entries with zero missing/mismatch, Python/JavaScript syntax, `git diff --check`, runtime verification as `3.7.0`, live V3.7/V3.6 schema registration, empty queue, and exact source/runtime SHA-256 for 25 release/Production files. ComfyUI_W restarted as PID `8296`; evidence is `D:\Codex\_test_results\ComfyUI-H3-Continuum\v370-release-runtime-restart-20260830`.
+- Published release commit `fe4ff9c20c2cc8bb375625d1534f5673a737d1be` to `origin/main`, created annotated tag `v3.7.0` pointing to that commit, and published the non-draft, non-prerelease GitHub Release `ComfyUI-H3-Continuum v3.7.0`. The tag remains fixed at the validated release commit; this post-publication record is a separate documentation-only main commit.
 
 ## 2026-08-30 - V3.7 frontend parity and Still Guide input hardening
 

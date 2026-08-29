@@ -12,7 +12,7 @@
 
 Updated: 2026-08-28
 
-## V3.7.0 Conditioning Adapter and RefineSchedule release candidate (2026-08-30)
+## V3.7.0 Conditioning Adapter and RefineSchedule release (2026-08-30)
 
 - Post-review frontend/input hardening is complete. `H3ContinuumSamplerV37` now follows the V3.6 compact frontend path for project identity, hidden internal widgets, Run Storage conditional controls, queue normalization, runtime diagnostics/debug/preview settings, and permanent Reference Audio label normalization. Still Image Guide now rejects every IMAGE batch except exactly one image at both public payload creation and defensive source preparation.
 - Guide/First/Last endpoint collisions are regression-covered at physical frame `0` and `123`: the explicit Still Guide role marker takes priority over frame-number inference, so the owned Guide source is reencoded rather than the First/Last image. Reference Audio remains the accepted V3.5.1 permanent-socket design; the withdrawn frontend `Hidden / Show` widget was not restored.
@@ -21,7 +21,7 @@ Updated: 2026-08-28
 - Still Image Guide now owns a CPU clone and SHA-256 identity of the original Guide source image. Only its owner physical group carries that source, and Second Pass rebuilds the marked Guide keyframe from the original image at target latent geometry; First/Last, Terminal Merge ownership, Core PackedLayout/RoPE construction, and First Pass audio bit-exact passthrough remain unchanged.
 - GPU Correctness PASS: internal Tail 6 at 704x704 used the exact six-evaluation suffix. Under the same Sage path as the earlier external `SplitSigmas` Tail 6 baseline, decoded Video SSIM is `0.982936` and decoded PCM SHA-256 is identical; both are 120 frames / 5.000 seconds. The 1152x1152 Guide run encoded the First Image plus the original 1254x1254 Guide source to 72x72 latent geometry and completed without node/finite/geometry/AV errors. It remains low-motion/freeze-detected, consistent with the already-known hard-anchor quality limitation; Still Image Guide Production promotion therefore remains **HOLD**.
 - Evidence: `D:\Codex\_test_results\ComfyUI-H3-Continuum\v37-pillars-gpu-gate-20260830`. Accepted snapshots: `pre-v37-refine-schedule-conditioning-approved-ecc72da-accepted-20260830_005156` (source, 641 files, zero SHA mismatch) and `pre-v37-refine-schedule-conditioning-runtime-w-approved-accepted-20260830_005202` (ComfyUI_W runtime, 353 files, zero mismatch).
-- Final local Release Gate is `633 passed`; the 185-entry Manifest, Python/JavaScript syntax, `git diff --check`, ComfyUI_W runtime verifier, live V3.7/V3.6 registration, empty queue, and source/runtime SHA-256 equality for 25 release/Production files pass. ComfyUI_W restarted on 0.34.2 and reports `H3 Continuum 3.7.0 loaded`. Runtime logic and Production defaults are unchanged; commit, push, and release remain pending.
+- Final Release Gate is `633 passed`; the 185-entry Manifest, Python/JavaScript syntax, `git diff --check`, ComfyUI_W runtime verifier, live V3.7/V3.6 registration, empty queue, and source/runtime SHA-256 equality for 25 release/Production files pass. ComfyUI_W restarted on 0.34.2 and reports `H3 Continuum 3.7.0 loaded`. Runtime logic and Production defaults are unchanged. Release commit `fe4ff9c20c2cc8bb375625d1534f5673a737d1be`, annotated tag `v3.7.0`, and the GitHub Release were published on 2026-08-30.
 
 ## Sampling layout-validation measurement (2026-08-28)
 
