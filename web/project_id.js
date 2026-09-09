@@ -655,6 +655,9 @@ function compactValue(value, maximumFractionDigits = 1) {
 }
 
 function durationLabel(node, chunks = null) {
+    if (linkedInput(node, [CHUNKS_WIDGET, "chunk_seconds"])) {
+        return "From connected inputs";
+    }
     const chunkCount = Number(chunks ?? findWidget(node, CHUNKS_WIDGET)?.value ?? 1);
     const seconds = Number(findWidget(node, "chunk_seconds")?.value || 5);
     return `${compactValue(chunkCount * seconds)} seconds`;
@@ -732,7 +735,7 @@ function readySummary(node) {
     const chunks = Math.max(1, Number(findWidget(node, CHUNKS_WIDGET)?.value || 1));
     const seconds = Number(findWidget(node, "chunk_seconds")?.value || 5);
     const reviewing = findWidget(node, GENERATION_MODE_WIDGET)?.value === GENERATION_MODE_REVIEW;
-    if (reviewing && chunks < 2) {
+    if (reviewing && chunks < 2 && !linkedInput(node, [CHUNKS_WIDGET])) {
         return {
             headline: "Set Chunks to 2 or more",
             detail: (
@@ -750,7 +753,9 @@ function readySummary(node) {
             detail: "Review Each Chunk must keep Base Seed unchanged between Queue runs.",
         };
     }
-    const duration = `${compactValue(chunks)} × ${compactValue(seconds)}s = ${durationLabel(node)}`;
+    const duration = linkedInput(node, [CHUNKS_WIDGET, "chunk_seconds"])
+        ? "Duration from connected inputs"
+        : `${compactValue(chunks)} × ${compactValue(seconds)}s = ${durationLabel(node)}`;
     const output = sizeSource === SIZE_SOURCE_FIRST_IMAGE
         ? "First Image"
         : `Manual ${frameSizeLabel(width, height)}`;
@@ -771,7 +776,7 @@ function facadeWidgetTooltip(node, name) {
     if (name === FACADE_CHUNKS_WIDGET) {
         const reviewing = findWidget(node, GENERATION_MODE_WIDGET)?.value === GENERATION_MODE_REVIEW;
         const chunks = Math.max(1, Number(findWidget(node, CHUNKS_WIDGET)?.value || 1));
-        if (reviewing && chunks < 2) {
+        if (reviewing && chunks < 2 && !linkedInput(node, [CHUNKS_WIDGET])) {
             return (
                 "Chunks is 1, so there is no next chunk to continue. Set Chunks to 2 or more "
                 + "before Queue when using Review Each Chunk."
@@ -942,6 +947,36 @@ function moveFacadeWidgetsToFront(node, orderedNames) {
     node.widgets.splice(0, node.widgets.length, ...ordered, ...remainder);
 }
 
+function configureDurationInputSlots(node) {
+    // Core lays out widget sockets using the direct widget binding, not the
+    // getWidgetFromSlot override used for drawing and disabled-state lookup.
+    for (const [source, facade] of [[CHUNKS_WIDGET, FACADE_CHUNKS_WIDGET], ["chunk_seconds", FACADE_SECONDS_WIDGET]]) {
+        const slot = node.inputs?.find((input) => input.widget?.name === source);
+        if (slot) slot._widget = findWidget(node, facade);
+    }
+    node._widgetSlotsDirty = true;
+    if (node.__h3ContinuumDurationSlots || typeof node.getWidgetFromSlot !== "function"
+        || typeof node.getSlotFromWidget !== "function") return;
+    const names = new Map([
+        [CHUNKS_WIDGET, FACADE_CHUNKS_WIDGET],
+        ["chunk_seconds", FACADE_SECONDS_WIDGET],
+    ]);
+    const getWidget = node.getWidgetFromSlot;
+    const getSlot = node.getSlotFromWidget;
+    // Keep Core input names/configuration intact; only map their visible controls.
+    node.getWidgetFromSlot = function(slot) {
+        const facade = names.get(slot.widget?.name);
+        return facade ? findWidget(this, facade) : getWidget.call(this, slot);
+    };
+    node.getSlotFromWidget = function(widget) {
+        for (const [source, facade] of names) {
+            if (widget?.name === facade) return getSlot.call(this, findWidget(this, source));
+        }
+        return getSlot.call(this, widget);
+    };
+    node.__h3ContinuumDurationSlots = true;
+}
+
 function moveNamedWidgetsToFront(node, orderedNames) {
     if (!Array.isArray(node.widgets)) return;
     const byName = new Map(node.widgets.map((widget) => [widget.name, widget]));
@@ -1026,6 +1061,7 @@ function configureIntuitiveV38Ux(node) {
         34,
     );
     const readyWidget = addFacadeInfoWidget(node, FACADE_READY_WIDGET, "ready", 62);
+    configureDurationInputSlots(node);
 
     const outputFacade = addFacadeProxyWidget(node, {
         type: "combo",
@@ -2514,6 +2550,16 @@ function configureProductionReviewUx(node) {
                 moveNamedWidgetsToFront(node, order);
             } else moveFacadeWidgetsToFront(node, node.__h3ContinuumFacadeOrder);
         }
+        // Connected duration controls stay directly below the normal inputs,
+        // including while the settings facade is replaced by Review/History.
+        const connectedDuration = [];
+        for (const [source, facade] of [[CHUNKS_WIDGET, FACADE_CHUNKS_WIDGET], ["chunk_seconds", FACADE_SECONDS_WIDGET]]) {
+            if (!linkedInput(node, [source])) continue;
+            setWidgetVisible(findWidget(node, facade), true);
+            connectedDuration.push(facade);
+        }
+        if (connectedDuration.length) moveNamedWidgetsToFront(node, connectedDuration);
+        node._widgetSlotsDirty = true;
         node.setDirtyCanvas?.(true, true);
     };
     node.__h3ContinuumProductionUxRefresh = refresh;

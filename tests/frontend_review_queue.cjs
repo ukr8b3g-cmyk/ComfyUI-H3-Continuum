@@ -68,6 +68,8 @@ function environment() {
       widgets:Object.entries(v).map(([name,value])=>({name,value,type:typeof value==='number'?'number':'combo',options:{values:[]},computeSize:()=>[120,20]})),
       addWidget(type,name,value,callback,options){const w={type,name,value,callback,options:options||{},computeSize:()=>[120,20]};this.widgets.push(w);return w;},
       addCustomWidget(w){this.widgets.push(w);return w;},setDirtyCanvas(){},
+      getWidgetFromSlot(slot){return this.widgets.find(w=>w.name===slot.widget?.name);},
+      getSlotFromWidget(widget){return this.inputs.find(slot=>slot.widget?.name===widget?.name);},
       serialize(){return {widgets_values:this.widgets.map(w=>w.value)};},
       configure(info){info.widgets_values.forEach((v,i)=>{if(this.widgets[i])this.widgets[i].value=v;});}
     };
@@ -393,5 +395,63 @@ await test('history catalog preserves lineage eligibility and compact summary',a
  assert.equal(p.canonical_head_revision_id,'r1-g3');
 });
 
+await test('duration sockets map to visible facades without changing Core names or types',async e=>{
+ const n=e.makeNode();
+ for(const [name,type,label] of [['chunks','INT','Chunks'],['chunk_seconds','FLOAT','Seconds per Chunk']]){
+  const slot={name,type,link:null,widget:{name}};n.inputs.push(slot);
+  assert.equal(n.getWidgetFromSlot(slot),e.w(n,label));
+  assert.equal(n.getSlotFromWidget(e.w(n,label)),slot);
+  assert.equal(n.getSlotFromWidget(e.w(n,name)),slot);
+  assert.equal(slot.widget.name,name);assert.equal(slot.type,type);
+  assert(!n.getWidgetFromSlot(slot).hidden);assert(e.w(n,name).hidden);
+ }
+ const other={name:'base_seed',widget:{name:'base_seed'}};n.inputs.push(other);
+ assert.equal(n.getWidgetFromSlot(other),e.w(n,'base_seed'));
+ const getter=n.getWidgetFromSlot;e.f.configureNode(n);assert.equal(n.getWidgetFromSlot,getter);
+ for(const slot of n.inputs.filter(s=>['chunks','chunk_seconds'].includes(s.name))){
+  assert.equal(slot._widget,n.getWidgetFromSlot(slot));
+  assert(!slot._widget.hidden);
+ }
+ // Workflow loading replaces slot objects; configure must bind the new slots.
+ n.inputs=n.inputs.map(s=>({name:s.name,type:s.type,widget:s.widget,link:null}));
+ e.f.configureNode(n);
+ assert.equal(n.inputs[0]._widget,e.w(n,'Chunks'));
+ assert.equal(n.inputs[1]._widget,e.w(n,'Seconds per Chunk'));
+ e.w(n,'generation_mode').value='Review Each Chunk';
+ n.inputs[0].link=42;n.inputs[1].link=43;
+ await e.load(n,project(1));
+ assert(e.visible(n,'Chunks'));assert(e.visible(n,'Seconds per Chunk'));
+ assert.equal(n.widgets[0].name,'Chunks');assert.equal(n.widgets[1].name,'Seconds per Chunk');
+ e.w(n,'Back to Settings').callback();
+ assert.equal(n.widgets[0].name,'Chunks');assert.equal(n.widgets[1].name,'Seconds per Chunk');
+ e.w(n,'Return to Review').callback();
+ assert.equal(n.widgets[0].name,'Chunks');assert.equal(n.widgets[1].name,'Seconds per Chunk');
+ n.inputs[0].link=null;n.inputs[1].link=null;
+ n.__h3ContinuumIntuitiveUxRefresh();n.__h3ContinuumProductionUxRefresh();
+ assert(!e.visible(n,'Chunks'));assert(!e.visible(n,'Seconds per Chunk'));
+});
+await test('duration manual entry and serialized values survive connect disconnect and reload',async e=>{
+ const n=e.makeNode();e.w(n,'Chunks').callback(6);e.w(n,'Seconds per Chunk').callback(2.5);
+ const before=n.serialize();const input={name:'chunks',type:'INT',widget:{name:'chunks'},link:42};
+ n.inputs.push(input);n.__h3ContinuumIntuitiveUxRefresh();
+ assert.equal(e.w(n,'Total Length').value,'From connected inputs');
+ assert.equal(JSON.stringify(n.serialize()),JSON.stringify(before));
+ input.link=null;n.__h3ContinuumIntuitiveUxRefresh();
+ assert.equal(e.w(n,'Total Length').value,'15 seconds');
+ const restored=e.makeNode(313);restored.configure(before);
+ assert.equal(e.w(restored,'chunks').value,6);assert.equal(e.w(restored,'chunk_seconds').value,2.5);
+ const values=await e.inputs(restored);assert.equal(values.chunks,6);assert.equal(values.chunk_seconds,2.5);
+ assert(!Object.hasOwn(values,'Chunks'));assert(!Object.hasOwn(values,'Seconds per Chunk'));
+});
+await test('external duration links remain links through actual review Queue adapter',async e=>{
+ const n=e.makeNode();e.w(n,'chunks').value=1;
+ n.inputs.push({name:'chunks',type:'INT',widget:{name:'chunks'},link:42});
+ e.w(n,'Run').callback('Review Each Chunk');n.__h3ContinuumIntuitiveUxRefresh();
+ assert(!e.w(n,'Chunks').tooltip.includes('Chunks is 1'));
+ const data={output:{[n.id]:{class_type:n.comfyClass,inputs:{...(await e.inputs(n)),chunks:['900',0],chunk_seconds:['901',0]}}},workflow:n.serialize()};
+ await e.api.queuePrompt(0,data);
+ assert.deepEqual(e.submissions.at(-1).data.output[n.id].inputs.chunks,['900',0]);
+ assert.deepEqual(e.submissions.at(-1).data.output[n.id].inputs.chunk_seconds,['901',0]);
+});
 console.log(JSON.stringify(results,null,2));if(results.some(r=>!r.pass))process.exitCode=1;
 })();

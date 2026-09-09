@@ -37,7 +37,7 @@ def review_queue_results():
         capture_output=True, text=True, encoding="utf-8", timeout=45,
     )
     records = json.loads(result.stdout)
-    assert len(records) == 42, "The complete queue fixture must finish"
+    assert len(records) == 45, "The complete queue fixture must finish, including three duration-input cases"
     failures = [item for item in records if not item["pass"]]
     assert result.returncode == 0 and not failures, result.stdout + result.stderr
     return {item["name"]: item for item in records}
