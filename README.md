@@ -29,6 +29,14 @@ Restart ComfyUI after cloning or pulling. If ComfyUI Manager installed the node,
 
 Download the current V3.8 workflow: [JSON](examples/workflows/MiniMax_H3_Continuum_V38.json) or [ZIP containing the same JSON](examples/workflows/MiniMax_H3_Continuum_V38.zip). This is one Spectrum-default graph, also usable with [LightX2V Turbo](https://github.com/ModelTC/Minimax-H3-Turbo). Install its external Spectrum, rgthree, KJNodes, and ComfyUI-Easy-Use nodes before opening it; switching Spectrum off does not remove those node dependencies. See [Spectrum and Turbo setup](#turbo-lora-and-spectrum-in-supplied-workflows) below.
 
+## Prompt and skill downloads
+
+- [LLM system prompt ZIP](H3-Continuum-LLM-System-Prompt-v1.zip) — system instructions and reference material for Continuum prompt authoring.
+- [Continuum prompt skill ZIP](H3-Continuum-Skill-v1.zip) — general chunk-aware prompt authoring for Codex and other compatible agents.
+- [Continuum Dance Director skill ZIP](minimax-h3-continuum-dance-director.zip) — long-form choreography prompts for one primary dancer, with body and camera continuity across chunks.
+
+These are optional prompt-authoring resources, not ComfyUI custom nodes. Extract each ZIP and follow its included instructions. They do not change the sampler or guarantee generated motion or image quality.
+
 ## You can ask an AI to read this manual
 
 This README is intentionally detailed. You do not have to memorize it. Give its GitHub URL to a web-enabled AI and describe what you want to make, your GPU/VRAM, whether you have a First Image or audio, and whether you want to review every chunk. Ask it to answer with the **exact V3.8 labels** used below.

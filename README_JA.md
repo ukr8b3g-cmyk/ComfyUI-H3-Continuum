@@ -22,6 +22,14 @@ ComfyUIを再起動してください。Managerから導入した場合はManage
 
 V3.8 Workflow：[JSON](examples/workflows/MiniMax_H3_Continuum_V38.json)／[同じJSONを含むZIP](examples/workflows/MiniMax_H3_Continuum_V38.zip)。Spectrumを初期設定とする1本です。[LightX2V Turbo](https://github.com/ModelTC/Minimax-H3-Turbo)にも切り替えられますが、完全なgraphを開くにはSpectrum・rgthree・KJNodes・ComfyUI-Easy-Useが必要です。外部ノードは別途導入してください。
 
+## プロンプト・スキルのダウンロード
+
+- [LLM用システムプロンプトZIP](H3-Continuum-LLM-System-Prompt-v1.zip)：Continuum向けプロンプト作成のシステム指示と詳細資料。
+- [Continuum専用プロンプトスキルZIP](H3-Continuum-Skill-v1.zip)：Codexなどで使う、チャンク構成に対応した汎用プロンプト作成スキル。
+- [Continuum Dance DirectorスキルZIP](minimax-h3-continuum-dance-director.zip)：主役のダンサー1人を対象に、チャンク間の身体動作とカメラの連続性を考慮した長尺ダンス用プロンプトを作成するスキル。
+
+いずれも任意のプロンプト作成支援資料で、ComfyUIのカスタムノードではありません。ZIPを展開し、同梱の案内に従って利用してください。Samplerを変更するものではなく、生成動作や画質を保証するものでもありません。
+
 ## V3.8の公開範囲
 
 H3 Continuumは、長尺映像を最初からやり直さずに生成・確認・部分再生成・再開するProduction Samplerです。V3.8は`Main / Production`と`Advanced`の2層に整理しました。
