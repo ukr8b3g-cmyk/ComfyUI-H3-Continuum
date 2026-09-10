@@ -1,5 +1,11 @@
 # Project State
 
+## Issue #20 workflow persistence hotfix (2026-09-10)
+
+- User authorized repair and publication to main from pinned 6b453fe. The only runtime change is `serialize: false` on the read-only Render History widget in `web/project_id.js`; existing `options.serialize: false` is retained. Backend widget order, Sampling, Audio, Run Storage, public workflow/ZIP bytes, and Easy Loader Bypass behavior are unchanged.
+- Added a regression using the real Continuum frontend script with modeled compact store persistence and forceInput migration. It covers ordinary serialization, store serialization, positional/named round trips, Advanced/Review/History/completion views, and API-input parity. It fails on the unmodified runtime; all 45 pre-existing fixture cases remain green. Full CPU pytest: 1154 passed, 2 skipped; frontend fixture: 46/46 passed.
+- Validation ran on an isolated GitHub Actions CPU runner after byte-verified snapshots made with `tools/snapshot.ps1`. This is not a real-browser or GPU validation. Windows source/runtime and saved Takes were not accessed or changed. Existing corrupted workflows need separate recovery; model/VAE/LoRA reset reports and the separate Bypass issue remain unverified. No Release/tag or Registry publication. Fixed H3情報チェック cross-task handoff was not sent from this session.
+
 ## Review boundary repair — CPU validated, live 3x5 pending (2026-09-08)
 
 - The latest actual Review Queue did not generate Chunk 1: backend history proved it reused all three saved chunks and returned the prior `complete` revision. The previous mode-selection presentation repair therefore did not satisfy the user's acceptance condition and is superseded by this entry.

@@ -2309,6 +2309,7 @@ function configureProductionReviewUx(node) {
                 type: "h3_continuum_take_history",
                 name: TAKE_STATUS_WIDGET,
                 value: "No Render History yet",
+                serialize: false,
                 options: { serialize: false },
                 [PRODUCTION_TRANSIENT_WIDGET]: true,
                 draw(ctx, _node, width, y, height) {

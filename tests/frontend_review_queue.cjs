@@ -371,6 +371,75 @@ await test('same completed revision reuse exits setup without new Sampling',asyn
  assert(!n.__h3ContinuumModeSetup);assert(e.visible(n,'Try this chunk again'));assert(e.visible(n,'Start again from Chunk 1'));
  assert(!e.visible(n,'Use it and continue'));assert.equal(e.submissions.length,1);
 });
+await test('Issue 20 store persistence excludes transient UI across reloads',async e=>{
+ // Model the compact store serializer, which does NOT call node.serialize().
+ // The flag contract is from ComfyUI_frontend 77bdc5d LGraphNode.ts.
+ // Real Continuum UI creation/refresh runs through the existing environment.
+ const n=e.makeNode();await e.load(n,null);
+ const persistent=()=>n.widgets.filter(w=>!w.__h3ContinuumProductionTransient);
+ const values=()=>persistent().map(w=>structuredClone(w.value));
+ const storeSave=()=>{
+  const widgets=n.widgets.filter(w=>w.serialize!==false);
+  return {widgets_values:widgets.map(w=>structuredClone(w.value)),
+   widgets_values_named:Object.fromEntries(widgets.map(w=>[w.name,structuredClone(w.value)]))};
+ };
+ // Array-only projection of Core's forceInput migration in litegraphUtil.ts.
+ // A leaked history value makes 30 values look like a 31-value legacy payload.
+ const migrate=(widgets,saved)=>{
+  const defs=[{name:'sequence_prompt',forceInput:true},
+   ...persistent().filter(w=>w.name!=='control_after_generate')
+    .map(w=>({name:w.name,control_after_generate:w.name==='base_seed'}))];
+  const names=new Set(widgets.map(w=>w.name));
+  const skipped=new Set(widgets.filter(w=>w.serialize===false).map(w=>w.name));
+  const mask=defs.filter(d=>names.has(d.name)||d.forceInput).flatMap(d=>
+   skipped.has(d.name)?[]:d.control_after_generate?[!!d.forceInput,false]:[!!d.forceInput]);
+  const count=widgets.filter(w=>w.serialize!==false).length;
+  if(!mask.includes(true)&&saved.length===count)return saved;
+  const compacted=saved.filter((_,i)=>widgets[i]?.serialize!==false);
+  const aligned=compacted.length===mask.length?compacted:saved.length===mask.length?saved:undefined;
+  return aligned?aligned.filter((_,i)=>!mask[i]):saved;
+ };
+ const verify=async()=>{
+  const expected=values();assert.equal(expected.length,30);
+  const saved=storeSave();
+  assert.equal(saved.widgets_values.length,30,'UI-only history leaked into workflow persistence');
+  assert.deepEqual(saved.widgets_values,expected);
+  assert.deepEqual(n.serialize().widgets_values,expected);
+  assert.deepEqual(Object.keys(saved.widgets_values_named),persistent().map(w=>w.name));
+  for(const w of n.widgets.filter(w=>w.__h3ContinuumProductionTransient)){
+   assert.equal(w.serialize,false,`${w.name}: workflow exclusion`);
+   assert.equal(w.options?.serialize,false,`${w.name}: API exclusion`);
+  }
+  const apiBefore=await e.inputs(n);
+  assert(!Object.hasOwn(apiBefore,'Render History / Takes'));
+  for(const named of [false,true]){
+   for(let i=0;i<3;i++){
+    const data=JSON.parse(JSON.stringify(storeSave()));
+    const canonical=persistent();
+    const migrated=migrate(canonical,data.widgets_values);
+    assert.deepEqual(migrated,expected);
+    if(named){
+     for(const w of canonical)w.value=structuredClone(data.widgets_values_named[w.name]);
+    }else n.configure({widgets_values:migrated});
+    e.f.configureNode(n);
+    assert.deepEqual(values(),expected);
+    assert.equal(e.w(n,'Prompt Format').value,e.w(n,'prompt_mode').value);
+    assert.equal(e.w(n,'Height').value,e.w(n,'height').value);
+   }
+  }
+  assert.deepEqual(await e.inputs(n),apiBefore);
+ };
+ // Empty history, ordinary settings, expanded controls, Review and completion.
+ e.w(n,'Chunks').callback(6);e.w(n,'Seconds per Chunk').callback(2.5);
+ e.w(n,'Width').callback(640);e.w(n,'Height').callback(768);
+ await verify();
+ e.w(n,'Advanced Settings').callback();await verify();
+ e.w(n,'generation_mode').value='Review Each Chunk';await e.load(n,project(1,6));
+ await verify();e.w(n,'Render History').callback();await verify();
+ e.w(n,'Back to Settings').callback();await verify();
+ e.w(n,'Return to Review').callback();await verify();
+ await e.load(n,project(6,6,'complete'));await verify();
+});
 await test('mode policy and transient UI serialization remain stable',async e=>{
  const n=e.makeNode();e.w(n,'run_storage').value='Off';e.w(n,'Run').callback('Review Each Chunk');
  assert.equal(e.w(n,'run_storage').value,'Save + Auto Resume');e.w(n,'Run').callback('Generate Full Video');
