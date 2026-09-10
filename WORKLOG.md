@@ -1843,3 +1843,8 @@ D:\Codex\_snapshots\ComfyUI-H3-Continuum\pre-rollback-after-00038-fail-20260821_
 
 - Replaced repository-root `H3-Continuum-Skill-v1.zip` with the user-supplied updated prompt-guide package. Published ZIP SHA-256: `DDE84DF88640B573031591F49F09A1BEB4DEE4F5199E7143F51BB650637F8D1D`.
 - The existing English and Japanese README download links remain valid because the stable repository filename is unchanged. Package validation confirmed seven file entries and `write-continuum-h3-prompts/SKILL.md`; runtime code and workflows were not changed.
+
+## Prompt skill explicit boundary opener update — GitHub (2026-09-11)
+
+- Repacked repository-root `H3-Continuum-Skill-v1.zip` from the validated installed `write-continuum-h3-prompts` skill after merging the preferred Chunk 2+ body opener `Continuation of Chunk N.`. Updated `SKILL.md`, `references/continuity.md`, and `references/examples.md`; the rule remains a prompt-level mitigation candidate rather than a sampler fix or quality guarantee.
+- Published package SHA-256: `7895D3E0C638D1D87E99F67EED13C04B85F5F8B76598C13EE9C48A01E707D808`. ZIP signature `504B0304`, seven file entries, six skill files, required `SKILL.md`, and byte-level equality of all packaged skill files to the installed source were verified. Existing English and Japanese README links remain unchanged and valid; runtime code and workflows were not changed.
