@@ -1,0 +1,36 @@
+name: Issue20 source snapshot
+on:
+  push:
+    branches: [automation/issue-20-persistence-20260911]
+    paths: [.github/workflows/issue20-export.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: bd12073c4322a88ce666fe062b7bb265f5de131a
+          persist-credentials: false
+      - name: Check clean source and snapshot before changes
+        shell: pwsh
+        run: |
+          if ((git status --porcelain).Length -gt 0) { throw 'Source is not clean' }
+          $snapshot = & ./tools/snapshot.ps1 -Source $PWD -SnapshotRoot "$env:RUNNER_TEMP/issue20-snapshots" -Label pre-issue20
+          $files = Get-ChildItem -LiteralPath $snapshot.Snapshot -Recurse -Force -File
+          foreach ($file in $files) {
+            $relative = [IO.Path]::GetRelativePath($snapshot.Snapshot, $file.FullName)
+            $original = Join-Path $PWD $relative
+            if ((Get-FileHash -LiteralPath $file.FullName).Hash -ne (Get-FileHash -LiteralPath $original).Hash) { throw "Snapshot mismatch: $relative" }
+          }
+          Write-Output "Verified snapshot: $($files.Count) files; hash mismatches 0"
+          "SNAPSHOT_PATH=$($snapshot.Snapshot)" >> $env:GITHUB_ENV
+      - name: Pack source snapshot
+        run: tar -czf "$RUNNER_TEMP/issue20-base.tar.gz" -C "$SNAPSHOT_PATH" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: issue20-pinned-base
+          path: ${{ runner.temp }}/issue20-base.tar.gz
+          retention-days: 7
