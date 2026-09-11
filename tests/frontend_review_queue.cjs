@@ -52,10 +52,10 @@ function environment() {
     .replace(/import \{ app \} from "\.\.\/\.\.\/scripts\/app.js";/,'')
     .replace(/import \{ api \} from "\.\.\/\.\.\/scripts\/api.js";/,'')
     .replace(/import \{ normalizeReferenceAudioLabels \} from "\.\/reference_audio_ui.js";/,'function normalizeReferenceAudioLabels() {}');
-  vm.runInNewContext(src+`\nglobalThis.testFns={configureNode,loadTakeHistory,prepareReviewQueueIntent,takeCatalog,selectTakeOffset,selectTakeAction,reviewStatus,reviewSettingsChanged,synchronizeReviewQueue};`,sandbox);
+  vm.runInNewContext(src+`\nglobalThis.testFns={configureNode,configureNodeAfterSetup,moveFacadeWidgetsToFront,moveNamedWidgetsToFront,loadTakeHistory,prepareReviewQueueIntent,takeCatalog,selectTakeOffset,selectTakeAction,reviewStatus,reviewSettingsChanged,synchronizeReviewQueue};`,sandbox);
   app.extension.setup();
   const f=sandbox.testFns;
-  function makeNode(id=312,run='fixture'){
+  function makeNode(id=312,run='fixture',beforeConfigure=null){
     const v={prompt_mode:'Auto',chunks:3,chunk_seconds:5,aspect:'Auto from First Image',
       preset:'Draft — 0.30 MP',custom_mp:.3,continuity:'Balanced — 22 frames',base_seed:123,
       control_after_generate:'fixed',audio_continuity:true,continuation_backend:'Standard',
@@ -73,7 +73,7 @@ function environment() {
       serialize(){return {widgets_values:this.widgets.map(w=>w.value)};},
       configure(info){info.widgets_values.forEach((v,i)=>{if(this.widgets[i])this.widgets[i].value=v;});}
     };
-    graph._nodes.push(n);f.configureNode(n);return n;
+    graph._nodes.push(n);beforeConfigure?.(n);f.configureNode(n);return n;
   }
   const w=(n,name)=>n.widgets.find(w=>w.name===name);
   async function inputs(n){
@@ -95,7 +95,9 @@ function environment() {
   };
 }
 async function test(name,body){const e=environment();try{await body(e);results.push({name,pass:true});}catch(err){results.push({name,pass:false,error:err.stack});}finally{e.close();}}
-(async()=>{
+if (require.main !== module) {
+ module.exports = { environment, project };
+} else (async()=>{
 await test('no sampler executed: accepted prompt and committed readback open Review',async e=>{
  const n=e.makeNode();await e.load(n,null);e.w(n,'Run').callback('Review Each Chunk');
  const q=await e.queue(n);e.setSaved(project(1));await e.emit('execution_success',{prompt_id:q.prompt_id});

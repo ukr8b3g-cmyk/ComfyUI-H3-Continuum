@@ -411,7 +411,18 @@ function installProductionSerializationGuard(node) {
     const originalSerialize = node.serialize;
     if (typeof originalSerialize === "function") {
         node.serialize = function(...args) {
-            return withoutTransientWidgets(originalSerialize, this, args);
+            // Serialize is also used by tab-state/change tracking. Never splice
+            // the live (possibly reactive) widget array during that read path.
+            const widgets = this.widgets;
+            const result = originalSerialize.apply(this, args);
+            if (!Array.isArray(widgets) || !Array.isArray(result?.widgets_values)) return result;
+            const persistent = widgets.map((widget, index) => ({ widget, index }))
+                .filter(({ widget }) => !widget?.[PRODUCTION_TRANSIENT_WIDGET]);
+            const values = result.widgets_values;
+            // Core's indexed serializer leaves slots for excluded widgets;
+            // other frontend paths already return a compact positional array.
+            if (persistent.length === widgets.length || values.length <= persistent.length) return result;
+            return { ...result, widgets_values: persistent.map(({ index }) => values[index]) };
         };
     }
     const originalConfigure = node.configure;
@@ -944,7 +955,11 @@ function moveFacadeWidgetsToFront(node, orderedNames) {
     );
     const ordered = orderedNames.map((name) => byName.get(name)).filter(Boolean);
     const remainder = node.widgets.filter((widget) => !widget[FACADE_TRANSIENT_WIDGET]);
-    node.widgets.splice(0, node.widgets.length, ...ordered, ...remainder);
+    const next = [...ordered, ...remainder];
+    if (next.length !== node.widgets.length
+        || next.some((widget, index) => widget !== node.widgets[index])) {
+        node.widgets.splice(0, node.widgets.length, ...next);
+    }
 }
 
 function configureDurationInputSlots(node) {
@@ -983,7 +998,11 @@ function moveNamedWidgetsToFront(node, orderedNames) {
     const ordered = orderedNames.map((name) => byName.get(name)).filter(Boolean);
     const selected = new Set(ordered);
     const remainder = node.widgets.filter((widget) => !selected.has(widget));
-    node.widgets.splice(0, node.widgets.length, ...ordered, ...remainder);
+    const next = [...ordered, ...remainder];
+    if (next.length !== node.widgets.length
+        || next.some((widget, index) => widget !== node.widgets[index])) {
+        node.widgets.splice(0, node.widgets.length, ...next);
+    }
 }
 
 function configureIntuitiveV38Ux(node) {
@@ -2767,8 +2786,10 @@ function configureResolutionPresetWidgets(node) {
     const firstImageGeometry = () => {
         const input = node.inputs?.find((item) => item.name === "first_frame");
         if (input?.link == null) return null;
-        const link = app.graph?.links?.[input.link];
-        const source = app.graph?.getNodeById?.(link?.origin_id);
+        // A deferred refresh may outlive the active workflow tab.
+        const graph = node.graph || app.graph;
+        const link = graph?.links?.[input.link];
+        const source = graph?.getNodeById?.(link?.origin_id);
         if (!source || Number(source.mode) === 4) return null;
         const image = source.imgs?.[0];
         const width = Number(image?.naturalWidth || image?.width || 0);
@@ -3092,9 +3113,20 @@ function configureNode(node) {
     return projectWidget;
 }
 
+const deferredNodeSetups = new WeakMap();
+
 function configureNodeAfterSetup(node) {
     configureNode(node);
-    const configureDeferred = () => configureNode(node);
+    const graph = node.graph || app.graph;
+    const token = {};
+    deferredNodeSetups.set(node, token);
+    const configureDeferred = () => {
+        // Old nodes can share IDs with a newly restored workflow. Do not let
+        // their pending setup mutate the restored graph or detached widgets.
+        if (deferredNodeSetups.get(node) !== token || node.graph !== graph) return;
+        if (graph?.getNodeById?.(node.id) !== node) return;
+        configureNode(node);
+    };
     setTimeout(configureDeferred, 0);
     setTimeout(configureDeferred, 100);
 }

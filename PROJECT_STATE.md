@@ -1,5 +1,12 @@
 # Project State
 
+## Issue #20 persistence candidate (2026-09-11; test branch only)
+
+- User authorized `test/issue-20-workflow-persistence`, based on `bd12073c4322a88ce666fe062b7bb265f5de131a`. The maintainer still cannot reproduce the reporter's complete Model/VAE/LoRA reset; this is a candidate, not a confirmed resolution. Main, tags/releases, installed Windows runtimes and saved Takes are untouched.
+- Runtime scope is only `web/project_id.js`: serialize without removing/reinserting live widgets, skip unchanged widget reorder operations, discard obsolete/detached deferred setup, and resolve First Image geometry using the owning graph. Backend schema/order, Sampling, Review Queue, Run Storage, Audio and public workflow bytes are unchanged. Canvas repaint is retained; `setDirtyCanvas` alone is not treated as evidence of a persistence defect.
+- Existing Node fixture 46/46 PASS. Additional candidate scenarios 9/9 PASS; 7 fail against unmodified base runtime. Tests are modeled lifecycle/serializer tests, not real-browser reproduction. Full CPU comparison: baseline 1121 passed / 20 failed / 3 skipped; candidate 1122 passed / 20 failed / 3 skipped. Failure identities are unchanged (existing missing workflow assets); no new CPU failures.
+- Before source edits, `tools/snapshot.ps1` created a count/hash-verified pinned-source snapshot in the isolated runner. Fixed H3情報チェック task was unavailable from this session; its review and reporter browser verification remain pending. Do not promote to main on these modeled tests alone. See `docs/ISSUE20_TEST_BRANCH.md` and the validation run artifacts.
+
 ## Issue #20 workflow persistence hotfix (2026-09-10)
 
 - User authorized repair and publication to main from pinned 6b453fe. The only runtime change is `serialize: false` on the read-only Render History widget in `web/project_id.js`; existing `options.serialize: false` is retained. Backend widget order, Sampling, Audio, Run Storage, public workflow/ZIP bytes, and Easy Loader Bypass behavior are unchanged.
