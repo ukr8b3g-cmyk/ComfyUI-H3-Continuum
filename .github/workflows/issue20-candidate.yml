@@ -1,0 +1,180 @@
+name: Issue20 candidate validation
+on:
+  push:
+    branches: [automation/issue-20-persistence-20260911]
+    paths: [.github/workflows/issue20-candidate.yml]
+permissions:
+  contents: read
+concurrency:
+  group: issue20-candidate-publisher
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      OMP_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: helpers
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: bd12073c4322a88ce666fe062b7bb265f5de131a
+          path: candidate
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: bd12073c4322a88ce666fe062b7bb265f5de131a
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Snapshot and verify the clean pinned source
+        working-directory: candidate
+        shell: pwsh
+        run: |
+          if ((git status --porcelain).Length -gt 0) { throw 'Uncommitted source changes' }
+          $snap = & ./tools/snapshot.ps1 -Source $PWD -SnapshotRoot "$env:RUNNER_TEMP/issue20-snapshots" -Label pre-candidate
+          $files = Get-ChildItem -LiteralPath $snap.Snapshot -Recurse -Force -File
+          foreach ($file in $files) {
+            $original = Join-Path $PWD ([IO.Path]::GetRelativePath($snap.Snapshot, $file.FullName))
+            if ((Get-FileHash $file.FullName).Hash -ne (Get-FileHash $original).Hash) { throw "Snapshot mismatch: $original" }
+          }
+          Write-Output "SNAPSHOT PASS: $($files.Count) files; zero hash mismatches"
+      - name: Apply byte-checked candidate
+        working-directory: candidate
+        run: python ../helpers/.github/issue20_stage.py apply
+      - name: Frontend red/green and existing regression gates
+        working-directory: candidate
+        shell: bash
+        run: |
+          E="$RUNNER_TEMP/issue20-evidence"
+          node --input-type=module --check < web/project_id.js
+          node --check tests/frontend_review_queue.cjs
+          node --check tests/frontend_issue20_persistence.cjs
+          set +e
+          H3_TEST_ROOT="$GITHUB_WORKSPACE/baseline" node tests/frontend_issue20_persistence.cjs > "$E/issue20-red.json"
+          RED=$?
+          set -e
+          test "$RED" -eq 1
+          node tests/frontend_issue20_persistence.cjs > "$E/issue20-green.json"
+          node tests/frontend_review_queue.cjs > "$E/existing-frontend.json"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          e=Path(os.environ['RUNNER_TEMP'])/'issue20-evidence'
+          for name, count, failures in [('issue20-red',9,7),('issue20-green',9,0),('existing-frontend',46,0)]:
+              r=json.loads((e/(name+'.json')).read_text())
+              assert len(r)==count and sum(not x['pass'] for x in r)==failures, r
+              print(name, 'total=',len(r),'failed=',failures)
+          PY
+      - name: Install CPU test dependencies
+        working-directory: candidate
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -r requirements.txt numpy safetensors pytest psutil opencv-python-headless Pillow
+      - name: Compare full CPU suites without hiding existing failures
+        shell: bash
+        run: |
+          E="$RUNNER_TEMP/issue20-evidence"
+          set +e
+          (cd baseline && python -m pytest -q -p no:cacheprovider --junitxml="$E/base.xml" > "$E/base.log" 2>&1)
+          BASE_RESULT=$?
+          (cd candidate && python -m pytest -q -p no:cacheprovider --junitxml="$E/candidate.xml" > "$E/candidate.log" 2>&1)
+          CANDIDATE_RESULT=$?
+          set -e
+          echo "Baseline pytest exit: $BASE_RESULT; candidate pytest exit: $CANDIDATE_RESULT"
+          test "$BASE_RESULT" -le 1
+          test "$CANDIDATE_RESULT" -le 1
+          tail -n 24 "$E/base.log"
+          tail -n 24 "$E/candidate.log"
+      - name: Snapshot before status/document updates
+        working-directory: candidate
+        shell: pwsh
+        run: |
+          $snap = & ./tools/snapshot.ps1 -Source $PWD -SnapshotRoot "$env:RUNNER_TEMP/issue20-snapshots" -Label pre-report
+          $files = Get-ChildItem -LiteralPath $snap.Snapshot -Recurse -Force -File
+          foreach ($file in $files) {
+            $original = Join-Path $PWD ([IO.Path]::GetRelativePath($snap.Snapshot, $file.FullName))
+            if ((Get-FileHash $file.FullName).Hash -ne (Get-FileHash $original).Hash) { throw "Snapshot mismatch: $original" }
+          }
+          Write-Output "REPORT SNAPSHOT PASS: $($files.Count) files; zero hash mismatches"
+      - name: Finalize evidence and narrow patch
+        working-directory: candidate
+        run: |
+          python ../helpers/.github/issue20_stage.py finalize
+          python -m compileall -q .
+          git add -N tests/frontend_issue20_persistence.cjs tests/test_issue20_persistence.py docs/ISSUE20_TEST_BRANCH.md
+          git diff --check
+          git diff --stat
+          git diff --binary --full-index > "$RUNNER_TEMP/issue20-evidence/candidate.patch"
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          allowed={'web/project_id.js','tests/frontend_review_queue.cjs','tests/frontend_issue20_persistence.cjs','tests/test_issue20_persistence.py','docs/ISSUE20_TEST_BRANCH.md','PROJECT_STATE.md','WORKLOG.md','MANIFEST.sha256','REGISTRY_MANIFEST.sha256'}
+          actual=set(subprocess.check_output(['git','diff','--name-only'],text=True).splitlines())
+          assert actual==allowed,(actual,allowed)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue20-candidate-evidence
+          path: ${{ runner.temp }}/issue20-evidence
+          retention-days: 14
+  publish:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: bd12073c4322a88ce666fe062b7bb265f5de131a
+      - uses: actions/download-artifact@v4
+        with:
+          name: issue20-candidate-evidence
+          path: ${{ runner.temp }}/issue20-validated
+      - name: Snapshot clean publication source
+        shell: pwsh
+        run: |
+          if ((git status --porcelain).Length -gt 0) { throw 'Uncommitted source changes' }
+          $snap = & ./tools/snapshot.ps1 -Source $PWD -SnapshotRoot "$env:RUNNER_TEMP/issue20-snapshots" -Label pre-publish
+          foreach ($file in (Get-ChildItem -LiteralPath $snap.Snapshot -Recurse -Force -File)) {
+            $original = Join-Path $PWD ([IO.Path]::GetRelativePath($snap.Snapshot, $file.FullName))
+            if ((Get-FileHash $file.FullName).Hash -ne (Get-FileHash $original).Hash) { throw "Snapshot mismatch: $original" }
+          }
+          Write-Output "Publication snapshot verified: $($snap.Files) files"
+      - name: Commit only tested files to the test branch
+        shell: bash
+        run: |
+          BASE=bd12073c4322a88ce666fe062b7bb265f5de131a
+          BRANCH=test/issue-20-workflow-persistence
+          REMOTE=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          test "$REMOTE" = "$BASE"
+          git apply --check "$RUNNER_TEMP/issue20-validated/candidate.patch"
+          git apply "$RUNNER_TEMP/issue20-validated/candidate.patch"
+          git diff --check
+          git add web/project_id.js tests/frontend_review_queue.cjs tests/frontend_issue20_persistence.cjs tests/test_issue20_persistence.py docs/ISSUE20_TEST_BRANCH.md PROJECT_STATE.md WORKLOG.md MANIFEST.sha256 REGISTRY_MANIFEST.sha256
+          python - <<'PY'
+          import hashlib,subprocess
+          from pathlib import Path
+          allowed={'web/project_id.js','tests/frontend_review_queue.cjs','tests/frontend_issue20_persistence.cjs','tests/test_issue20_persistence.py','docs/ISSUE20_TEST_BRANCH.md','PROJECT_STATE.md','WORKLOG.md','MANIFEST.sha256','REGISTRY_MANIFEST.sha256'}
+          actual=set(subprocess.check_output(['git','diff','--cached','--name-only'],text=True).splitlines())
+          assert actual==allowed,actual
+          assert hashlib.sha256(Path('web/project_id.js').read_bytes()).hexdigest()=='dcef8db261339ff08568512dcb4ccb80834ef5e4af073ab45909fc82ebcb2a0a'
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: isolate Issue 20 workflow serialization and deferred setup (test candidate)'
+          git push origin "HEAD:refs/heads/$BRANCH"
+          echo "Published candidate: $(git rev-parse HEAD)"
+          echo "TEST BRANCH ONLY: $BRANCH"
