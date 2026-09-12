@@ -16,6 +16,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -r requirements.txt numpy safetensors pytest psutil opencv-python-headless Pillow
+
       - name: Snapshot authoritative checkout
         shell: pwsh
         run: ./tools/snapshot.ps1 -Source $PWD -SnapshotRoot /tmp/h3-continuum-snapshots -Label pre-skill-timeline-syntax
@@ -26,7 +37,7 @@ jobs:
         run: python .github/skill_timeline_syntax_update.py
 
       - name: Validate current prompt parser baseline
-        run: python -m pytest tests/test_v2_prompts.py -q
+        run: python -m pytest tests/test_v2_prompts.py -q -p no:cacheprovider
 
       - name: Remove helpers and commit validated result
         shell: bash
