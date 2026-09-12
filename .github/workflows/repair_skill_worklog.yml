@@ -1,0 +1,79 @@
+name: Repair skill worklog append
+
+on:
+  push:
+    branches:
+      - automation/skill-timeline-syntax-20260912
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Snapshot authoritative checkout
+        shell: pwsh
+        run: ./tools/snapshot.ps1 -Source $PWD -SnapshotRoot /tmp/h3-continuum-snapshots -Label pre-worklog-repair
+
+      - name: Restore main WORKLOG and append one entry byte-preserving
+        shell: bash
+        run: |
+          git show origin/main:WORKLOG.md > WORKLOG.md
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          path = Path('WORKLOG.md')
+          raw = path.read_bytes()
+          nl = b'\r\n' if b'\r\n' in raw else b'\n'
+          raw = raw.rstrip(b'\r\n')
+          lines = [
+              '',
+              '',
+              '## Prompt skill Timeline syntax hardening — GitHub (2026-09-12)',
+              '',
+              '- Updated repository-root `H3-Continuum-Skill-v1.zip` without changing runtime code or workflows. Promoted the standalone Timeline-header rule into `SKILL.md`, refreshed `references/continuum-contract.md` to the current V3.8 parser baseline `bd12073c4322a88ce666fe062b7bb265f5de131a`, added simple `3x5`, `3x10`, and `2x15` Timeline examples plus inline-input normalization to `references/examples.md`, and added the same critical syntax note to `README_JA.md`.',
+              '- Validation: `tools/snapshot.ps1` completed before modification; ZIP retained exactly seven entries and passed ZIP integrity validation; targeted `tests/test_v2_prompts.py` passed 52/52. New ZIP SHA-256: `144324850D4BA086938DA5F4ED7B02FF0668DEC554F092695328240E43FEC3EC`. This is documentation/prompt-skill only; Sampling, Run Storage, public node schema, workflows, and runtime tensors are unchanged. H3情報チェック handoff remains pending because that cross-task destination is unavailable from this GitHub Actions job.',
+              '',
+          ]
+          path.write_bytes(raw + nl.join(s.encode('utf-8') for s in lines))
+
+          z = Path('H3-Continuum-Skill-v1.zip')
+          digest = hashlib.sha256(z.read_bytes()).hexdigest().upper()
+          expected = '144324850D4BA086938DA5F4ED7B02FF0668DEC554F092695328240E43FEC3EC'
+          if digest != expected:
+              raise SystemExit(f'ZIP changed unexpectedly: {digest}')
+          print('WORKLOG newline:', 'CRLF' if nl == b'\r\n' else 'LF')
+          print('ZIP SHA-256:', digest)
+          PY
+
+      - name: Verify diff is narrow
+        shell: bash
+        run: |
+          git diff --numstat origin/main -- WORKLOG.md H3-Continuum-Skill-v1.zip
+          python - <<'PY'
+          import subprocess
+          out = subprocess.check_output(['git','diff','--numstat','origin/main','--','WORKLOG.md'], text=True).strip()
+          if not out:
+              raise SystemExit('WORKLOG has no diff')
+          adds, dels, _ = out.split('\t')
+          if adds == '-' or dels == '-' or int(adds) > 10 or int(dels) > 2:
+              raise SystemExit(f'WORKLOG diff too large: {out}')
+          print('Narrow WORKLOG diff:', out)
+          PY
+
+      - name: Remove helper and commit repair
+        shell: bash
+        run: |
+          rm -f .github/workflows/repair_skill_worklog.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --stat
+          git commit -m "docs: preserve worklog formatting for skill update"
+          git push origin HEAD:automation/skill-timeline-syntax-20260912
