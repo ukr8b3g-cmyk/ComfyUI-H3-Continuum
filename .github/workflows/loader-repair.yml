@@ -11,17 +11,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Verify repair transport and check out authoritative baseline
+      - name: Preserve follow-up script and check out tested main
         run: |
-          cp .github/loader-repair.py "$RUNNER_TEMP/loader-repair.py"
-          cp -R .github/loader-payload "$RUNNER_TEMP/loader-payload"
-          python "$RUNNER_TEMP/loader-repair.py" --check
-          git checkout --detach 3d7c2fd6928a545b12b84968b09dc455e7f9da65
+          cp .github/loader-followup.py "$RUNNER_TEMP/loader-followup.py"
+          git checkout --detach f8eb40d8b44e54386bcf3c5197c48f0f71daf6df
           test -z "$(git status --porcelain)"
-      - name: Snapshot before changes
+      - name: Snapshot before follow-up changes
         shell: pwsh
         run: |
-          ./tools/snapshot.ps1 -Source $PWD -SnapshotRoot "$env:RUNNER_TEMP/loader-snapshots" -Label before-loader-repair
+          ./tools/snapshot.ps1 -Source $PWD -SnapshotRoot "$env:RUNNER_TEMP/loader-snapshots" -Label before-loader-followup
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -30,13 +28,13 @@ jobs:
         run: |
           python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
           python -m pip install -r requirements.txt numpy safetensors pytest psutil opencv-python-headless Pillow
-      - name: Apply scoped repair and run regression gates
-        run: python "$RUNNER_TEMP/loader-repair.py"
-      - name: Commit tested result to a review branch only
+      - name: Update approved workflow fingerprint and validate full suite
+        run: python "$RUNNER_TEMP/loader-followup.py"
+      - name: Commit tested follow-up to a review branch only
         run: |
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m "fix: preserve loader state and migrate audio/video workflow inputs" -m "Refs #23. Keep Image Enable, delegate Core mode accessors, and remove widget-array mutation. Use Core Audio and Core Video with an Enable-free FPS adapter. Legacy loader IDs remain compatible. Focused CPU tests pass; Windows/browser acceptance remains pending."
-          git push origin "HEAD:refs/heads/codex/loader-repair-verified-${{ github.run_id }}"
+          git commit -m "test: synchronize approved loader workflow integration fingerprint" -m "Preserve all Decode Cache assertions and record complete CPU/Node suite results. No additional runtime or workflow changes."
+          git push origin "HEAD:refs/heads/codex/loader-followup-verified-${{ github.run_id }}"
           echo "VERIFIED_COMMIT=$(git rev-parse HEAD)"
