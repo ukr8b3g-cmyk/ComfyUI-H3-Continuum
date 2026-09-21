@@ -1,0 +1,40 @@
+name: loader-repair-validation
+on:
+  push:
+    branches: [codex/loader-repair-20260921]
+permissions:
+  contents: write
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Preserve repair script and check out authoritative baseline
+        run: |
+          cp .github/loader-repair.py "$RUNNER_TEMP/loader-repair.py"
+          git checkout --detach 3d7c2fd6928a545b12b84968b09dc455e7f9da65
+          test -z "$(git status --porcelain)"
+      - name: Snapshot before changes
+        shell: pwsh
+        run: |
+          ./tools/snapshot.ps1 -Source $PWD -SnapshotRoot "$env:RUNNER_TEMP/loader-snapshots" -Label before-loader-repair
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install existing test dependencies
+        run: |
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install -r requirements.txt numpy safetensors pytest psutil opencv-python-headless Pillow
+      - name: Apply scoped repair and run regression gates
+        run: python "$RUNNER_TEMP/loader-repair.py"
+      - name: Commit tested result to a review branch only
+        run: |
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "fix: preserve loader state and migrate audio/video workflow inputs" -m "Refs #23. Keep Image Enable, delegate Core mode accessors, and remove widget-array mutation. Use Core Audio and Core Video with an Enable-free FPS adapter. Legacy loader IDs remain compatible. Focused CPU tests pass; Windows/browser acceptance remains pending."
+          git push origin "HEAD:refs/heads/codex/loader-repair-verified-${{ github.run_id }}"
+          echo "VERIFIED_COMMIT=$(git rev-parse HEAD)"
