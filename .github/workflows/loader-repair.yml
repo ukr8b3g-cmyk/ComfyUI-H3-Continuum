@@ -11,9 +11,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Preserve repair script and check out authoritative baseline
+      - name: Verify repair transport and check out authoritative baseline
         run: |
           cp .github/loader-repair.py "$RUNNER_TEMP/loader-repair.py"
+          cp -R .github/loader-payload "$RUNNER_TEMP/loader-payload"
+          python "$RUNNER_TEMP/loader-repair.py" --check
           git checkout --detach 3d7c2fd6928a545b12b84968b09dc455e7f9da65
           test -z "$(git status --porcelain)"
       - name: Snapshot before changes
