@@ -1,3 +1,49 @@
+ComfyUI-H3-Continuum 3.9.1 / V3.9安定化修正・V3.8X2併存
+パッケージmetadata: 3.9.1（2026-10-04）
+
+現行パッケージ:
+- 公開登録は12ノード。引き続きSampler V3.9／Reference Images V3.9を使う。
+- V3.8X2は別Workflowとして維持。旧Run／TakeやReference配線を自動移行しない。
+- Second Passの音声のみ／複合キーフレーム、途中Reviewの条件・Reference継承を修正。
+- Sampling Contract v6／Graph Contract v4でSamplerやCFG／wrapperも照合する。
+- Review Driving Audioを元physical groupの自然時間から一度だけ切り出す。
+- Core標準resampleを優先。同一VAE内部の重みを直接変える場合はキャッシュの
+  明示的クリア、またはVAE再読込が必要。
+- 公開Node ID、widget順、公式Workflow、Run Storage v3、State／Session形式を維持。
+- Experimental LoRA Plan／V4.0は含まない。
+
+更新時の注意:
+ComfyUIを再起動し、ブラウザーも更新する。旧v5 Takeと履歴は読めて削除されないが、
+新しいv6生成の前半には再利用できない。新規Full Video、または
+「Start again from Chunk 1」で開始する。
+
+検証と公開:
+- 実Coreの全CPU: 1,696成功／1スキップ／失敗0。CUDA初期化0回。
+- 実CoreのRelease準備確認: 66成功。文書・Manifest確認: 9成功。
+- 公開CI: 1,676成功／21スキップ／失敗0。実Coreが必要な18件と、既存環境制約3件。
+  実Coreの1696件をCIでも実行したという意味ではない。件数を単純合算しない。
+- 対象GPUの途中Review／Chunk単独／完了経路と生成・Take再利用確認は成功。
+- ブラウザー受入と無改変公式Workflow全体の受入は別途必要。万能な画質・速度・
+  アクセラレータ互換性のPASSは宣言しない。
+- GitHub Release v3.9.1は公開済み。文書訂正はmainへの後続更新として扱い、
+  公開済みtagは保持する。Registry公開は別作業で、今回は未実施。
+- Manifestは開発429件／Registry payload 144件。任意LATENT拡大の問題はIssue #27。
+
+公式V3.9 Workflow:
+MiniMax_H3_Continuum_V39.json／同名ZIP。32ノード／39リンク。
+画像Loader 1～6は初期Bypass、7～9は必要に応じて追加する。Sequence Promptは空欄。
+初期設定はFirst Image＋Draft 0.30 MP、2×10秒、Generate Full Video。
+Queue前にモデル・画像・プロンプトを自分の素材へ設定する。Reference-onlyなら
+First ImageをOFFにしてManualへ切り替える。Workflow ZIPはノード本体の
+インストーラーではなく、モデル・素材も含まない。
+
+現行手順: README_JA.md、docs/VALIDATION_JA.md、PACKAGE_VALIDATION.txt。
+
+======================================================================
+以下は旧3.9.0および過去版の履歴。バージョン、公開状態、検証条件は当時の記録であり、
+現在の3.9.1の導入案内・受入結果ではない。
+======================================================================
+
 ComfyUI-H3-Continuum 3.9.0 / V3.8X2併存
 パッケージmetadata: 3.9.0（mainソース。新しいGitHub Release／Registry公開は未実施。過去のReleaseは維持）
 

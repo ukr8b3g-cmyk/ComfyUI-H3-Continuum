@@ -1,3 +1,81 @@
+# H3 Continuum 3.9.1 — 検証手順と受入範囲
+
+現行版はパッケージ3.9.1、公開12ノードです。引き続きV3.9ノードを使用します。
+旧版の検証手順は末尾に履歴として残しています。
+
+## CPU・登録確認
+
+リポジトリのルートで、ComfyUIに使用しているPythonを指定して実行します。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/validate.ps1 `
+  -Python "path/to/ComfyUI/venv/Scripts/python.exe" `
+  -ComfyRoot "path/to/ComfyUI"
+```
+
+pytestが実Coreを必要とするケースまで実行したかは、結果のスキップ理由と
+使用したCore環境を確認してください。`-ComfyRoot`はruntime verifierへの指定で、
+この指定だけでpytestのCore import環境を設定するわけではありません。
+Coreがないstandalone環境では、実Core依存18件を明示的にスキップします。
+Core内部の依存エラーや計算エラーをスキップで隠す設計ではありません。
+
+記録済みの結果は環境別です。実Coreの全CPUは1,696成功・1スキップ、公開CIは
+1,676成功・21スキップです。CIの21件は実Core依存18件と既存環境制約3件です。
+詳細・対象コミットは[PACKAGE_VALIDATION.txt](../PACKAGE_VALIDATION.txt)を参照し、
+異なる環境の件数を単純合算しないでください。
+
+## 実ブラウザー受入
+
+生成中のワークフローを再起動・置換せず、実行中と待機中のキューが空の状態で
+検証用Workflowを使用します。元Workflowと採用済みTakeを先に保存してください。
+
+1. 実backendの`object_info`で公開12ノードの登録を確認します。
+2. V3.9公式Workflowを開き、モデル・素材・Promptを検証用に設定します。
+3. 別名保存→再読込→別Workflowタブへ移動→戻る、を実際の画面で確認します。
+4. 外部INTのWidth／Height接続、Reference割り当て、Decode Cache Helper設定が
+   保存・復元されていることを確認します。
+5. 保存済み履歴のReviewとTake選択が表示されることを確認します。
+6. Second Passの接続・設定が保存・復元されることを確認します。実際の生成完走、
+   条件継承、音声一致は次のGPU Gateで別途確認します。
+
+Canvasの表示だけ、API登録だけ、DOM代替のJSテストだけで、保存・再読込の
+実ブラウザーPASSとはしません。検証用Workflowの合格も、無改変公式Workflowの
+初期設定でのGPU受入とは区別します。
+
+## 修正対象のGPU Gate
+
+- R1／Review Second Pass: audio-only／mixed keyframes、partial prefix、
+  中央Chunk単独、complete sequenceを確認します。出力group自身のconditioning、
+  Referenceのlogical chunk対応、First Pass Audio passthroughを記録します。
+- R2: 同一v6条件は前半を再利用し、Sampler／CFG／wrapper等が異なる条件では
+  誤再利用しないことを確認します。旧v5履歴は読めてもv6へ継ぎ足しません。
+- R3: 識別できるDriving Audioで、元physical groupの自然時間に対応するPCMを
+  Exact ON／OFFとも一度だけ切り出すことを確認します。
+- 保存済みTakeのJSON／raw、動画と音声の尺、CUDA／OOM／NaN、残留キューも記録します。
+
+対象修正のGPU確認は記録済みですが、ブラウザー受入、無改変公式Workflow全体、
+全アクセラレータ構成や総合画質の受入まで済んだとは扱いません。
+任意LATENT拡大の二重輪郭は[Issue #27](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/issues/27)
+として分けて扱います。
+
+## 更新と旧Take
+
+更新後はComfyUIを再起動し、ブラウザーも更新してください。旧v5 Takeは保持・閲覧
+できますが、新しいv6生成の前半としては再利用できません。新規Full Video、または
+**Start again from Chunk 1**で開始します。旧manifestを新契約へ書き換えません。
+同一VAEオブジェクトの重みを直接変更した場合は、Reference Encode Cacheを
+明示的にクリアするか、VAEを再読込してください。
+
+GitHub ReleaseとRegistry公開は別作業です。公開済みv3.9.1 tagは保持し、後続の
+文書訂正はmainで参照してください。
+
+---
+
+## 履歴：V2専用の旧検証手順
+
+以下は当時の記録です。V1／V2ノード数、`strict_compatibility`、旧Session再開手順を
+3.9.1の現行仕様や受入結果として使用しないでください。
+
 # H3 Continuum Join 2.0 — 実機検証
 
 ## 1. インストール検査

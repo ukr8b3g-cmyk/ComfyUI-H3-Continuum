@@ -1,3 +1,65 @@
+ComfyUI-H3-Continuum 3.9.1 / V3.9 stability validation - 2026-10-04
+
+Current package metadata: 3.9.1. Public registration: twelve nodes.
+The V3.9 Sampler and Reference Images helper retain their public IDs and
+official workflows; V3.8X2 remains a separate workflow. LoRA Plan / V4.0 is
+not included. Run Storage v3 and State/Session formats are unchanged.
+
+Repair scope
+- Preserve audio-only/mixed Second Pass keyframes; spatially adapt video only.
+- Match partial/middle-chunk Review conditioning and References to the actual
+  output physical groups, retaining Terminal Merge groups as atomic units.
+- Use Sampling Contract v6 / Graph Contract v4 for Take compatibility,
+  including sampler closures and MODEL CFG/wrapper settings.
+- Crop Review Driving Audio once from the original physical-group time range.
+- Prefer Core audio resampling. Direct weight mutation inside the same VAE
+  object requires explicit Reference Encode Cache clearing or VAE reload.
+
+Recorded validation (separate environments; do not add these counts)
+- Full CPU with real ComfyUI Core: 1,696 passed / 1 skipped / 0 failed.
+  CUDA initialization attempts: zero.
+- Release preparation with real Core: 66 passed / 0 skipped / 0 failed.
+- Standalone dependency check: 48 passed / 18 skipped / 0 failed.
+- Release document/manifest checks: 9 passed / 0 failed.
+- GitHub Actions at release commit 94eaf70d674a58244e1cb139f021290d63fb2e6c:
+  1,676 passed / 21 skipped / 0 failed. Eighteen cases require real Core and
+  are explicitly skipped without it; three retain existing environment or
+  fixture limits. This is not 1,696 real-Core cases executed in CI.
+- Offline native PackedLayout, Fixed 3x5-second planning and twelve-node
+  registration passed.
+- Targeted GPU partial-prefix, single-middle-chunk and complete-sequence
+  Review Second Pass checks passed at 512x512 / 24 fps, including conditioning
+  inheritance, source-PCM alignment and saved Take/raw preservation.
+- Integrated generation and Take-reuse GPU checks passed for the repaired
+  runtime. These are targeted results, not universal quality/accelerator gates.
+
+Current manifests declare 429 development files and 144 Registry payload
+files. Hash integrity does not establish semantic freshness of every document.
+The official V3.9 workflow retains 32 nodes / 39 links, the original JSON
+bytes and matching workflow ZIP. Models/media are not included.
+
+Publication and remaining gates
+- GitHub Release v3.9.1 is published. Its tag remains fixed at the release
+  commit above; later documentation corrections are follow-up main updates.
+- Registry publication is separate and has not been performed for this patch.
+- Browser save/reload acceptance and full acceptance of the unchanged default
+  workflow remain separate gates; do not infer them from CPU or targeted GPU
+  results. Record the tested workflow and runtime when completing them.
+- Optional latent-upscale doubled outlines remain separate in Issue #27.
+
+Updating: restart ComfyUI and refresh the browser. Old v5 Takes/history remain
+readable and are not deleted or rewritten, but cannot supply prefixes to new
+v6 generation. Start a new Full Video or Start again from Chunk 1. Continue
+using the V3.9 nodes.
+
+See README.md, README_JA.md and docs/VALIDATION_JA.md for current instructions.
+
+======================================================================
+Historical V3.9.0 main-source record - 2026-09-29
+The original record below is retained as history. Its metadata, test counts,
+manifest counts and publication status do not describe package 3.9.1.
+======================================================================
+
 ComfyUI-H3-Continuum 3.9.0 / V3.9 main-source validation — 2026-09-29
 
 Status: MAIN SOURCE PUBLICATION. The ComfyUI_W worktree has 12 public node IDs: the

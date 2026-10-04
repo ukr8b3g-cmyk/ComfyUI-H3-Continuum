@@ -31,4 +31,4 @@ Run Storage v3 and State/Session formats are retained. Unknown upstream settings
 - Optional latent-upscale doubled outlines are tracked separately in [Issue #27](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/issues/27).
 - Versioned source downloads are listed in GitHub Releases. Registry publication is separate, and Release publication does not complete the pending acceptance gates.
 
-See README.md, README_JA.md and CHANGELOG.md for user instructions and repair details.
+See README.md, README_JA.md and CHANGELOG.md for user instructions and repair details. Current package records are in PACKAGE_VALIDATION.txt and PACKAGE_INFO_JA.txt; docs/VALIDATION_JA.md separates the current acceptance procedure from historical V2 instructions. Follow-up documentation corrections on main retain the published v3.9.1 tag.
