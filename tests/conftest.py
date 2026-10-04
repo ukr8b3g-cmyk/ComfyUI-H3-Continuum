@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import sys
 from pathlib import Path
@@ -25,6 +26,17 @@ import shutil
 import subprocess
 
 import pytest
+
+
+@pytest.fixture
+def require_comfy_core():
+    """Only skip integration cases when the standalone checkout lacks Core."""
+    try:
+        importlib.import_module("comfy")
+    except ModuleNotFoundError as error:
+        if error.name != "comfy":
+            raise
+        pytest.skip("Requires an installed ComfyUI Core; standalone CI has no Core")
 
 
 @pytest.fixture(scope="session")

@@ -19,7 +19,7 @@ def test_equal_rate_returns_original_without_importing_a_resampler(monkeypatch):
 
 @pytest.mark.parametrize("rate", [16000, 22050, 32000, 44100, 48000, 96000])
 @pytest.mark.parametrize("channels", [1, 2])
-def test_resample_is_exactly_core(rate, channels):
+def test_resample_is_exactly_core(rate, channels, require_comfy_core):
     from comfy.audio import resample
     waveform = torch.sin(torch.arange(rate // 10, dtype=torch.float32) * 0.0123).view(1, 1, -1).repeat(1, channels, 1)
     frozen = waveform.clone()
@@ -75,7 +75,7 @@ def test_errors_never_switch_silently_to_a_different_resampler(monkeypatch, fail
 
 
 @pytest.mark.parametrize("rate", [32000, 44100, 48000])
-def test_reference_bundle_and_driving_do_not_require_torchaudio(rate, monkeypatch):
+def test_reference_bundle_and_driving_do_not_require_torchaudio(rate, monkeypatch, require_comfy_core):
     original_import = builtins.__import__
     def no_torchaudio(name, *args, **kwargs):
         if name == "torchaudio" or name.startswith("torchaudio."):

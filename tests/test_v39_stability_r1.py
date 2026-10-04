@@ -12,7 +12,9 @@ def group(keyframe):
 
 @pytest.mark.parametrize('resize',[False,True])
 @pytest.mark.parametrize('kind',['audio','video','mixed'])
-def test_modalities_preserve_audio_and_frozen_source(kind,resize):
+def test_modalities_preserve_audio_and_frozen_source(kind,resize,request):
+    if resize and kind!='audio':
+        request.getfixturevalue('require_comfy_core')
     keyframe={'resolved_frame_index':0}
     if kind!='video': keyframe['audio_latent']=torch.arange(32*2*7).reshape(1,32,2,7).float()
     if kind!='audio': keyframe['latent']=torch.ones(1,24,1,2,3)

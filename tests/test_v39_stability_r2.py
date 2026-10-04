@@ -131,7 +131,7 @@ def test_signature_failure_is_diagnostic_not_a_generation_stop():
     assert contract and not safe and reasons
 
 
-def test_core_euler_sampler_has_an_observable_runtime_signature():
+def test_core_euler_sampler_has_an_observable_runtime_signature(require_comfy_core):
     from comfy.samplers import sampler_object
     _, safe = storage._sampler_signature(sampler_object("euler"))
     assert safe
