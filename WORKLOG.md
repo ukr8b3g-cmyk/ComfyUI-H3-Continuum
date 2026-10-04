@@ -12,5 +12,6 @@
 - Replace workstation paths and private operational history in public documentation with portable instructions and public validation summaries. Original development records are preserved outside the publication checkout.
 - Mark the eighteen real-Core integration cases as dependency skips in standalone CI when ComfyUI Core is absent. They still execute with Core installed; broken Core dependencies remain test failures. Production code is unchanged.
 - Release-preparation checks for the affected tests and package metadata: 66 passed with real Core; 48 passed / 18 dependency skips without Core. Both CPU gates had zero CUDA initialization attempts.
+- GitHub Actions confirmed 1,676 passed / 21 skipped / no failures in standalone CI. Eighteen skips require real Core; the remaining three reflect existing platform/fixture limits. Prepare the versioned GitHub Release with English/Japanese repair and migration notes; Registry publication remains separate.
 
 Earlier product behavior is described in CHANGELOG.md and the historical Release/tag versions. This log contains public engineering summaries rather than private operational records.

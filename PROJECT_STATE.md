@@ -29,6 +29,6 @@ Run Storage v3 and State/Session formats are retained. Unknown upstream settings
 - Integrated generation and Take-reuse GPU checks passed for the repaired runtime.
 - Browser save/reload acceptance and full acceptance of the unchanged default workflow remain pending. These targeted results do not establish every accelerator or quality combination.
 - Optional latent-upscale doubled outlines are tracked separately in [Issue #27](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/issues/27).
-- Publishing these sources does not create a GitHub Release, tag or Registry package.
+- Versioned source downloads are listed in GitHub Releases. Registry publication is separate, and Release publication does not complete the pending acceptance gates.
 
 See README.md, README_JA.md and CHANGELOG.md for user instructions and repair details.

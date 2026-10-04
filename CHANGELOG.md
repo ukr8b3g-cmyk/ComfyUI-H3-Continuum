@@ -7,7 +7,7 @@
 - Slice Review Driving Audio once from physical-group natural time; use Core resampling and document explicit Reference Encode Cache invalidation for direct VAE weight mutation.
 - Match V3.9 partial Review conditioning and Reference routes to actual output-group identities before Second Pass. Preserve complete-run behavior, original audio LATENT objects and saved Takes.
 - The repaired runtime passed 1696 CPU cases (1 skipped) and three targeted 512×512 Review Second Pass GPU cases. Browser acceptance remains pending. Optional latent-upscale doubled outlines are tracked separately in Issue #27 and are not a required gate for this stabilization.
-- Bump package metadata to 3.9.1 while preserving V3.9 public node IDs, widget order and official workflows. Restart ComfyUI and refresh the browser after updating. Keep historical V3.8 releases untouched; this main-source update adds no LoRA Plan and does not create a GitHub Release or Registry package.
+- Bump package metadata to 3.9.1 while preserving V3.9 public node IDs, widget order and official workflows. Restart ComfyUI and refresh the browser after updating. Keep historical V3.8 releases untouched; this patch adds no LoRA Plan. Versioned source downloads are provided through GitHub Releases; Registry publication is separate.
 
 ## 3.9.0 — V3.9 source on main (2026-09-29)
 
