@@ -1536,11 +1536,13 @@ function reviewReady(node) {
     // Completion ends continuation, not the user's ability to inspect/retry a Take.
     // Keep the backend status authoritative; never rewrite complete to review_ready.
     if (revision?.status === "complete") return true;
+    if (revision?.status === "review_ready" && takeReadOnly(revision)) return true;
     return revision?.status === "review_ready" && reviewHasUnit(node);
 }
 
 function reviewHasUnit(node) {
     const revision = canonicalStorageRevision(node.__h3ContinuumTakeProject);
+    if (revision && takeReadOnly(revision)) return false;
     const unit = revision?.review_unit;
     return [unit?.physical_group, unit?.start, unit?.end].every(
         (value) => Number.isInteger(Number(value)) && Number(value) > 0,
@@ -1569,6 +1571,9 @@ function reviewStatus(node) {
     if (!project) return "Queue the workflow to create the first chunk.";
     const revision = canonicalStorageRevision(project);
     if (!revision) return "Queue the workflow to create the first chunk.";
+    if (takeReadOnly(revision)) {
+        return "Saved history is read-only for Sampling v6\nStart from Chunk 1 with current settings. Existing Takes are kept.";
+    }
     if (revision.status === "complete") {
         const unit = revision.review_unit;
         const label = reviewHasUnit(node)
@@ -1607,6 +1612,8 @@ function reviewStatus(node) {
 }
 
 function selectProductionReviewAction(node, action) {
+    const revision = canonicalStorageRevision(node.__h3ContinuumTakeProject);
+    if (revision && takeReadOnly(revision)) return;
     if (activeReviewPrompt(node) || node.__h3ContinuumOutputFailure) return;
     const from = findWidget(node, REGENERATE_WIDGET)?.value;
     if (reviewSettingsChanged(node) || (from && from !== "Auto" && from !== 0)) {
@@ -1645,6 +1652,10 @@ function takeGroup(item) {
 
 const takeCatalogCache = new WeakMap();
 
+function takeReadOnly(item) {
+    return Number(item?.sampling_contract_version) !== 6 || item?.generation_reusable !== true;
+}
+
 function takeCatalog(node) {
     const project = node.__h3ContinuumTakeProject;
     if (project && takeCatalogCache.has(project)) return takeCatalogCache.get(project);
@@ -1673,7 +1684,7 @@ function takeCatalog(node) {
     if (lineageAware && !canonicalLineage) return [];
     const scoped = canonicalLineage
         ? normalized.filter(
-            ({ item }) => String(item?.lineage_sha256 || "") === canonicalLineage,
+            ({ item }) => String(item?.lineage_sha256 || "") === canonicalLineage || takeReadOnly(item),
         )
         : normalized;
     const scopedById = new Map(scoped.map(
@@ -1807,6 +1818,9 @@ function takeAncestry(project, selected, catalog) {
 }
 
 function continueFromTakeSummary(project, selected, catalog) {
+    if (takeReadOnly(selected)) {
+        return "Read-only history: start a new Full Video or Review from Chunk 1; saved Takes remain available.";
+    }
     const chain = takeAncestry(project, selected, catalog);
     if (!chain.length) {
         return "Continue From Here: unavailable until provenance is validated";
@@ -1861,9 +1875,12 @@ function takeStatus(node) {
         canonicalHead
             ? `Canonical head: ${takeLabel(canonicalHead)} | ${shortRevision(canonicalHead.revision_id)}`
             : "Canonical head: unavailable",
-        `Compatible history: ${catalog.length} Take${catalog.length === 1 ? "" : "s"}`,
+        `Compatible history: ${catalog.filter(item => !takeReadOnly(item)).length} Takes`,
         continueFromTakeSummary(project, selected, catalog),
     ];
+    if (takeReadOnly(selected)) {
+        lines.push(`Sampling v${selected.sampling_contract_version ?? "unknown"}: read-only; cannot reuse in v6 generation.`);
+    }
     if (hiddenCount) {
         lines.push(
             `${hiddenCount} incompatible or incomplete Take${hiddenCount === 1 ? "" : "s"} hidden`,
@@ -1894,7 +1911,7 @@ function selectTakeOffset(node, offset) {
 
 function selectTakeAction(node, action) {
     const selected = selectedTake(node);
-    if (!selected || reviewSettingsChanged(node) || activeReviewPrompt(node)) return;
+    if (!selected || takeReadOnly(selected) || reviewSettingsChanged(node) || activeReviewPrompt(node)) return;
     delete node.__h3ContinuumModeSetup;
     setExistingWidgetValue(
         findWidget(node, TAKE_GROUP_WIDGET),
@@ -2492,7 +2509,8 @@ function configureProductionReviewUx(node) {
         const edited = reviewSettingsChanged(node);
         const outputFailure = node.__h3ContinuumOutputFailure?.runName === takeRunName(node);
         const busy = Boolean(activeReviewPrompt(node));
-        const canReview = !edited && !busy && !outputFailure && (!from || from === "Auto" || from === 0);
+        const canReview = !takeReadOnly(canonicalStorageRevision(node.__h3ContinuumTakeProject))
+            && !edited && !busy && !outputFailure && (!from || from === "Auto" || from === 0);
         const takeCount = takeCatalog(node).length;
         const actionNames = new Set([
             PRODUCTION_STATUS_WIDGET,
@@ -2552,7 +2570,7 @@ function configureProductionReviewUx(node) {
         }
         const catalog = takeCatalog(node);
         const hasSelection = Boolean(selectedTake(node));
-        const takeActionAvailable = hasSelection && !edited && !busy;
+        const takeActionAvailable = hasSelection && !takeReadOnly(selectedTake(node)) && !edited && !busy;
         const historyToggle = transientProductionWidgets(node).find(
             (widget) => widget.name === TAKE_TOGGLE_WIDGET,
         );

@@ -10,6 +10,8 @@ from typing import Any
 
 import torch
 
+from .audio_compat import resample_audio
+
 
 REFERENCE_AUDIO_CONTRACT_VERSION = 1
 REFERENCE_AUDIO_PREPROCESS_VERSION = 1
@@ -152,9 +154,7 @@ def _prepare_reference_audio_source(
     resampled = waveform
     if source_sample_rate != resolved_rate:
         try:
-            import torchaudio
-
-            resampled = torchaudio.functional.resample(
+            resampled = resample_audio(
                 waveform, source_sample_rate, resolved_rate
             ).contiguous()
         except Exception as exc:

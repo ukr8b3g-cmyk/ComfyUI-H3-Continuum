@@ -1,0 +1,726 @@
+{
+  "branch_provenance": {
+    "active_chain": [
+      "f0d03f641973fb1d89c2ca4a",
+      "d5b6382c7152f233ac608bfa"
+    ],
+    "canonical_committed_utc": "2026-10-03T15:37:37+00:00",
+    "canonical_sequence": 1,
+    "version": 1
+  },
+  "branch_regenerate_from": 0,
+  "chunks": [
+    {
+      "entry": {
+        "clip_index": 1,
+        "context_frames": 0,
+        "motion_score": 0.0,
+        "plan": {
+          "clip_index": 1,
+          "context_frames": 5,
+          "continuation": false,
+          "debug": false,
+          "height": 64,
+          "magic": "H3_CONTINUUM_PLAN",
+          "net_frames": 124,
+          "requested_extend_seconds": 5.0,
+          "schema_version": 1,
+          "state_capacity_frames": 39,
+          "total_frames": 124,
+          "trim_frames": 0,
+          "width": 64
+        },
+        "prompt_hash": "5dec1ecc3f0d6f846562049c0a4968da02cbbb43113feb87a95cfd6d6691be07",
+        "seed": 17671095936967226055,
+        "sequence_index": 0
+      },
+      "file_sha256": "26e771cffc57f171f4cc4c6859876350bdf717d1e8213fc005343006a34f002f",
+      "file_size": 110080,
+      "filename": "rev-d8352287737286e5-txn-9bb0a584b7344342b114bd31b175225c-chunk-0001.safetensors",
+      "sequence_index": 0,
+      "storage_revision_id": "d8352287737286e5"
+    },
+    {
+      "entry": {
+        "clip_index": 2,
+        "context_frames": 22,
+        "motion_score": 0.0,
+        "plan": {
+          "clip_index": 2,
+          "context_frames": 22,
+          "continuation": true,
+          "debug": false,
+          "height": 64,
+          "magic": "H3_CONTINUUM_PLAN",
+          "net_frames": 119,
+          "requested_extend_seconds": 5.0,
+          "schema_version": 1,
+          "state_capacity_frames": 39,
+          "total_frames": 141,
+          "trim_frames": 22,
+          "width": 64
+        },
+        "prompt_hash": "5dec1ecc3f0d6f846562049c0a4968da02cbbb43113feb87a95cfd6d6691be07",
+        "seed": 2167717532453298830,
+        "sequence_index": 1
+      },
+      "file_sha256": "8b8ca1b0c802d024c6915d903747d8722bea25628369997ab008ff896462b96a",
+      "file_size": 124928,
+      "filename": "rev-d8352287737286e5-txn-008f52b93a88461481ead25f91627af0-chunk-0002.safetensors",
+      "sequence_index": 1,
+      "storage_revision_id": "d8352287737286e5"
+    }
+  ],
+  "contract": {
+    "chunk_contract_hashes": [
+      "a1d04437be62e79c3945c65d26bbc2cc8fdab89c661d78e8dd8da4673b9f1f15",
+      "b90a1eab80aaefd1db1935d6aec14050332ccc6047a7045bf52728de4f527259",
+      "ffdc4b800b697062ab3d2e27c9079dda7fcd2e4c2a7d83fc98fac7402ffaaf55",
+      "b07b8643f7706d41ae6a0b0a74c1f6771d844502ef8b006f5cf71664a0ba26f4"
+    ],
+    "chunk_contracts": [
+      {
+        "chunk_number": 1,
+        "effective_reroll_nonce": 0,
+        "global_hash": "3f2ddb7a42a25548a6ec9319f859ed1a75ae0a11933056953d722e2553af357d",
+        "last_frame_hash": "",
+        "physical_group_reference_sha256": "ac4a88fbfb79802981cae2f4ce7b3befcfc5b40fa14f1cd9d03852a2e7a4678f",
+        "prompt_hash": "5dec1ecc3f0d6f846562049c0a4968da02cbbb43113feb87a95cfd6d6691be07",
+        "reroll_boundary": 0
+      },
+      {
+        "chunk_number": 2,
+        "effective_reroll_nonce": 0,
+        "global_hash": "3f2ddb7a42a25548a6ec9319f859ed1a75ae0a11933056953d722e2553af357d",
+        "last_frame_hash": "",
+        "physical_group_reference_sha256": "24824ce6a4f406415e52b1909270780063bece5f97fc3fdb2e844d40878afdbe",
+        "prompt_hash": "5dec1ecc3f0d6f846562049c0a4968da02cbbb43113feb87a95cfd6d6691be07",
+        "reroll_boundary": 0
+      },
+      {
+        "chunk_number": 3,
+        "effective_reroll_nonce": 0,
+        "global_hash": "3f2ddb7a42a25548a6ec9319f859ed1a75ae0a11933056953d722e2553af357d",
+        "last_frame_hash": "",
+        "physical_group_reference_sha256": "b9fcc63b033a0cdf334e68dad74f77ac87ff5e1f8c3b346aa5879411856f62da",
+        "prompt_hash": "5dec1ecc3f0d6f846562049c0a4968da02cbbb43113feb87a95cfd6d6691be07",
+        "reroll_boundary": 0
+      },
+      {
+        "chunk_number": 4,
+        "effective_reroll_nonce": 0,
+        "global_hash": "3f2ddb7a42a25548a6ec9319f859ed1a75ae0a11933056953d722e2553af357d",
+        "last_frame_hash": "6bc13118765285cba097403c4b340bac0e550599fb27a1b415ffc88fc6237daa",
+        "physical_group_reference_sha256": "b9fcc63b033a0cdf334e68dad74f77ac87ff5e1f8c3b346aa5879411856f62da",
+        "prompt_hash": "5dec1ecc3f0d6f846562049c0a4968da02cbbb43113feb87a95cfd6d6691be07",
+        "reroll_boundary": 0
+      }
+    ],
+    "chunk_count": 4,
+    "effective_reroll_nonce": 0,
+    "global": {
+      "actual_prefix_steps": 2,
+      "audio_continuity": true,
+      "base_seed": 1234,
+      "chunk_seconds": 5.0,
+      "clip": {
+        "graph_route": {
+          "node": {
+            "class_type": "CLIPLoader",
+            "inputs": {
+              "clip_name": "audit_minimax_h3.safetensors",
+              "type": "minimax"
+            },
+            "node_id": "clip"
+          },
+          "output": 0
+        },
+        "runtime": {
+          "conditioner": {
+            "parameter_count": 4,
+            "parameter_layout_sha256": "bfc7a2fa460fae4eb803fa7bedfa5a2cb8c3c793902b65c1e7796159b92d79bd",
+            "tensor_count": 1,
+            "type": "audit_providers.TinyModule",
+            "weight_probe": [
+              {
+                "dtype": "torch.float32",
+                "name": "proj.weight",
+                "sample_sha256": "c3a6b1f08b0b05ac05390d6c257551ffd0cdcf40496f232b52df2498f915469e",
+                "shape": [
+                  2,
+                  2
+                ]
+              }
+            ]
+          },
+          "options": {
+            "layer_idx": null,
+            "tokenizer_options": {},
+            "use_clip_schedule": false
+          },
+          "patcher": {
+            "model_type": "audit_providers.TinyModule",
+            "state": {
+              "model_options": {
+                "transformer_options": {}
+              },
+              "object_patches": {},
+              "patches": {},
+              "wrappers": {}
+            },
+            "type": "comfy.model_patcher.ModelPatcher"
+          },
+          "runtime_observation": {
+            "options_complete": true,
+            "patcher_complete": true
+          },
+          "tokenizer": {
+            "bos_token_id": null,
+            "core_type": "types.SimpleNamespace",
+            "eos_token_id": null,
+            "model_max_length": 1024,
+            "model_wrapper_type": "types.SimpleNamespace",
+            "name_or_path": "audit-type-only",
+            "pad_token_id": null,
+            "padding_side": null,
+            "truncation_side": null,
+            "vocab_size": 10,
+            "wrapper_type": "types.SimpleNamespace"
+          },
+          "wrapper_type": "audit_providers.SyntheticClip"
+        }
+      },
+      "conditioning_mode": "fl2va",
+      "continuity": "Balanced - 22 frames",
+      "continuum_interop_api": 1,
+      "driving_audio": {
+        "driving_audio_contract_version": 1,
+        "preprocess_version": 1,
+        "resampled_dtype": "torch.float32",
+        "resampled_sha256": "7cca6be8869d599159077330aaf71972b0328bf8758cd99e6d52ba5bd3466b7a",
+        "resampled_shape": [
+          1,
+          2,
+          640000
+        ],
+        "resolved_vae_sample_rate": 32000,
+        "source_dtype": "torch.float32",
+        "source_sample_rate": 32000,
+        "source_sha256": "7cca6be8869d599159077330aaf71972b0328bf8758cd99e6d52ba5bd3466b7a",
+        "source_shape": [
+          1,
+          2,
+          640000
+        ]
+      },
+      "driving_audio_vae": {
+        "graph_route": {
+          "node": {
+            "class_type": "VAELoader",
+            "inputs": {
+              "vae_name": "audit_audio_vae.safetensors"
+            },
+            "node_id": "audio_vae"
+          },
+          "output": 0
+        },
+        "runtime": {
+          "audio_sample_rate": 32000,
+          "first_stage": {
+            "parameter_count": 4,
+            "parameter_layout_sha256": "bfc7a2fa460fae4eb803fa7bedfa5a2cb8c3c793902b65c1e7796159b92d79bd",
+            "tensor_count": 1,
+            "type": "audit_providers.TinyModule",
+            "weight_probe": [
+              {
+                "dtype": "torch.float32",
+                "name": "proj.weight",
+                "sample_sha256": "cfd5cd0554b977e5208296d4a63e8d2ec6f6cc9823321f2d242239432b7d472b",
+                "shape": [
+                  2,
+                  2
+                ]
+              }
+            ]
+          },
+          "latent_channels": 32,
+          "patcher": {
+            "model_type": "audit_providers.TinyModule",
+            "state": {
+              "model_options": {
+                "transformer_options": {}
+              },
+              "object_patches": {},
+              "patches": {},
+              "wrappers": {}
+            },
+            "type": "comfy.model_patcher.ModelPatcher"
+          },
+          "runtime_observation": {
+            "config_complete": true,
+            "patcher_complete": true
+          },
+          "vae_dtype": "torch.float32",
+          "wrapper_type": "audit_providers.SyntheticAudioVAE"
+        }
+      },
+      "execution_semantics": {
+        "continuation_transport": "masked_av_prefix_22_v1",
+        "flf_execution": "terminal_merged_10s_seed_v2",
+        "terminal_seed_policy": "physical_window_seed_v2"
+      },
+      "first_frame_hash": "ce95397885a93617f1e00a1e6c9a4b5a9c03411a8f2ef58762709df00b6e95d6",
+      "height": 64,
+      "model": {
+        "graph_route": {
+          "node": {
+            "class_type": "UNETLoader",
+            "inputs": {
+              "unet_name": "audit_minimax_h3_fl2va.safetensors",
+              "weight_dtype": "default"
+            },
+            "node_id": "model"
+          },
+          "output": 0
+        },
+        "runtime": {
+          "base": "audit_core_payload.TinyCoreH3",
+          "dtype": "torch.float32",
+          "inner": "audit_providers.TinyModule",
+          "legacy_fingerprint": "2acbeaa9b63a6cf12d7a1b88a1533c12cf5329df420822568eaea5a0bc59bcd4",
+          "model_patcher": "comfy.model_patcher.ModelPatcher",
+          "model_size": 16,
+          "patches": {},
+          "runtime_observation": {
+            "patches_complete": true,
+            "transformer_options_complete": true,
+            "wrappers_complete": true
+          },
+          "transformer_options": {},
+          "weight_probe": [
+            {
+              "dtype": "torch.float32",
+              "name": "proj.weight",
+              "sample_sha256": "f6bb1294da2f78cd935b01c7656280df5eaa0439e9d97bc03775825a41a508e4",
+              "shape": [
+                2,
+                2
+              ]
+            }
+          ],
+          "wrappers": {}
+        }
+      },
+      "reference_audio": {
+        "combined_hash": "a55474f5b6c557a5eaf70e78a5341a49a39fd2b0cb717b5d08396645d6e2ded8",
+        "count": 2,
+        "items": [
+          {
+            "audio_index": 1,
+            "reference_audio": {
+              "combined_hash": "64a489714dfa65dc229ad059608cd6f488ba1b2d49e815fd71403bfd100f2452",
+              "preprocess_version": 1,
+              "reference_audio_contract_version": 1,
+              "resampled_dtype": "torch.float32",
+              "resampled_sha256": "7ad1bd40edaed4e0a4601dca856191e3002a8b09b8551ec74b81365faecf0548",
+              "resampled_shape": [
+                1,
+                2,
+                3200
+              ],
+              "resolved_vae_sample_rate": 32000,
+              "source_dtype": "torch.float32",
+              "source_sample_rate": 32000,
+              "source_sha256": "7ad1bd40edaed4e0a4601dca856191e3002a8b09b8551ec74b81365faecf0548",
+              "source_shape": [
+                1,
+                2,
+                3200
+              ]
+            }
+          },
+          {
+            "audio_index": 2,
+            "reference_audio": {
+              "combined_hash": "5b8b8a88f1a7b2adf9005a4e9c32625b493812bb37d33837ee4d99890adafe54",
+              "preprocess_version": 1,
+              "reference_audio_contract_version": 1,
+              "resampled_dtype": "torch.float32",
+              "resampled_sha256": "69ac770debe6804e3d5762f61896bc226f266f57b8398ea3bed3dc67fde92a8a",
+              "resampled_shape": [
+                1,
+                2,
+                3200
+              ],
+              "resolved_vae_sample_rate": 32000,
+              "source_dtype": "torch.float32",
+              "source_sample_rate": 32000,
+              "source_sha256": "69ac770debe6804e3d5762f61896bc226f266f57b8398ea3bed3dc67fde92a8a",
+              "source_shape": [
+                1,
+                2,
+                3200
+              ]
+            }
+          }
+        ],
+        "reference_audio_bundle_contract_version": 1
+      },
+      "reference_audio_vae": {
+        "graph_route": {
+          "node": {
+            "class_type": "H3ContinuumReferenceAudios",
+            "inputs": {
+              "reference_audio_vae": {
+                "node": {
+                  "class_type": "VAELoader",
+                  "inputs": {
+                    "vae_name": "audit_audio_vae.safetensors"
+                  },
+                  "node_id": "audio_vae"
+                },
+                "output": 0
+              }
+            },
+            "node_id": "audio_bundle"
+          },
+          "output": 0
+        },
+        "runtime": {
+          "audio_sample_rate": 32000,
+          "first_stage": {
+            "parameter_count": 4,
+            "parameter_layout_sha256": "bfc7a2fa460fae4eb803fa7bedfa5a2cb8c3c793902b65c1e7796159b92d79bd",
+            "tensor_count": 1,
+            "type": "audit_providers.TinyModule",
+            "weight_probe": [
+              {
+                "dtype": "torch.float32",
+                "name": "proj.weight",
+                "sample_sha256": "cfd5cd0554b977e5208296d4a63e8d2ec6f6cc9823321f2d242239432b7d472b",
+                "shape": [
+                  2,
+                  2
+                ]
+              }
+            ]
+          },
+          "latent_channels": 32,
+          "patcher": {
+            "model_type": "audit_providers.TinyModule",
+            "state": {
+              "model_options": {
+                "transformer_options": {}
+              },
+              "object_patches": {},
+              "patches": {},
+              "wrappers": {}
+            },
+            "type": "comfy.model_patcher.ModelPatcher"
+          },
+          "runtime_observation": {
+            "config_complete": true,
+            "patcher_complete": true
+          },
+          "vae_dtype": "torch.float32",
+          "wrapper_type": "audit_providers.SyntheticAudioVAE"
+        }
+      },
+      "reference_routing_contract_version": 1,
+      "sampler": {
+        "function": "torch._VariableFunctionsClass.add",
+        "options": {
+          "extra_options": {},
+          "inpaint_options": {}
+        },
+        "type": "types.SimpleNamespace"
+      },
+      "sampling_contract_version": 5,
+      "sigmas": {
+        "dtype": "torch.float32",
+        "exact_sha256": "be115d3ffbb025877d7320bd3b0b29cbe245f520f805091917a60169e7737659",
+        "shape": [
+          3
+        ]
+      },
+      "strict_compatibility": false,
+      "upstream_graph": {
+        "routes": {
+          "audio_vae": {
+            "node": {
+              "class_type": "VAELoader",
+              "inputs": {
+                "vae_name": "audit_audio_vae.safetensors"
+              },
+              "node_id": "audio_vae"
+            },
+            "output": 0
+          },
+          "clip": {
+            "node": {
+              "class_type": "CLIPLoader",
+              "inputs": {
+                "clip_name": "audit_minimax_h3.safetensors",
+                "type": "minimax"
+              },
+              "node_id": "clip"
+            },
+            "output": 0
+          },
+          "model": {
+            "node": {
+              "class_type": "UNETLoader",
+              "inputs": {
+                "unet_name": "audit_minimax_h3_fl2va.safetensors",
+                "weight_dtype": "default"
+              },
+              "node_id": "model"
+            },
+            "output": 0
+          },
+          "reference_audio_vae": {
+            "node": {
+              "class_type": "H3ContinuumReferenceAudios",
+              "inputs": {
+                "reference_audio_vae": {
+                  "node": {
+                    "class_type": "VAELoader",
+                    "inputs": {
+                      "vae_name": "audit_audio_vae.safetensors"
+                    },
+                    "node_id": "audio_vae"
+                  },
+                  "output": 0
+                }
+              },
+              "node_id": "audio_bundle"
+            },
+            "output": 0
+          },
+          "video_vae": {
+            "node": {
+              "class_type": "VAELoader",
+              "inputs": {
+                "vae_name": "audit_video_vae.safetensors"
+              },
+              "node_id": "video_vae"
+            },
+            "output": 0
+          }
+        },
+        "sampler_class_type": "H3ContinuumSamplerV39",
+        "sha256": "f7f6f31d4e90a07b040f2774b93ff2e405e0565f8443f3ff1fb5c546394f2ca3",
+        "version": 3
+      },
+      "video_vae": {
+        "graph_route": {
+          "node": {
+            "class_type": "VAELoader",
+            "inputs": {
+              "vae_name": "audit_video_vae.safetensors"
+            },
+            "node_id": "video_vae"
+          },
+          "output": 0
+        },
+        "runtime": {
+          "chunked_io": false,
+          "downscale_ratio": 16,
+          "first_stage": {
+            "parameter_count": 4,
+            "parameter_layout_sha256": "bfc7a2fa460fae4eb803fa7bedfa5a2cb8c3c793902b65c1e7796159b92d79bd",
+            "tensor_count": 1,
+            "type": "audit_providers.TinyModule",
+            "weight_probe": [
+              {
+                "dtype": "torch.float32",
+                "name": "proj.weight",
+                "sample_sha256": "24c60715698663563d76ecaf262778712879423eb057d12b74a037150009d619",
+                "shape": [
+                  2,
+                  2
+                ]
+              }
+            ]
+          },
+          "latent_channels": 24,
+          "patcher": {
+            "model_type": "audit_providers.TinyModule",
+            "state": {
+              "model_options": {
+                "transformer_options": {}
+              },
+              "object_patches": {},
+              "patches": {},
+              "wrappers": {}
+            },
+            "type": "comfy.model_patcher.ModelPatcher"
+          },
+          "required": true,
+          "runtime_observation": {
+            "config_complete": true,
+            "patcher_complete": true
+          },
+          "upscale_ratio": 16,
+          "vae_dtype": "torch.float32",
+          "wrapper_type": "audit_providers.SyntheticVideoVAE"
+        }
+      },
+      "width": 64
+    },
+    "last_frame_hash": "6bc13118765285cba097403c4b340bac0e550599fb27a1b415ffc88fc6237daa",
+    "nonce_lifecycle": {
+      "effective_nonce": 0,
+      "lineage_sha256": "2dbba4b61863fde2a8d74a75dae4b563e7b79484a2ff678d0cbd333e504cf158",
+      "mode": "inactive",
+      "request_sha256": "55c6f2d10dbe9abae01443bac060ba1d56d583d0f80e5f3cfc586cef54a65fcd",
+      "requested_nonce": 0
+    },
+    "nonce_lineage_sha256": "2dbba4b61863fde2a8d74a75dae4b563e7b79484a2ff678d0cbd333e504cf158",
+    "nonce_request_sha256": "55c6f2d10dbe9abae01443bac060ba1d56d583d0f80e5f3cfc586cef54a65fcd",
+    "prompt_hashes": [
+      "5dec1ecc3f0d6f846562049c0a4968da02cbbb43113feb87a95cfd6d6691be07",
+      "5dec1ecc3f0d6f846562049c0a4968da02cbbb43113feb87a95cfd6d6691be07",
+      "5dec1ecc3f0d6f846562049c0a4968da02cbbb43113feb87a95cfd6d6691be07",
+      "5dec1ecc3f0d6f846562049c0a4968da02cbbb43113feb87a95cfd6d6691be07"
+    ],
+    "prompt_mode": "Fixed — one prompt",
+    "reference_group_contracts": [
+      {
+        "descriptor": {
+          "effective_prompt_sha256": "4de5a7dfe7c4a22a4f42e26d525e5175d90a85fe6eaa1a093663f3e5bf8ad6b1",
+          "first_anchor": "ce95397885a93617f1e00a1e6c9a4b5a9c03411a8f2ef58762709df00b6e95d6",
+          "last_anchor": "6bc13118765285cba097403c4b340bac0e550599fb27a1b415ffc88fc6237daa",
+          "logical_chunks": [
+            1
+          ],
+          "physical_group": 1,
+          "picture_order": [
+            "first_frame",
+            "last_frame",
+            "R1"
+          ],
+          "picture_presentation_version": 1,
+          "reference_preprocess_version": 1,
+          "reference_size_mode": "Match Output",
+          "references": [
+            {
+              "picture_number": 3,
+              "prepared_sha256": "4e2f68facb219819b6b0ba6c2c48f37a64b02ae159aef772e2e5d1dea15a3e62",
+              "source_slot_id": "R1"
+            }
+          ],
+          "terminal_atomic": false,
+          "terminal_prompt_policy": null,
+          "version": 1
+        },
+        "sha256": "ac4a88fbfb79802981cae2f4ce7b3befcfc5b40fa14f1cd9d03852a2e7a4678f"
+      },
+      {
+        "descriptor": {
+          "effective_prompt_sha256": "4de5a7dfe7c4a22a4f42e26d525e5175d90a85fe6eaa1a093663f3e5bf8ad6b1",
+          "first_anchor": "ce95397885a93617f1e00a1e6c9a4b5a9c03411a8f2ef58762709df00b6e95d6",
+          "last_anchor": "6bc13118765285cba097403c4b340bac0e550599fb27a1b415ffc88fc6237daa",
+          "logical_chunks": [
+            2
+          ],
+          "physical_group": 2,
+          "picture_order": [
+            "first_frame",
+            "last_frame",
+            "R1"
+          ],
+          "picture_presentation_version": 1,
+          "reference_preprocess_version": 1,
+          "reference_size_mode": "Match Output",
+          "references": [
+            {
+              "picture_number": 3,
+              "prepared_sha256": "4e2f68facb219819b6b0ba6c2c48f37a64b02ae159aef772e2e5d1dea15a3e62",
+              "source_slot_id": "R1"
+            }
+          ],
+          "terminal_atomic": false,
+          "terminal_prompt_policy": null,
+          "version": 1
+        },
+        "sha256": "24824ce6a4f406415e52b1909270780063bece5f97fc3fdb2e844d40878afdbe"
+      },
+      {
+        "descriptor": {
+          "effective_prompt_sha256": "4de5a7dfe7c4a22a4f42e26d525e5175d90a85fe6eaa1a093663f3e5bf8ad6b1",
+          "first_anchor": "ce95397885a93617f1e00a1e6c9a4b5a9c03411a8f2ef58762709df00b6e95d6",
+          "last_anchor": "6bc13118765285cba097403c4b340bac0e550599fb27a1b415ffc88fc6237daa",
+          "logical_chunks": [
+            3,
+            4
+          ],
+          "physical_group": 3,
+          "picture_order": [
+            "first_frame",
+            "last_frame",
+            "R1"
+          ],
+          "picture_presentation_version": 1,
+          "reference_preprocess_version": 1,
+          "reference_size_mode": "Match Output",
+          "references": [
+            {
+              "picture_number": 3,
+              "prepared_sha256": "4e2f68facb219819b6b0ba6c2c48f37a64b02ae159aef772e2e5d1dea15a3e62",
+              "source_slot_id": "R1"
+            }
+          ],
+          "terminal_atomic": true,
+          "terminal_prompt_policy": "shared_prompt_v1",
+          "version": 1
+        },
+        "sha256": "b9fcc63b033a0cdf334e68dad74f77ac87ff5e1f8c3b346aa5879411856f62da"
+      }
+    ],
+    "reroll_from_chunk": 0
+  },
+  "contract_sha256": "f5a4b7ec0041d5f51731148aae29b228608c1904aa7b3d922764697dc97daf46",
+  "created_utc": "2026-10-03T15:37:36+00:00",
+  "effective_reroll_nonce": 0,
+  "nonce_lifecycle": {
+    "effective_nonce": 0,
+    "lineage_sha256": "2dbba4b61863fde2a8d74a75dae4b563e7b79484a2ff678d0cbd333e504cf158",
+    "mode": "inactive",
+    "request_sha256": "55c6f2d10dbe9abae01443bac060ba1d56d583d0f80e5f3cfc586cef54a65fcd",
+    "requested_nonce": 0
+  },
+  "reference_routing_audit": {
+    "requested_routes": [
+      [
+        "R1"
+      ],
+      [
+        "R1"
+      ],
+      [
+        "R1"
+      ]
+    ],
+    "routing_config_sha256": "a3b1b8850a2c72eaa4e7c6c4f2697bb8bd6194091b677e5267338236e298734e",
+    "version": 1
+  },
+  "report_summary": "H3 Continuum V3 3.9.0\nConditioning mode: Hybrid FL2VA + Reference + Continuation.\nPrompt plan: Fixed — one prompt; 4 chunks; 1 unique prompt(s); 5.000s per chunk. Auto detected Fixed.\nPrompt Preflight: OK.\nDecode: external ComfyUI Core VAE nodes; full raw AV chunks retained.\naccelerator markers not detected (informational only); Continuum APPLY_MODEL wrapper installed\nExecution: conditioning precomputed; single call-local MODEL clone per chunk; no internal VAE decode.\nDriving Audio: absolute-time guide slices enabled; original audio is preserved for final output.\nReference Audio conditioning: 2 ordered item(s); persistent across all chunks.\nV3.9 Custom Reference routing: group-local conditioning and complete-group saved-prefix verification; the verified effective Plan is available after Queue.\nFLF execution: terminal merged 10s seed v2; the final two 5-second logical chunks share one physical sample and are split back into normal chunk entries.\nresuming after accepted chunk 1\nPhysical review execution: 1 new physical group(s) completed; 2/4 logical chunks available.\nSession e03555e8: 2 chunks, 243 retained frames, 1 reused, 64x64.\nOutput: 2 raw AV latent chunk(s); connect Core VAE Decode nodes, then H3 Continuum Assemble V3.\nDecode preview: Chunk 2\nReference Plan Inspector (last Queue, runtime verified)\nMode: custom; accepted chunks: 2\nConnected: R1\nGroup 1 [C1] reused — R1=<Picture 3>; contract=ac4a88fbfb79\nGroup 2 [C2] generated — R1=<Picture 3>; contract=24824ce6a4f4\nGroup 3 [C3,4] pending — configured R1\nRun Storage: run_00bb27779f215038a7eb1845979fdd7c / revision d8352287737286e5; 1 reused, 1 generated, 4 total; resume=2; nonce=0 (inactive).\nWarning: Review is incomplete. Second Pass refinement of a partial review sequence is not yet supported.",
+  "resume_disabled_reasons": [],
+  "resume_safe": true,
+  "review_control_version": 1,
+  "review_pause_reason": "review_each_chunk",
+  "review_unit": {
+    "end": 2,
+    "physical_group": 2,
+    "start": 2
+  },
+  "revision_id": "d8352287737286e5",
+  "run_name": "run_00bb27779f215038a7eb1845979fdd7c",
+  "run_storage_schema_version": 3,
+  "sampling_contract_version": 5,
+  "sampling_revision_id": "f5a4b7ec0041d5f5",
+  "session_id": "e03555e805774b9eb22b7d2eae44268c",
+  "status": "review_ready",
+  "updated_utc": "2026-10-03T15:37:37+00:00"
+}

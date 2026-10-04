@@ -992,8 +992,9 @@ def _prompt_graph(model_name="minimax_h3_fl2va.safetensors"):
         },
         "42": {
             "class_type": "H3ContinuumSamplerProduction",
-            "inputs": {"model": ["12", 0], "clip": ["20", 0], "video_vae": ["30", 0]},
+            "inputs": {"model": ["12", 0], "clip": ["20", 0], "video_vae": ["30", 0], "sampler": ["40", 0]},
         },
+        "40": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
     }
 
 

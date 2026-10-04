@@ -1,0 +1,99 @@
+{
+  "active_revisions": {
+    "1": "f0d03f641973fb1d89c2ca4a",
+    "2": "d5b6382c7152f233ac608bfa"
+  },
+  "branch_provenance_version": 1,
+  "canonical_chain": [
+    "f0d03f641973fb1d89c2ca4a",
+    "d5b6382c7152f233ac608bfa"
+  ],
+  "canonical_head_revision_id": "d5b6382c7152f233ac608bfa",
+  "canonical_storage_revision_id": "d8352287737286e5",
+  "group_revisions": [
+    {
+      "branch_provenance_version": 1,
+      "created_utc": "2026-10-03T15:37:36+00:00",
+      "generation_contract_sha256": "f5a4b7ec0041d5f51731148aae29b228608c1904aa7b3d922764697dc97daf46",
+      "group": {
+        "end": 1,
+        "physical_group": 1,
+        "start": 1
+      },
+      "lineage_sha256": "2dbba4b61863fde2a8d74a75dae4b563e7b79484a2ff678d0cbd333e504cf158",
+      "parent_revision_id": null,
+      "records": [
+        {
+          "file_sha256": "26e771cffc57f171f4cc4c6859876350bdf717d1e8213fc005343006a34f002f",
+          "file_size": 110080,
+          "filename": "rev-d8352287737286e5-txn-9bb0a584b7344342b114bd31b175225c-chunk-0001.safetensors",
+          "prompt_hash": "5dec1ecc3f0d6f846562049c0a4968da02cbbb43113feb87a95cfd6d6691be07",
+          "seed": 17671095936967226055,
+          "sequence_index": 0,
+          "storage_revision_id": "d8352287737286e5"
+        }
+      ],
+      "revision_id": "f0d03f641973fb1d89c2ca4a",
+      "revision_order": "2026-10-03T15:37:36+00:00|f0d03f641973fb1d89c2ca4a",
+      "seed_identity": "d54e2bdb426c4a8217b8d7a5cf608093c8a53b6087982053d294f61e042cbf49",
+      "storage_revision_id": "d8352287737286e5",
+      "variation_nonce": 0
+    },
+    {
+      "branch_provenance_version": 1,
+      "created_utc": "2026-10-03T15:37:36+00:00",
+      "generation_contract_sha256": "f5a4b7ec0041d5f51731148aae29b228608c1904aa7b3d922764697dc97daf46",
+      "group": {
+        "end": 2,
+        "physical_group": 2,
+        "start": 2
+      },
+      "lineage_sha256": "2dbba4b61863fde2a8d74a75dae4b563e7b79484a2ff678d0cbd333e504cf158",
+      "parent_revision_id": "f0d03f641973fb1d89c2ca4a",
+      "records": [
+        {
+          "file_sha256": "8b8ca1b0c802d024c6915d903747d8722bea25628369997ab008ff896462b96a",
+          "file_size": 124928,
+          "filename": "rev-d8352287737286e5-txn-008f52b93a88461481ead25f91627af0-chunk-0002.safetensors",
+          "prompt_hash": "5dec1ecc3f0d6f846562049c0a4968da02cbbb43113feb87a95cfd6d6691be07",
+          "seed": 2167717532453298830,
+          "sequence_index": 1,
+          "storage_revision_id": "d8352287737286e5"
+        }
+      ],
+      "revision_id": "d5b6382c7152f233ac608bfa",
+      "revision_order": "2026-10-03T15:37:36+00:00|d5b6382c7152f233ac608bfa",
+      "seed_identity": "ea9acc75bcb213362286781997985bc03df80bb8e3b3368ab02907a465286579",
+      "storage_revision_id": "d8352287737286e5",
+      "variation_nonce": 0
+    }
+  ],
+  "revisions": [
+    {
+      "active_chain": [
+        "f0d03f641973fb1d89c2ca4a",
+        "d5b6382c7152f233ac608bfa"
+      ],
+      "branch_regenerate_from": 0,
+      "contract_sha256": "f5a4b7ec0041d5f51731148aae29b228608c1904aa7b3d922764697dc97daf46",
+      "effective_reroll_nonce": 0,
+      "nonce_mode": "inactive",
+      "reroll_from_chunk": 0,
+      "resume_safe": true,
+      "review_control_version": 1,
+      "review_pause_reason": "review_each_chunk",
+      "review_unit": {
+        "end": 2,
+        "physical_group": 2,
+        "start": 2
+      },
+      "revision_id": "d8352287737286e5",
+      "sampling_revision_id": "f5a4b7ec0041d5f5",
+      "status": "review_ready",
+      "updated_utc": "2026-10-03T15:37:37+00:00"
+    }
+  ],
+  "run_name": "run_00bb27779f215038a7eb1845979fdd7c",
+  "run_storage_schema_version": 3,
+  "updated_utc": "2026-10-03T15:37:37+00:00"
+}

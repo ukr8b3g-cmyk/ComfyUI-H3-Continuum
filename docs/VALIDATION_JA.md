@@ -11,9 +11,10 @@ ComfyUIを終了後、展開フォルダーで実行します。
 または：
 
 ```powershell
-D:\StabilityMatrix\Data\Packages\ComfyUI_W\venv\Scripts\python.exe `
+$ComfyRoot = "path/to/ComfyUI" # 使用中のComfyUIの場所へ置き換える
+& "$ComfyRoot/venv/Scripts/python.exe" `
   .\tools\verify_runtime.py `
-  --comfy-root D:\StabilityMatrix\Data\Packages\ComfyUI_W
+  --comfy-root $ComfyRoot
 ```
 
 確認項目：

@@ -1,8 +1,37 @@
-# ComfyUI-H3-Continuum 3.9.0 — V3.9
+# ComfyUI-H3-Continuum 3.9.1 — V3.9
+
+## 3.9.1で変わった点（2026-10-04）
+
+Second Pass、Takeの再利用、Review音声に関するバグを修正しました。
+
+- **Second Pass**：音声のみ／複合キーフレームを保持し、途中Reviewや中間Chunk単独でも、その出力区間のconditioningとReference割当を照合して引き継ぎます。
+- **Takeの再利用**：Samplerのclosure、MODELのCFG／wrapperも互換性判定に含め、異なる生成設定のTakeを誤って再利用しないようにしました。
+- **ReviewのDriving Audio**：物理groupの自然時間に合わせて元PCMを1回だけ切り出します。Exact ON/OFFで開始位置を揃えます。
+- **音声resample**：ComfyUI Core標準APIを優先し、古いCoreでは従来方式へ戻します。同じVAE内部の重みを直接変更する場合のReference Encode Cacheの制約も下記に明記しました。
+
+**3.9.0から更新する場合**：更新後にComfyUIを再起動し、ブラウザーも更新してください。旧v5 Takeと履歴は読めて、削除されませんが、新しいv6生成の前半として再利用できません。新規Full Video、または **Start again from Chunk 1** で開始してください。公開Node ID・widget順・公式Workflowは維持し、引き続き **V3.9ノード** を使います。
+
+修正済みコードは **CPU 1,696成功・1スキップ**、対象を絞ったReview Second PassのGPU検証、生成／Take再利用の統合GPU検証に合格しています。ブラウザー受入は未完了です。任意のLATENT拡大で出る二重輪郭は別課題の [Issue #27](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/issues/27) として管理し、今回の修正の必須Gateには含めません。今回もmainソースの更新で、GitHub Release／Registry公開ではありません。
 
 ![H3 Continuum V3.9：固定の参照画像番号、チャンク別割り当て、Samplerへの1本の接続](docs/images/v39/v39-feature-summary.png)
 
 *現在の`main`はV3.9です。Image 1～9の固定番号、チャンク別のReference選択、V3.9 Samplerへの1本の接続が新しい操作です。*
+
+## 3.9.1の修正詳細
+
+Second Passで音声のみのキーフレームを保持し、複合キーフレームでは映像だけを空間適応します。ReviewのDriving Audioは、区間選択前の物理decode groupの自然時間から元PCMを切り出します。Exact ON/OFFの開始位置は共通です。完全に空のReview音声だけは選択映像の尺に合う無音を補い、部分的に短い音声はExact OFFで引き延ばしません。
+
+新しい生成はSampling Contract v6／Graph Contract v4を使用します。Samplerのコード・closureとMODELのCFG／wrapper等の設定も再利用判定へ含めます。旧v5のTake・raw・生成履歴は読めますが、v6生成へ継ぎ足せません。新規Full Video、またはReviewの「Start again from Chunk 1」で新しいrevisionを作成してください。旧Takeは残ります。署名を観測できない外部設定でも新規生成は可能ですが、自動再利用は無効になります。明示した不適合TakeやRetryを別Takeへ置き換えません。
+
+Reference／DrivingのresampleはCore標準APIを優先し、そのAPIがない旧Coreだけ従来のTorchAudioを使います。最終出力へ渡す元PCMの波形とsample rateは保持します。
+
+**Reference Encode Cacheの制約**：同じVAEオブジェクトの内部重みを直接書き換えた場合、その変更を自動検知しません。変更後は`v3.ref_encode_cache.clear_ref_encode_cache()`を呼ぶか、新しいVAEオブジェクトへ再ロードしてください。通常の同一VAE・同一入力ではcache HITを維持します。Decode Cache Helperのresetは別のcacheを対象とし、Reference Encode Cacheを消しません。
+
+この修正はV3.9内の変更です。公開Node ID・socket・widget順、公式Workflow、Run Storage v3、State／Session形式を維持し、LoRA Planは追加しません。CPU検証と実ブラウザー・GPU受入は別です。
+
+V3.9では、Second Passへ渡す条件を実際のReview出力区間へ対応させます。途中までの出力や中間Chunk単独でも、条件の照合に成功すれば、その区間自身のconditioningとReference割当を継承します。全体の完了状態や保存済みTakeは変更しません。条件が不足・不一致の場合は、従来の診断付きprompt-only fallbackを維持します。
+
+修正済みランタイムは**CPU 1696成功・1スキップ**、**512×512・24fpsのGPU 3ケース**（途中2区間、Chunk 2単独、完了済み3区間の再利用）で合格しました。全区間の条件継承を確認し、保存FLACと元PCMの対応区間は完全一致、既存Takeとrawファイルも保持しています。合格対象は修正対象の動作です。ブラウザー受入は未完了で、任意のLATENT拡大時の二重輪郭はIssue #27で別途調査します。過去のV3.8 Release／tagはそのまま利用できます。
 
 ## V3.9の基本操作を動画で見る
 
@@ -46,9 +75,9 @@ ComfyUIの **Templates → ComfyUI-H3-Continuum** には、今回選んだ[V3.9�
 
 ヘルパーの `All chunks` は接続画像を全チャンクに、`Per chunk` は画像×チャンクの表で指定します。このテンプレートは`Per chunk`で全チェックOFFから始まるため、Loaderを有効にした後、使用したいチャンクにもチェックしてください。空欄があっても番号はずれず、Image 1は常に`@R1`、Image 9は`@R9`です。Sequence Promptにはチャンクごとの動作を短く書き、そのチャンクで使う画像の`@R`タグを付けます。内部の`<Picture N>`番号はgroupごとに自動変換されます。使わないタグは警告しますが生成を止めません。まず短いチャンクと縮小済み画像で試してください。入力元画像はSamplerのReference Image Size設定より前にRAMを使うことがあります。
 
-V3.9.0は`main`の現行ソースです。今回のmain更新は新しいGitHub ReleaseやComfyUI Registry公開ではなく、過去のReleaseとtagは残します。設定済み1024×1024のReference-only GPU/APIテストは通っていますが、無改変の公式テンプレート初期設定とブラウザー保存・再読込は別の受入項目です。古い環境を厳密に再現するには対応する過去のRelease／tagとWorkflowを使用してください。現行mainにもV3.8 Samplerを残し、V3.8X2 Workflowを使えるようにしています。
+V3.9.1は`main`の現行ソースです。今回のmain更新は新しいGitHub ReleaseやComfyUI Registry公開ではなく、過去のReleaseとtagは残します。設定済み1024×1024のReference-only GPU/APIテストは通っていますが、無改変の公式テンプレート初期設定とブラウザー保存・再読込は別の受入項目です。古い環境を厳密に再現するには対応する過去のRelease／tagとWorkflowを使用してください。現行mainにもV3.8 Samplerを残し、V3.8X2 Workflowを使えるようにしています。
 
-`pyproject.toml`の宣言上はComfyUI `>=0.32.0`ですが、以前の実生成・GPU検証はComfyUI `0.34.2`、上記の限定したFixedキャッシュ比較は`0.38.0`で行いました。最低宣言版でV3.9の実機動作を確認済みという意味ではありません。最新の記録済みWindows CPU試験は`1569 passed / 1 skipped / 0 failed`、以前の別環境Linux再実行報告は`1534 passed / 3 skipped / 0 failed`で、新しいキャッシュ／外部INT試験は含みません。これらは無改変の公式テンプレートの実ブラウザー保存・再読込やGPU受入を代替しません。
+`pyproject.toml`の宣言上はComfyUI `>=0.32.0`ですが、以前の実生成・GPU検証はComfyUI `0.34.2`、上記の限定したFixedキャッシュ比較は`0.38.0`で行いました。最低宣言版でV3.9の実機動作を確認済みという意味ではありません。最新の記録済みWindows CPU試験は`1696 passed / 1 skipped / 0 failed`、以前の別環境Linux再実行報告は`1534 passed / 3 skipped / 0 failed`で、新しいキャッシュ／外部INT試験は含みません。これらは無改変の公式テンプレートの実ブラウザー保存・再読込やGPU受入を代替しません。
 
 ## V3.9 Reference Images
 
@@ -84,7 +113,7 @@ Promptは実行を止めません。明示的なTimelineでも解析できなけ
 
 **互換性：** V3.8X2の既存Workflowは旧V3.8 Samplerと旧4～9ヘルパーで引き続き利用します。V3.9では新ヘルパーへの接続が必要です。旧Workflow上でSamplerの型だけ変えず、上記のV3.9専用Workflowを開いてください。以前のV3.9試作WorkflowにあったSampler直結1～3やSampler側の割り当て欄は配線と保存widgetの位置が異なります。V3.8の途中Run／Takeは自動移行しません。元Workflowを保存し、V3.9では別Run Nameを使ってください。
 
-旧V3.9操作系のRR-R6BブラウザーPASSは、新しいヘルパーのブラウザー保存・再読込PASSを意味しません。新ヘルパーは設定済みGPU/API実行の証拠がありますが、公式テンプレート初期設定の受入は別です。CPU／JS・Manifestも別に判定し、V3.9 GitHub Release／Registry公開はまだ行っていません。
+以前のV3.9操作系のブラウザー確認は、新しいヘルパーの保存・再読込確認とは別です。新ヘルパーは設定済みGPU/API実行の証拠がありますが、公式テンプレート初期設定の受入は別です。CPU／JS・Manifestも別に判定し、V3.9 GitHub Release／Registry公開はまだ行っていません。
 
 **バージョン境界：** V3.8X2（package 3.8.3）とV3.9.0は別Workflowです。今回、新しいtag・GitHub Release・保守ブランチ・Registry版は作成せず、既存Releaseも削除しません。旧V3.8.0は既存の`v3.8.0` tagから取得できます。
 
@@ -323,7 +352,7 @@ Long Terminal Mergeのpairは分割せず、1つのReview単位として扱い�
 
 Driving AudioはReview／Smart Regenerateと併用できます。Continuum Image／Audio／Video Loaderは任意入力向けのnative bypassに対応します。
 
-> **Reviewの制限:** Review途中のpartial sequenceでは、Second Pass／`refine_context`を正式対応範囲に含めません。Reviewを完了してsequenceを確定してからSecond Passを実行してください。
+> **V3.8 Reviewの制限:** Review途中のpartial sequenceでは、Second Pass／`refine_context`を正式対応範囲に含めません。Reviewを完了してsequenceを確定してからSecond Passを実行してください。V3.9では、上記のとおり検証済みの出力区間条件を継承できます。
 
 ### Take・Branch・安全な継続
 
@@ -414,7 +443,7 @@ Prompt/CLIPの数値はconditioning区間だけで、総生成時間ではあり
 
 RTX 5060 Ti 16 GB／RAM 64 GBの検証環境で測定したSage-only Production baselineは、576×576 T2VA 1×5秒が168.069秒、640×640 FL2VA Long Terminal Merge 3×5秒が379.765秒です。環境・設定固有の測定値であり、すべての環境に対する速度保証ではありません。Samplingが最大コストで、Continuum Assemble + Seamは1%未満でした。
 
-**V3.8.0はhistorical release baselineです。V3.8X2はpackage 3.8.3の別Workflowとして維持し、V3.9.0はmainの現行ソースです。** V3.8X2が内部利用する旧module/classはsourceへ維持します。現在の登録面はV3.8X2の10 IDとV3.9追加の2 IDです。一部は旧IDを維持しますが、それ以外のIDを必要とする旧保存Workflowは対応するhistorical Release/tagを使用してください。Still Image Guideは引き続きExperimentalです。
+**V3.8.0はhistorical release baselineです。V3.8X2はpackage 3.8.3の別Workflowとして維持し、V3.9はmainの現行ソースです。** V3.8X2が内部利用する旧module/classはsourceへ維持します。現在の登録面はV3.8X2の10 IDとV3.9追加の2 IDです。一部は旧IDを維持しますが、それ以外のIDを必要とする旧保存Workflowは対応するhistorical Release/tagを使用してください。Still Image Guideは引き続きExperimentalです。
 
 ## V3.5.1 Reference Audio／互換性更新
 

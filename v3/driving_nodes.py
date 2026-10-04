@@ -16,7 +16,7 @@ from ..constants import (
     normalize_continuity_mode,
     normalize_diagnostics_mode,
 )
-from ..driving_audio import prepare_driving_audio_source
+from ..driving_audio import prepare_driving_audio_source, slice_review_source_audio
 from ..guide_timeline import (
     GUIDE_TYPE,
     make_still_image_guide,
@@ -854,6 +854,20 @@ class H3ContinuumSamplerV39(H3ContinuumSamplerV38):
         plan = outputs[2].get("reference_routing_v1")
         if not isinstance(plan, dict):
             raise RuntimeError("V3.9 Reference Routing has no verified output Plan")
+        if len(outputs) == 6 and isinstance(outputs[5], dict):
+            from .refine_context import MAGIC, OUTPUT_SCOPE_KEY, project_refine_context
+            if outputs[5].get("magic") == MAGIC:
+                context = project_refine_context(outputs[5], outputs[2])
+                if context is not outputs[5]:
+                    status = outputs[3]
+                    if context.get(OUTPUT_SCOPE_KEY) is not None:
+                        from .nodes import _PARTIAL_REVIEW_SECOND_PASS_WARNING
+                        status = str(status).replace(
+                            _PARTIAL_REVIEW_SECOND_PASS_WARNING,
+                            "Second Pass: output-scope conditioning verified; "
+                            "the full sequence may still be incomplete.",
+                        )
+                    outputs = (*outputs[:3], status, outputs[4], context)
         return {
             "ui": {"h3_reference_plan": [format_reference_plan(plan)]},
             "result": outputs,
@@ -1103,6 +1117,7 @@ class H3ContinuumAssembleSeamV35(H3ContinuumAssembleSeamV34):
         diagnostics_mode = str(_singleton(diagnostics, "diagnostics"))
         preserved_audio = _copy_audio(plan.get(_DRIVING_AUDIO_PLAN_KEY))
         selected_audio = preserved_audio or _copy_audio(driving_audio)
+        selected_audio = slice_review_source_audio(selected_audio, plan)
         selected_audio_source = None
         if selected_audio is not None:
             selected_audio_source = (

@@ -4,50 +4,9 @@ Date: 2026-09-14 (Asia/Tokyo)
 Phase: R0 only  
 Architecture changes: none
 
-## 1. Authoritative baseline
+## 1. Historical baseline
 
-R0の正本は、開始時点の次のdirty treeである。HEADや別cloneへ置き換えない。
-
-```text
-authoritative_runtime_path:
-  D:\StabilityMatrix\Data\Packages\ComfyUI_W\custom_nodes\ComfyUI-H3-Continuum
-branch: main
-HEAD: c421913bf1311050ac10a6d782ce40f9e72be852
-Python: 3.13.12
-Torch: 2.14.0+cu130
-ComfyUI: 0.35.1
-GPU initialized by R0: NO
-user backend 8188 touched: NO
-```
-
-開始時点には既存のtracked変更と、次のuntrackedファイルがあった。すべてユーザー作業として保持した。
-
-| Untracked file | SHA-256 |
-|---|---|
-| `examples/workflows/MiniMax_H3_Continuum_V38.json` | `9772DD1A82C20FD0D6F40AE7CD2B2F11DFB81641B86515ADB17C6555ADA7AFF3` |
-| `examples/workflows/MiniMax_H3_Continuum_V38.zip` | `9B684C37EBFE116FCB5C68032B82E5D49279325548C48494F23B3309BB211924` |
-| `tests/test_audit_boundary_repairs.py` | `FE23752312D62DDC8C23A3C598ED2F92F2D46E2E4460F06AEA91921659092451` |
-
-Workflow ZIP内の唯一のentryは`MiniMax_H3_Continuum_V38.json`で、展開JSONのSHA-256は上表のJSONと一致した。
-
-Baseline diff artifact:
-
-```text
-D:\Codex\_test_results\ComfyUI-H3-Continuum\r0-runtime-redesign-20260914\BASELINE_WORKTREE.diff
-```
-
-Snapshot:
-
-```text
-verified:
-  D:\Codex\_snapshots\ComfyUI-H3-Continuum\pre-r0-runtime-redesign-verified-excluding-pytest-cache-20260914_021621
-  files: 892
-
-partial attempt (Copy-Item was denied by .pytest_cache ACL):
-  D:\Codex\_snapshots\ComfyUI-H3-Continuum\pre-r0-runtime-redesign-20260914_021557
-```
-
-Verified snapshotは`.git`とアクセス不能だった`.pytest_cache`だけを除外し、source/destination file countを一致確認した。
+この文書は2026-09-14時点のR0 CPU characterizationです。現行3.9.1の受入結果ではありません。当時の実装・Workflow・既存変更を保持した状態で調査し、アーキテクチャ変更やGPU生成は行っていません。
 
 ## 2. Baseline validation
 

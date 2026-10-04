@@ -37,7 +37,7 @@ from .file_backed_buffer import (
     format_auto_buffer_decision,
     select_auto_buffer_backend,
 )
-from .plan import FPS, validate_assembly_plan
+from .plan import FPS, validate_assembly_plan, REVIEW_AUDIO_PROJECTION_KEY
 
 
 _COPY_BATCH_FRAMES = 8
@@ -526,7 +526,9 @@ def _write_assembly(
     driving_audio_report = ""
     if final_audio_override is not None:
         result_audio = dict(final_audio_override)
-        if exact_total_duration:
+        override_waveform, _ = validate_audio(result_audio)
+        empty_review = (REVIEW_AUDIO_PROJECTION_KEY in plan and int(override_waveform.shape[-1]) == 0)
+        if exact_total_duration or empty_review:
             result_audio, _ = adjust_audio_duration_direct(
                 result_audio,
                 target_frames=output_frames,
@@ -543,6 +545,8 @@ def _write_assembly(
             f"sample_rate={int(selected_rate)}, samples={int(waveform.shape[-1])}; "
             "generated audio and Audio Seam bypassed."
         )
+        if empty_review:
+            driving_audio_report += " Empty Review interval: silence added for the selected video duration."
 
     reports.append(
         f"Assembled {len(units)} physical decoded group(s) into "

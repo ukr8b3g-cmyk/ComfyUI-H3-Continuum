@@ -12,6 +12,7 @@ ASSEMBLY_PLAN_MAGIC = "H3_CONTINUUM_ASSEMBLY_PLAN"
 ASSEMBLY_PLAN_SCHEMA_VERSION = 1
 FPS = 24
 SECOND_PASS_CONTRACT_VERSION = 1
+REVIEW_AUDIO_PROJECTION_KEY = "review_audio_projection_v1"
 
 
 class AssemblyPlanError(ValueError):
@@ -134,7 +135,63 @@ _validate_assembly_plan_v300 = validate_assembly_plan
 def validate_assembly_plan(plan):
     result = _validate_assembly_plan_v300(plan)
     _validate_assembly_plan_contract(plan)
+    validate_review_audio_projection(plan)
     return result
+
+
+def validate_review_audio_projection(plan):
+    """Check a scoped PCM coordinate without recomputing its absolute origin."""
+    if REVIEW_AUDIO_PROJECTION_KEY not in plan:
+        return None
+    metadata = plan[REVIEW_AUDIO_PROJECTION_KEY]
+    if not isinstance(metadata, dict):
+        raise AssemblyPlanError("Review audio projection must be a dictionary")
+    if (type(metadata.get("version")) is not int or metadata.get("version") != 1 or metadata.get("kind") != "current_review_unit"
+            or metadata.get("coordinate_space") != "full_source_pcm"):
+        raise AssemblyPlanError("Review audio projection version or coordinate space is invalid")
+    for field in ("fps", "start_chunk", "end_chunk", "source_start_frame", "source_stop_frame"):
+        if type(metadata.get(field)) is not int:
+            raise AssemblyPlanError(f"Review audio projection {field} must be an integer")
+    if metadata["fps"] != FPS or int(plan.get("fps", 0)) != FPS:
+        raise AssemblyPlanError("Review audio projection FPS must be 24")
+    start, end = metadata["start_chunk"], metadata["end_chunk"]
+    first, stop = metadata["source_start_frame"], metadata["source_stop_frame"]
+    chunks = [int(chunk["chunk_index"]) for chunk in plan["chunks"]]
+    units = plan.get("decode_groups") or plan["chunks"]
+    if (start < 1 or end < start or len(chunks) != end - start + 1
+            or any(index != start + position for position, index in enumerate(chunks))
+            or first < 0 or stop <= first
+            or stop - first != sum(int(unit["net_frames"]) for unit in units)):
+        raise AssemblyPlanError("Review audio projection physical range is inconsistent")
+    return metadata
+
+
+def make_review_audio_projection(plan, *, start_chunk: int, end_chunk: int):
+    """Read natural retained ranges before narrowing the accepted decode view."""
+    validate_assembly_plan(plan)
+    if REVIEW_AUDIO_PROJECTION_KEY in plan:
+        raise AssemblyPlanError("Review output cannot be projected twice")
+    start, end = int(start_chunk), int(end_chunk)
+    selected = []
+    covered = []
+    for unit in plan.get("decode_groups") or plan["chunks"]:
+        indices = unit.get("logical_chunk_indices") or [unit["chunk_index"]]
+        if not any(start <= int(index) <= end for index in indices):
+            continue
+        if not all(start <= int(index) <= end for index in indices):
+            raise AssemblyPlanError("Review audio projection cannot split a physical group")
+        first, stop = unit.get("frame_start"), unit.get("frame_stop")
+        if type(first) is not int or type(stop) is not int or stop - first != int(unit["net_frames"]):
+            raise AssemblyPlanError("Review audio projection needs retained natural frame ranges")
+        if selected and selected[-1][1] != first:
+            raise AssemblyPlanError("Review audio projection ranges are not contiguous")
+        selected.append((first, stop))
+        covered.extend(int(index) for index in indices)
+    if not selected or covered != list(range(start, end + 1)):
+        raise AssemblyPlanError("Review audio projection is outside the accepted sequence")
+    return dict(version=1, kind="current_review_unit", coordinate_space="full_source_pcm",
+                fps=FPS, start_chunk=start, end_chunk=end,
+                source_start_frame=selected[0][0], source_stop_frame=selected[-1][1])
 
 
 def make_assembly_plan(*args, **kwargs):

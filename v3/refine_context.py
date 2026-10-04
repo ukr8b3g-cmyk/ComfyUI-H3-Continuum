@@ -21,6 +21,7 @@ from ..guide_timeline import MARK_STILL_IMAGE_GUIDE
 
 MAGIC = "H3_CONTINUUM_REFINE_CONTEXT"
 VERSION = 1
+OUTPUT_SCOPE_KEY = "output_scope_v1"
 
 
 class RefineContextError(ValueError):
@@ -251,6 +252,49 @@ def _group_field_tuple(group: Mapping[str, Any], name: str) -> tuple[int, ...]:
         ) from exc
 
 
+def project_refine_context(context: dict[str, Any], assembly_plan: Mapping[str, Any]):
+    """Bind a V3.9 runtime-only view to complete physical output groups.
+
+    Sequence completion and saved history are unchanged. A partial capture may
+    serve a smaller decode view only after the ordinary complete-group checks
+    pass, including the frozen Reference route. Missing or mismatched partial
+    evidence retains the legacy diagnostic fallback, never guessed conditions.
+    """
+    validate_refine_context(context)
+    contract = assembly_plan.get("second_pass_contract")
+    planned = contract.get("physical_groups") if isinstance(contract, Mapping) else None
+    if not isinstance(planned, list) or not planned:
+        return context
+    source = context["groups"]
+    keys = [tuple(group["logical_chunks"]) for group in source]
+    targets = [tuple(group.get("logical_chunks", ())) for group in planned]
+    if context["complete"] and keys == targets:
+        return validate_refine_context(context, assembly_plan=assembly_plan)
+    if len(set(keys)) != len(keys) or len(set(targets)) != len(targets):
+        return context
+    lookup = dict(zip(keys, source))
+    if any(key not in lookup for key in targets):
+        return context
+    selected = [lookup[key] for key in targets]
+    view = dict(context)
+    view["groups"] = tuple(
+        {**group, "group_id": index} for index, group in enumerate(selected)
+    )
+    view[OUTPUT_SCOPE_KEY] = MappingProxyType({
+        "version": 1,
+        "source_group_ids": tuple(group["group_id"] for group in selected),
+    })
+    try:
+        validate_refine_context(view, assembly_plan=assembly_plan)
+    except RefineContextError as exc:
+        # These groups were previously optional/incomplete. Do not add a new
+        # execution stop for unavailable output-scope evidence.
+        fallback = dict(context)
+        fallback["notes"] = (*context["notes"], f"Output scope unavailable: {exc}")
+        return fallback
+    return view
+
+
 def validate_refine_context(
     context: Any, assembly_plan: Mapping[str, Any] | None = None
 ) -> dict[str, Any]:
@@ -278,6 +322,14 @@ def validate_refine_context(
     notes = context.get("notes")
     if not isinstance(notes, tuple) or any(not isinstance(note, str) for note in notes):
         raise RefineContextError("refine context notes must be an immutable string tuple")
+    scope = context.get(OUTPUT_SCOPE_KEY)
+    if scope is not None:
+        ids = scope.get("source_group_ids") if isinstance(scope, Mapping) else None
+        if (not isinstance(scope, Mapping) or scope.get("version") != 1
+                or not isinstance(ids, tuple) or len(ids) != len(groups)
+                or any(type(value) is not int or value < 0 for value in ids)
+                or tuple(sorted(set(ids))) != ids or not groups):
+            raise RefineContextError("refine context output scope is invalid")
 
     previous_clip_index = 0
     for expected_id, group in enumerate(groups):
@@ -345,9 +397,9 @@ def validate_refine_context(
         # Its local group ids describe capture order, not Assembly Plan position;
         # validating those partial entries by index would incorrectly turn the
         # intended prompt-only fallback into a broken typed-contract hard error.
-        if not context["complete"]:
+        if not context["complete"] and scope is None:
             return context
-        if context["complete"] and len(plan_groups) != len(groups):
+        if len(plan_groups) != len(groups):
             raise RefineContextError(
                 "complete refine context physical-group count differs from assembly plan"
             )
@@ -365,6 +417,15 @@ def validate_refine_context(
                     view_groups[group_id] if isinstance(view_groups, list)
                     and group_id < len(view_groups) else None
                 )
+                if scope is not None:
+                    # Inspector retains the full run, including pending groups.
+                    # A Chunk-2 view must not compare against Inspector group 1.
+                    matches = [item for item in view_groups
+                               if isinstance(item, Mapping)
+                               and isinstance(item.get("descriptor"), Mapping)
+                               and tuple(item["descriptor"].get("logical_chunks", ()))
+                               == tuple(group["logical_chunks"])] if isinstance(view_groups, list) else []
+                    expected_route = matches[0] if len(matches) == 1 else None
                 captured_route = group.get("reference_routing_v1")
                 if (not isinstance(expected_route, Mapping)
                         or not isinstance(captured_route, Mapping)
@@ -536,6 +597,18 @@ def adapt_group_conditioning(
                     )
                 keyframe = dict(frozen_keyframe)
                 latent = keyframe.get("latent")
+                audio_latent = keyframe.get("audio_latent")
+                if audio_latent is not None and (
+                    not torch.is_tensor(audio_latent) or audio_latent.ndim != 4
+                ):
+                    raise RefineConditioningAdaptationError(
+                        f"refine group {group_id} keyframe audio latent is invalid"
+                    )
+                # Core keyframes may carry audio without a spatial video latent.
+                # Keep its frozen audio and timing; resize only video payloads.
+                if latent is None and audio_latent is not None:
+                    adapted_keyframes.append(keyframe)
+                    continue
                 if not torch.is_tensor(latent) or latent.ndim != 5:
                     raise RefineConditioningAdaptationError(
                         f"refine group {group_id} keyframe latent is invalid"

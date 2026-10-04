@@ -16,6 +16,7 @@ from ..v2.sampling import latent_from_cpu
 from .plan import SECOND_PASS_CONTRACT_VERSION
 from .refine_context import (
     MAGIC as REFINE_CONTEXT_MAGIC,
+    OUTPUT_SCOPE_KEY,
     RefineConditioningAdaptationError,
     RefineContextError,
     adapt_group_conditioning,
@@ -283,13 +284,16 @@ def prepare_physical_refine_groups(
                 f"using legacy prompt-only conditioning ({exc})."
             )
         else:
-            if bool(validated_context.get("complete")):
+            if (bool(validated_context.get("complete"))
+                    or validated_context.get(OUTPUT_SCOPE_KEY) is not None):
                 captured_groups = validated_context["groups"]
             else:
                 warnings.append(
                     "WARNING: refine_context capture is incomplete; using legacy "
                     "prompt-only conditioning."
                 )
+                warnings.extend(str(note) for note in validated_context.get("notes", ())
+                                if str(note).startswith("Output scope unavailable:"))
 
     group_models: list[Any] = []
     group_conditioning: list[list[Any]] = []

@@ -261,11 +261,13 @@ def test_run_storage_graph_contract_fingerprints_helper_vae_and_sources():
             "inputs": {
                 "model": ["model", 0],
                 "clip": ["clip", 0],
+                "sampler": ["ksampler", 0],
                 "audio_references": ["refs", 0],
             },
         },
         "model": {"class_type": "UNETLoader", "inputs": {"name": "model.safetensors"}},
         "clip": {"class_type": "CLIPLoader", "inputs": {"name": "text.safetensors"}},
+        "ksampler": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
         "refs": {
             "class_type": "H3ContinuumReferenceAudios",
             "inputs": {

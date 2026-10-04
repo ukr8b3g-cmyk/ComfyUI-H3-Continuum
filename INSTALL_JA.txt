@@ -1,14 +1,13 @@
-ComfyUI-H3-Continuum 3.9.0 — V3.9 / V3.8X2 インストール
+ComfyUI-H3-Continuum 3.9.1 — V3.9 / V3.8X2 インストール
 
-V3.9.0はmainの現行ソースです。新しいGitHub Release／Registry公開は別工程で、過去のRelease／tagは残します。V3.8X2 WorkflowをV3.9へ自動変換せず、別々のWorkflowとして保存してください。保存済みRun／Takeも自動移行しません。
+3.9.1はV3.9の安定化修正版です。旧v5 Takeと履歴は読めますが、新しいv6生成の前半には再利用できません。新規Full VideoまたはStart again from Chunk 1で開始してください。新しいGitHub Release／Registry公開は別工程で、過去のRelease／tagは残します。V3.8X2 WorkflowをV3.9へ自動変換せず、別々のWorkflowとして保存してください。保存済みRun／Takeも自動移行しません。
 
 1. ComfyUIを終了します。
 2. 既存の `ComfyUI-H3-Continuum` を更新する場合は、作業中のworkflowとRun Storageを先に退避します。
 3. ZIPを展開し、`ComfyUI-H3-Continuum` フォルダーを `ComfyUI/custom_nodes/` に配置します。
 4. ComfyUIを再起動します。旧UIが残る場合はブラウザをハードリロードします。
 
-StabilityMatrixの配置例:
-`D:\StabilityMatrix\Data\Packages\ComfyUI_W\custom_nodes\ComfyUI-H3-Continuum\`
+インストール先は、使用しているComfyUIの `custom_nodes/ComfyUI-H3-Continuum/` です。
 
 PowerShellによる自動インストール:
 `install_windows.ps1`

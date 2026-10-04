@@ -9,6 +9,8 @@ from typing import Any
 
 import torch
 
+from .audio_compat import resample_audio
+
 
 DRIVING_AUDIO_CONTRACT_VERSION = 1
 DRIVING_AUDIO_PREPROCESS_VERSION = 1
@@ -49,6 +51,20 @@ class DrivingAudioAssets:
     audio_latent: torch.Tensor
 
 
+def slice_review_source_audio(audio: dict[str, Any] | None, assembly_plan):
+    """Cut the selected full-source PCM once; do not alter the plan or source."""
+    from .v3.plan import validate_review_audio_projection
+    from .media import validate_audio
+    projection = validate_review_audio_projection(assembly_plan)
+    if audio is None or projection is None:
+        return audio
+    waveform, sample_rate = validate_audio(audio)
+    samples = int(waveform.shape[-1])
+    start = min(samples, round(projection["source_start_frame"] * sample_rate / projection["fps"]))
+    stop = min(samples, round(projection["source_stop_frame"] * sample_rate / projection["fps"]))
+    return {**audio, "waveform": waveform[..., start:stop], "sample_rate": sample_rate}
+
+
 def prepare_driving_audio_source(
     audio: dict[str, Any] | None,
     audio_vae: Any,
@@ -77,9 +93,7 @@ def prepare_driving_audio_source(
     resolved_rate = int(getattr(audio_vae, "audio_sample_rate", 32000))
     resampled = effective_waveform
     if sample_rate != resolved_rate:
-        import torchaudio
-
-        resampled = torchaudio.functional.resample(
+        resampled = resample_audio(
             effective_waveform,
             sample_rate,
             resolved_rate,

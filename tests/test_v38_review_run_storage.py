@@ -89,6 +89,7 @@ def _contract(
 ) -> dict:
     global_contract = {
         "sampling_contract_version": SAMPLING_CONTRACT_VERSION,
+        "runtime_signature_version": 1,
         "conditioning_mode": "t2va",
         "width": 96,
         "height": 64,
@@ -435,6 +436,7 @@ def test_rr_r5_selected_foreign_take_requires_whole_compatible_prefix(tmp_path):
         "chunks": [],
     }
     controller._write_manifest()
+    controller.resume_safe = True
     imported = controller._adopt_plan_prefix(controller._plan_import)
     assert len(imported) == 2
     assert all(record["storage_revision_id"] == controller.revision_id for record in imported)

@@ -25,7 +25,7 @@ def test_v3_reference_video_imports_the_shared_temporal_helper():
 def test_reference_bundle_fingerprint_ignores_unused_legacy_vae():
     graph = {
         "1": {"class_type": "H3ContinuumSamplerV38", "inputs": {
-            "model": ["2", 0], "clip": ["3", 0],
+            "model": ["2", 0], "clip": ["3", 0], "sampler": ["8", 0],
             "audio_references": ["4", 0], "reference_audio_vae": ["5", 0]}},
         "2": {"class_type": "UNETLoader", "inputs": {"unet_name": "model"}},
         "3": {"class_type": "CLIPLoader", "inputs": {"clip_name": "clip"}},
@@ -34,6 +34,7 @@ def test_reference_bundle_fingerprint_ignores_unused_legacy_vae():
         "5": {"class_type": "VAELoader", "inputs": {"vae_name": "unused"}},
         "6": {"class_type": "VAELoader", "inputs": {"vae_name": "active"}},
         "7": {"class_type": "LoadAudio", "inputs": {"audio": "voice.wav"}},
+        "8": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
     }
 
     def contract(value):

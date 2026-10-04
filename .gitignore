@@ -2,4 +2,5 @@ __pycache__/
 .pytest_cache/
 *.py[cod]
 *.safetensors
+!tests/fixtures/v39_sampling_v5/**/*.safetensors
 *.tmp

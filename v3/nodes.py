@@ -23,7 +23,7 @@ from ..v2.nodes import (
     validate_sparse_prompt_overrides,
 )
 from .assembly import H3ContinuumAssembleSeamExperimental, H3ContinuumAssembleV3
-from .plan import make_assembly_plan
+from .plan import make_assembly_plan, make_review_audio_projection, REVIEW_AUDIO_PROJECTION_KEY
 from .execution_planner import (
     PROJECTION_CURRENT_REVIEW_UNIT,
     PROJECTION_FULL_ACCEPTED_PREFIX,
@@ -188,6 +188,9 @@ def _apply_review_decode_scope(
         return outputs
     start = int(decision.start_chunk)
     end = int(decision.end_chunk)
+    audio_projection = make_review_audio_projection(
+        assembly_plan, start_chunk=start, end_chunk=end,
+    )
 
     selected_entries = entries[start - 1 : end]
     sequence_complete = len(entries) == int(configured_chunks)
@@ -220,6 +223,7 @@ def _apply_review_decode_scope(
         terminal_merged=selected_terminal_merged,
         terminal_initial_pair=(start == 1),
     )
+    scoped_plan[REVIEW_AUDIO_PROJECTION_KEY] = audio_projection
     # Projection narrows the AV decode view, not the already-verified routing
     # decision. Keep that Queue-local plan available to the public Inspector.
     route_plan = assembly_plan.get("reference_routing_v1")

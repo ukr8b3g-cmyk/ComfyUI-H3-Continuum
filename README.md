@@ -1,4 +1,33 @@
-# ComfyUI-H3-Continuum 3.9.0 — V3.9
+# ComfyUI-H3-Continuum 3.9.1 — V3.9
+
+## 3.9.1 — what changed (2026-10-04)
+
+This patch fixes Second Pass conditioning, Take reuse and Review audio:
+
+- **Second Pass:** preserve audio-only/mixed keyframes and inherit the verified conditioning and Reference assignments of the actual Review output, including a single middle chunk.
+- **Take reuse:** include sampler closures and MODEL CFG/wrappers in compatibility checks to prevent reuse under different generation settings.
+- **Review Driving Audio:** cut the source PCM once at the physical group's natural time, with the same start position for Exact ON/OFF.
+- **Audio resampling:** prefer ComfyUI Core's standard API, with the legacy fallback for older Core versions. The Reference Encode Cache limitation for direct VAE weight changes is documented below.
+
+**Updating from 3.9.0:** restart ComfyUI and refresh the browser after updating. Existing v5 Takes and history remain readable and are not deleted, but cannot be reused as prefixes for new v6 generation. Start a new Full Video or choose **Start again from Chunk 1**. Public node IDs, widget order and official workflows remain unchanged; keep using the **V3.9** nodes.
+
+The repaired code passed **1,696 CPU tests / 1 skipped**, targeted Review Second Pass GPU checks and an integrated generation/reuse check. Browser acceptance remains pending. Optional latent-upscale doubled outlines are tracked separately in [Issue #27](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/issues/27); they are not a required gate for these fixes. This is a main-source update, not a new GitHub Release or Registry publication.
+
+## 3.9.1 repair details
+
+Second Pass preserves audio-only keyframes and adapts only the video component of mixed keyframes. Review Driving Audio uses the retained natural frame range of the physical decode group, measured before projection. Exact ON/OFF share that PCM origin. Completely empty Review intervals receive silence for the selected video duration; partially short audio stays short with Exact OFF.
+
+New generation uses Sampling Contract v6 and Graph Contract v4, including sampler code/closures and MODEL CFG/wrapper settings. Saved v5 Takes, raw tensors and provenance remain readable, but cannot be reused in v6 generation. Start a new Full Video or use Review's **Start again from Chunk 1** to create a new revision. Old Takes remain intact. Unobservable external settings still allow fresh generation with reuse disabled; incompatible explicit Take/Retry requests are not replaced with a different Take.
+
+Reference/Driving resampling prefers Core's standard API and uses legacy TorchAudio only when that API is absent. Preserved output PCM keeps its original waveform and sample rate.
+
+**Reference Encode Cache limitation:** direct weight mutation inside the same VAE object is not detected automatically. Call `v3.ref_encode_cache.clear_ref_encode_cache()` afterwards or reload into a new VAE object. Unchanged VAE/input pairs continue to hit the cache. Decode Cache Helper reset affects a separate cache and does not clear Reference Encode Cache.
+
+This repair stays within V3.9: public node IDs, socket/widget order, official workflows, Run Storage v3 and State/Session formats are retained. LoRA Plan is not included. CPU checks and browser/GPU acceptance are separate.
+
+V3.9 also projects captured conditioning onto the actual Review output groups before Second Pass. A partial prefix or a single middle chunk can inherit its own conditioning and Reference assignments when the context validates. Full-sequence completion and saved Takes are unchanged; missing or mismatched context keeps the diagnostic prompt-only fallback.
+
+The repaired runtime passed **1696 CPU tests, 1 skipped**, and three targeted GPU cases at **512×512 / 24 fps**: a two-group partial prefix, Chunk 2 alone, and complete three-group reuse. All groups inherited verified conditioning; saved FLAC matched the corresponding source PCM exactly and existing Takes/raw files were preserved. This validates the targeted repair. Browser acceptance remains pending; optional latent-upscale double outlines are a separate investigation in Issue #27. Historical V3.8 releases and tags remain available unchanged.
 
 ![H3 Continuum V3.9: fixed Reference Image slots, per-chunk assignments, and one Sampler input](docs/images/v39/v39-feature-summary.png)
 
@@ -46,9 +75,9 @@ The selected V3.9 template has 32 nodes. Image loaders 1–6 are wired to the ne
 
 In the helper, `All chunks` uses connected images throughout; `Per chunk` provides an image-by-chunk table. The template starts in `Per chunk` with all assignments off: after enabling a loader, tick the chunks that should use it. Slot numbers never shift: Image 1 is `@R1` and Image 9 is `@R9`, even when intervening slots are empty. In Sequence Prompt, describe the action for each chunk and use `@R` tags only for active References; their actual `<Picture N>` numbers are resolved per group. Unused tags warn without stopping generation. Start with short chunks and pre-resized images: source images may consume RAM before the Sampler's Reference Image Size setting applies.
 
-V3.9.0 is the current source version on `main`. This source update is **not** a new GitHub Release or ComfyUI Registry publication; existing Releases and tags are left in place. Configured 1024×1024 Reference-only GPU/API runs succeeded, but the unchanged default template and browser save/reload remain separate acceptance gates. For a reproducible older environment, use the matching historical Release/tag and workflow; the retained V3.8 Sampler on current `main` specifically supports V3.8X2 workflows.
+V3.9.1 is the current source version on `main`. This source update is **not** a new GitHub Release or ComfyUI Registry publication; existing Releases and tags are left in place. Configured 1024×1024 Reference-only GPU/API runs succeeded, but the unchanged default template and browser save/reload remain separate acceptance gates. For a reproducible older environment, use the matching historical Release/tag and workflow; the retained V3.8 Sampler on current `main` specifically supports V3.8X2 workflows.
 
-`pyproject.toml` declares ComfyUI `>=0.32.0`; earlier real-generation/GPU validation used ComfyUI `0.34.2`, and the scoped Fixed cache comparison above used `0.38.0`. The minimum declaration does not establish V3.9 runtime acceptance on 0.32.0. The latest recorded Windows CPU run is `1569 passed / 1 skipped / 0 failed`; the earlier separate Linux rerun report records `1534 passed / 3 skipped / 0 failed` and does not include the new cache or external INT tests. Neither replaces browser save/reload or GPU acceptance for the unchanged official template.
+`pyproject.toml` declares ComfyUI `>=0.32.0`; earlier real-generation/GPU validation used ComfyUI `0.34.2`, and the scoped Fixed cache comparison above used `0.38.0`. The minimum declaration does not establish V3.9 runtime acceptance on 0.32.0. The latest recorded Windows CPU run is `1696 passed / 1 skipped / 0 failed`; the earlier separate Linux rerun report records `1534 passed / 3 skipped / 0 failed` and does not include the new cache or external INT tests. Neither replaces browser save/reload or GPU acceptance for the unchanged official template.
 
 ## V3.9 Reference Images
 
@@ -84,7 +113,7 @@ The [official V3.9 workflow](examples/workflows/MiniMax_H3_Continuum_V39.json) i
 
 **Compatibility:** Existing V3.8X2 workflows still use the V3.8 Sampler and old Reference Images 4–9 helper. V3.9 needs its new helper and connection. Open the new V3.9 workflow instead of only changing the Sampler type in an old graph: older V3.9 prototype workflows with direct 1–3 connections and Sampler-side routing widgets need manual rewiring, and their saved widget positions may differ. Accepted V3.8 Runs/Takes are not automatically migrated. Keep a copy of the previous workflow and use a new Run Name for V3.9.
 
-The earlier RR-R6B browser PASS covered the old V3.9 controls. The new helper has configured GPU/API execution evidence; its browser save/reload and the unchanged default template's full acceptance are still open. CPU/JS and manifest results are separate; no V3.9 Release/Registry publication is implied.
+Earlier browser checks covered the previous V3.9 controls. The new helper has GPU/API execution evidence; its browser save/reload and the unchanged default template's full acceptance are still open. CPU/JS and manifest results are separate; no V3.9 Release/Registry publication is implied.
 
 **Version boundary:** V3.8X2 package 3.8.3 and V3.9.0 are separate workflows. This update does not create a V3.8X2 or V3.9 GitHub Release, tag, maintenance branch, or Registry version; it does not remove any older Release. The existing [`v3.8.0` tag](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/tree/v3.8.0) remains the reproducible V3.8.0 baseline.
 
@@ -823,7 +852,7 @@ Prompt/CLIP figures measure only the conditioning subphase, not total generation
 
 The measured Sage-only production baselines on the tested RTX 5060 Ti 16 GB / 64 GB system were 168.069 seconds for 1×5-second 576×576 T2VA and 379.765 seconds for 3×5-second 640×640 FL2VA Long Terminal Merge. These are configuration-specific baselines, not universal speed guarantees. Sampling remained the dominant cost; Continuum Assemble + Seam stayed below 1%.
 
-> **V3.8.0 is the historical release baseline.** V3.8X2 remains a separate package-3.8.3 workflow, while V3.9.0 source is available on `main`. Historical implementation modules remain in source because V3.8X2 reuses them internally. The current registration has ten V3.8X2 IDs plus two V3.9 IDs. Use the matching historical Release/tag for workflows requiring other IDs. Still Image Guide remains Experimental.
+> **V3.8.0 is the historical release baseline.** V3.8X2 remains a separate package-3.8.3 workflow, while V3.9 source is available on `main`. Historical implementation modules remain in source because V3.8X2 reuses them internally. The current registration has ten V3.8X2 IDs plus two V3.9 IDs. Use the matching historical Release/tag for workflows requiring other IDs. Still Image Guide remains Experimental.
 
 ## V3.5.1 Reference Audio & Compatibility Update
 
@@ -1443,7 +1472,7 @@ Validation results apply to the tested local source and environment. They do not
 
 ## Limits
 
-- Second Pass / `refine_context` is not supported while a Review sequence is partial. Finish Review before starting Second Pass.
+- V3.8 Second Pass / `refine_context` is not supported while a Review sequence is partial. V3.9 supports validated output-group conditioning for partial Review as described above.
 - The 16GB GPU Gate passed with small VRAM headroom; memory use depends on the complete environment and workflow.
 - Continuation does not guarantee frame-perfect identity or motion.
 - Video Guide Frames guides H3; it does not reproduce every source frame.

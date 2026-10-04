@@ -37,7 +37,7 @@ def review_queue_results():
         capture_output=True, text=True, encoding="utf-8", timeout=45,
     )
     records = json.loads(result.stdout)
-    assert len(records) == 60, "The complete queue fixture must finish, including Workflow rehydration"
+    assert len(records) == 62, "The complete queue fixture must finish, including Workflow rehydration and v5 history"
     failures = [item for item in records if not item["pass"]]
     assert result.returncode == 0 and not failures, result.stdout + result.stderr
     return {item["name"]: item for item in records}

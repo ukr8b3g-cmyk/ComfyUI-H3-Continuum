@@ -5,6 +5,8 @@ from __future__ import annotations
 import contextvars
 import copy
 import hashlib
+import functools
+import inspect
 import json
 import marshal
 import os
@@ -72,7 +74,10 @@ from .conditioning import (
 )
 
 
-SAMPLING_CONTRACT_VERSION = 5
+SAMPLING_CONTRACT_VERSION = 6
+SAMPLING_READABLE_CONTRACT_VERSIONS = {5, 6}
+RUNTIME_SIGNATURE_VERSION = 1
+_OBSERVATION_MAX_ITEMS = 4096
 REVIEW_CONTROL_VERSION = 1
 RUN_STORAGE_OFF = "Off"
 RUN_STORAGE_AUTO = "Save + Auto Resume"
@@ -450,6 +455,13 @@ def _tensor_exact(tensor: torch.Tensor) -> dict[str, Any]:
 
 
 def _observe(value: Any, *, depth: int = 0) -> tuple[Any, bool]:
+    try:
+        return _observe_value(value, depth=depth)
+    except Exception as exc:
+        return {"type": _qualified(value), "observation_error": type(exc).__name__}, False
+
+
+def _observe_value(value: Any, *, depth: int = 0) -> tuple[Any, bool]:
     if depth > 10:
         return {"type": _qualified(value), "truncated": True}, False
     if value is None or isinstance(value, (bool, int, float, str)):
@@ -462,6 +474,8 @@ def _observe(value: Any, *, depth: int = 0) -> tuple[Any, bool]:
         except Exception:
             return {"tensor_type": _qualified(value)}, False
     if isinstance(value, dict):
+        if len(value) > _OBSERVATION_MAX_ITEMS:
+            return {"type": _qualified(value), "items": len(value), "truncated": True}, False
         result: dict[str, Any] = {}
         safe = True
         for key in sorted(value, key=lambda item: str(item)):
@@ -470,6 +484,8 @@ def _observe(value: Any, *, depth: int = 0) -> tuple[Any, bool]:
             safe = safe and item_safe
         return result, safe
     if isinstance(value, (list, tuple)):
+        if len(value) > _OBSERVATION_MAX_ITEMS:
+            return {"type": _qualified(value), "items": len(value), "truncated": True}, False
         result = []
         safe = True
         for item in value:
@@ -478,13 +494,24 @@ def _observe(value: Any, *, depth: int = 0) -> tuple[Any, bool]:
             safe = safe and item_safe
         return result, safe
     if isinstance(value, (set, frozenset)):
+        if len(value) > _OBSERVATION_MAX_ITEMS:
+            return {"type": _qualified(value), "items": len(value), "truncated": True}, False
         # Set repr order varies with PYTHONHASHSEED; keep every item and its type.
         items = [_observe(item, depth=depth + 1) for item in value]
         return {
             "type": _qualified(value),
             "items": sorted((item for item, _ in items), key=_canonical),
         }, all(safe for _, safe in items)
+    if isinstance(value, torch.nn.Module):
+        # Never traverse every parameter through a wrapper's bound owner.
+        return {"type": _qualified(value), "module_state_unobserved": True}, False
     if callable(value):
+        if isinstance(value, functools.partial):
+            observed, safe = _observe({
+                "function": value.func, "args": value.args,
+                "keywords": value.keywords, "attributes": vars(value),
+            }, depth=depth + 1)
+            return {"partial": observed}, safe
         code = getattr(value, "__code__", None)
         descriptor: dict[str, Any] = {"callable": _qualified(value)}
         safe = True
@@ -498,9 +525,23 @@ def _observe(value: Any, *, depth: int = 0) -> tuple[Any, bool]:
             closure, closure_safe = _observe(closure_values, depth=depth + 1)
             descriptor.update(defaults=defaults, kwdefaults=kwdefaults, closure=closure)
             safe = defaults_safe and kw_safe and closure_safe
+            if inspect.ismethod(value):
+                owner, owner_safe = _observe(value.__self__, depth=depth + 1)
+                descriptor["bound_self"] = owner
+                safe = safe and owner_safe
         elif hasattr(value, "__dict__"):
-            attributes, safe = _observe(vars(value), depth=depth + 1)
+            attributes, attributes_safe = _observe(vars(value), depth=depth + 1)
             descriptor["attributes"] = attributes
+            # Callable instances need both state and executable implementation.
+            # An empty __dict__ is not evidence for an opaque extension wrapper.
+            implementation = getattr(type(value), "__call__", None)
+            if inspect.isfunction(implementation):
+                call, call_safe = _observe(implementation, depth=depth + 1)
+                descriptor["implementation"] = call
+                slots = any(getattr(cls, "__slots__", ()) for cls in type(value).__mro__)
+                safe = attributes_safe and call_safe and bool(vars(value)) and not slots
+            else:
+                safe = False
         else:
             safe = False
         return descriptor, safe
@@ -517,13 +558,14 @@ def _model_signature(model: Any, legacy_fingerprint: str) -> tuple[dict[str, Any
     wrappers, wrappers_safe = _observe(getattr(model, "wrappers", {}) or {})
     patches, patches_safe = _observe(getattr(model, "patches", {}) or {})
     options = getattr(model, "model_options", {}) or {}
-    transformer = options.get("transformer_options", {}) or {}
-    transformer_values = {
-        str(key): transformer[key]
-        for key in transformer
-        if key not in {"h3_continuum_join_context"}
-    }
-    observed_transformer, transformer_safe = _observe(transformer_values)
+    if not isinstance(options, dict):
+        return {"model_patcher": _qualified(model), "error": "model_options is not a mapping"}, False
+    observed_options = dict(options)
+    transformer = dict(observed_options.get("transformer_options", {}) or {})
+    transformer.pop("h3_continuum_join_context", None)
+    if "transformer_options" in observed_options:
+        observed_options["transformer_options"] = transformer
+    observed_options, options_safe = _observe(observed_options)
     weights: list[dict[str, Any]] = []
     weights_safe = True
     try:
@@ -541,29 +583,54 @@ def _model_signature(model: Any, legacy_fingerprint: str) -> tuple[dict[str, Any
         "dtype": str(getattr(model, "model_dtype", lambda: "unknown")()),
         "model_size": int(getattr(model, "model_size", lambda: 0)() or 0),
         "wrappers": wrappers,
-        "transformer_options": observed_transformer,
+        "model_options": observed_options,
         "patches": patches,
         "weight_probe": weights,
         "runtime_observation": {
             "wrappers_complete": bool(wrappers_safe),
             "patches_complete": bool(patches_safe),
-            "transformer_options_complete": bool(transformer_safe),
+            "model_options_complete": bool(options_safe),
         },
     }
-    return descriptor, weights_safe and bool(weights)
+    return descriptor, weights_safe and bool(weights) and wrappers_safe and patches_safe and options_safe
 
 
 def _sampler_signature(sampler: Any) -> tuple[dict[str, Any], bool]:
     function = getattr(sampler, "sampler_function", None)
     observed, safe = _observe({
+        "function": function,
         "extra_options": getattr(sampler, "extra_options", {}) or {},
         "inpaint_options": getattr(sampler, "inpaint_options", {}) or {},
     })
     return {
         "type": _qualified(sampler),
-        "function": _qualified(function) if function is not None else "unknown",
         "options": observed,
     }, function is not None and safe
+
+
+def _signature_observation(observer, *args, **kwargs):
+    try:
+        return observer(*args, **kwargs)
+    except Exception as exc:
+        return {"observation_error": type(exc).__name__}, False
+
+
+def _reusable_sampling_contract(contract: dict[str, Any], *, resume_safe: bool = True) -> bool:
+    global_contract = contract.get("global") or {}
+    return bool(
+        resume_safe
+        and global_contract.get("sampling_contract_version") == SAMPLING_CONTRACT_VERSION
+        and global_contract.get("runtime_signature_version") == RUNTIME_SIGNATURE_VERSION
+        and contract.get("reuse_policy") != "disabled_unobservable_contract"
+    )
+
+
+def _reusable_manifest(manifest: dict[str, Any]) -> bool:
+    return bool(
+        manifest.get("sampling_contract_version") == SAMPLING_CONTRACT_VERSION
+        and manifest.get("resume_safe") is True
+        and _reusable_sampling_contract(manifest.get("contract") or {})
+    )
 
 
 def _module_parameter_dtype(module: Any, name: str, parameter: torch.Tensor) -> torch.dtype:
@@ -889,7 +956,7 @@ def build_sampling_contract(
     if reference_storage_plan is not None and reference_contract is not None:
         raise RunStorageError("routed Reference plan cannot use legacy Reference contract")
     last_frame_hash = _canonical_optional_hash(last_frame_hash)
-    model_value, model_safe = _model_signature(model, model_fingerprint_value)
+    model_value, model_safe = _signature_observation(_model_signature, model, model_fingerprint_value)
     clip_value, clip_safe = _clip_signature(clip)
     has_first = str(first_frame_hash).lower() not in {"", "none", "null"}
     has_last = str(last_frame_hash).lower() not in {"", "none", "null"}
@@ -920,7 +987,7 @@ def build_sampling_contract(
         )
     else:
         video_vae_value, video_vae_safe = None, True
-    sampler_value, sampler_safe = _sampler_signature(sampler)
+    sampler_value, sampler_safe = _signature_observation(_sampler_signature, sampler)
     if reference_audio_contract is not None:
         audio_vae_value, audio_vae_safe = _audio_vae_signature(reference_audio_vae)
     else:
@@ -964,6 +1031,7 @@ def build_sampling_contract(
             }
     global_contract = {
         "sampling_contract_version": SAMPLING_CONTRACT_VERSION,
+        "runtime_signature_version": RUNTIME_SIGNATURE_VERSION,
         "conditioning_mode": conditioning_mode,
         "model": model_value,
         "clip": clip_value,
@@ -1584,6 +1652,8 @@ class RunStorageController:
                 )
             }
             revision.update(
+                sampling_contract_version=value.get("sampling_contract_version"),
+                generation_reusable=_reusable_manifest(value),
                 nonce_mode=lifecycle.get("mode"),
                 effective_reroll_nonce=lifecycle.get("effective_nonce"),
                 reroll_from_chunk=(value.get("contract") or {}).get("reroll_from_chunk"),
@@ -1616,7 +1686,10 @@ class RunStorageController:
                     [catalog[revision_id] for revision_id in canonical_chain]
                 ) if canonical_chain else {},
                 "group_revisions": sorted(
-                    catalog.values(),
+                    [dict(item,
+                          sampling_contract_version=(manifests.get(str(item.get("storage_revision_id"))) or {}).get("sampling_contract_version"),
+                          generation_reusable=_reusable_manifest(manifests.get(str(item.get("storage_revision_id"))) or {}))
+                     for item in catalog.values()],
                     key=lambda item: (
                         int(item["group"]["physical_group"]),
                         str(item["revision_order"]),
@@ -1663,8 +1736,10 @@ class RunStorageController:
         hashes: list[str],
         *,
         current_contract: dict[str, Any] | None = None,
+        prompts: list[str] | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         stored_contract = manifest.get("contract") or {}
+        prompts = self.prompts if prompts is None else prompts
         active_contract = self.contract if current_contract is None else current_contract
         stored = list(stored_contract.get("chunk_contract_hashes") or [])
         stored_prompt_hashes = list(stored_contract.get("prompt_hashes") or [])
@@ -1687,7 +1762,7 @@ class RunStorageController:
             if position >= len(records) or int(records[position].get("sequence_index", -1)) != position:
                 break
             try:
-                entry = self._load_entry(records[position], self.prompts[position])
+                entry = self._load_entry(records[position], prompts[position])
             except Exception as exc:
                 self.notes.append(f"stored chunk {position + 1} rejected: {exc}")
                 break
@@ -1715,7 +1790,9 @@ class RunStorageController:
         *,
         current_contract: dict[str, Any],
         enforce_sampling_contract: bool = False,
+        prompts: list[str] | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        prompts = self.prompts if prompts is None else prompts
         manifests = self._read_manifests()
         storage_revision_id = str(manifest.get("revision_id", ""))
         if storage_revision_id not in manifests:
@@ -1734,7 +1811,7 @@ class RunStorageController:
         expected_prompts = list(current_contract.get("prompt_hashes") or [])
         entries: list[dict[str, Any]] = []
         for position, record in enumerate(records):
-            if position >= len(self.prompts) or position >= len(expected_prompts):
+            if position >= len(prompts) or position >= len(expected_prompts):
                 raise RunStorageError("provenance prefix exceeds the current prompt plan")
             if enforce_sampling_contract:
                 boundary = int(current_contract.get("reroll_from_chunk", 0))
@@ -1753,7 +1830,7 @@ class RunStorageController:
                         or produced_hashes[position] != requested_hashes[position]
                     ):
                         break
-            entry = self._load_entry(record, self.prompts[position])
+            entry = self._load_entry(record, prompts[position])
             if str(entry.get("prompt_hash", "")) != str(expected_prompts[position]):
                 raise RunStorageError("provenance prefix prompt lineage is incompatible")
             entries.append(entry)
@@ -1761,7 +1838,7 @@ class RunStorageController:
 
     def _compatible_plan_prefix(
         self, manifest: dict[str, Any], current_contract: dict[str, Any],
-        *, stop_before: int = 0,
+        *, stop_before: int = 0, resume_safe: bool = True,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Certify a prefix for import, not for cross-lineage Take selection.
 
@@ -1769,6 +1846,8 @@ class RunStorageController:
         retain its topology and actual producing per-chunk contract. New plans
         get their own raw copies below; no foreign lineage is spliced into a DAG.
         """
+        if not _reusable_sampling_contract(current_contract, resume_safe=resume_safe) or not _reusable_manifest(manifest):
+            return [], []
         manifests = self._read_manifests()
         source_contract = manifest.get("contract") or {}
         _manifest_sampling_identity(manifest)
@@ -1794,7 +1873,7 @@ class RunStorageController:
             compatible = True
             for position, record in zip(range(expected.start - 1, expected.end), group_records):
                 producer = manifests.get(str(record.get("storage_revision_id", "")))
-                if producer is None:
+                if producer is None or not _reusable_manifest(producer):
                     compatible = False
                     break
                 if "reference_group_contracts" in (producer.get("contract") or {}):
@@ -1834,10 +1913,10 @@ class RunStorageController:
         return entries, accepted
 
     def _find_plan_import(
-        self, contract: dict[str, Any], *, stop_before: int = 0,
+        self, contract: dict[str, Any], *, stop_before: int = 0, resume_safe: bool = True,
     ) -> dict[str, Any] | None:
         """Find a verified plan prefix, stopping before explicit regeneration."""
-        if stop_before == 1:
+        if stop_before == 1 or not _reusable_sampling_contract(contract, resume_safe=resume_safe):
             return None
         manifests = self._read_manifests()
         # A matching plan already owns its history. Do not reload an older plan
@@ -1862,7 +1941,8 @@ class RunStorageController:
         ), reverse=True)
         for manifest in ordered:
             source = manifest.get("contract") or {}
-            if (manifest.get("status") not in {"complete", "review_ready", "interrupted"}
+            if (not _reusable_manifest(manifest)
+                    or manifest.get("status") not in {"complete", "review_ready", "interrupted"}
                     or source.get("nonce_lineage_sha256") == contract.get("nonce_lineage_sha256")
                     or _hash(source.get("global")) != _hash(contract.get("global"))):
                 continue
@@ -1902,6 +1982,8 @@ class RunStorageController:
 
     def _adopt_plan_prefix(self, imported: dict[str, Any]) -> list[dict[str, Any]]:
         """Copy verified tensors into the new plan; keep every old revision intact."""
+        if not _reusable_sampling_contract(self.contract, resume_safe=self.resume_safe) or not _reusable_manifest(imported.get("manifest") or {}):
+            raise RunStorageError("plan prefix has no reusable Sampling v6 identity")
         self.manifest["prefix_import"] = {
             "version": 1, "source_revision_id": imported["revision_id"],
             "source_contract_sha256": imported["manifest"]["contract_sha256"],
@@ -1961,8 +2043,10 @@ class RunStorageController:
     def _validated_take_selection(
         self,
         contract: dict[str, Any],
-        *, source_lineage: str | None = None,
+        *, source_lineage: str | None = None, resume_safe: bool = True,
     ) -> dict[str, Any]:
+        if not _reusable_sampling_contract(contract, resume_safe=resume_safe):
+            raise RunStorageError("selected Take cannot be reused: current sampling identity is unobservable or unsupported")
         lineage = str(source_lineage or contract.get("nonce_lineage_sha256", ""))
         manifests, catalog, _ = self._provenance_catalog(
             lineage_sha256=lineage,
@@ -2003,6 +2087,8 @@ class RunStorageController:
             source_manifest = manifests.get(source_id)
             if source_manifest is None:
                 raise RunStorageError("selected Take source manifest is unavailable")
+            if not _reusable_manifest(source_manifest):
+                raise RunStorageError("selected Take is read-only: Sampling v6 with an observable identity is required")
             source_records = list(source_manifest.get("chunks") or [])
             for position in range(expected_group.start - 1, expected_group.end):
                 if position >= len(source_records):
@@ -2057,9 +2143,11 @@ class RunStorageController:
         self,
         manifest: dict[str, Any],
         *,
-        current_contract: dict[str, Any],
+        current_contract: dict[str, Any] | None = None,
+        for_reuse: bool = True,
+        resume_safe: bool = True,
     ) -> dict[str, Any]:
-        """Validate one compatible persisted state without applying policy."""
+        """Validate stored integrity first; optionally certify current reuse."""
 
         schema = int(manifest.get("run_storage_schema_version", -1))
         if schema not in RUN_STORAGE_READABLE_SCHEMA_VERSIONS:
@@ -2067,13 +2155,19 @@ class RunStorageController:
         stored_contract = manifest.get("contract")
         if not isinstance(stored_contract, dict):
             raise RunStorageError("review head sampling contract is missing")
-        if str(stored_contract.get("nonce_lineage_sha256", "")) != str(
+        if for_reuse and (
+            current_contract is None
+            or not _reusable_sampling_contract(current_contract, resume_safe=resume_safe)
+            or not _reusable_manifest(manifest)
+        ):
+            raise RunStorageError("review head is read-only or its sampling identity is unobservable")
+        if for_reuse and str(stored_contract.get("nonce_lineage_sha256", "")) != str(
             current_contract.get("nonce_lineage_sha256", "")
         ):
             raise RunStorageError("review head belongs to a different sampling lineage")
         _, contract_sha256 = _manifest_sampling_identity(manifest)
         revision_id = str(manifest.get("revision_id", ""))
-        if int(manifest.get("sampling_contract_version", -1)) != SAMPLING_CONTRACT_VERSION:
+        if int(manifest.get("sampling_contract_version", -1)) not in SAMPLING_READABLE_CONTRACT_VERSIONS:
             raise RunStorageError("review head sampling contract version is incompatible")
 
         status = str(manifest.get("status", ""))
@@ -2091,16 +2185,19 @@ class RunStorageController:
         if len(hashes) != chunks:
             raise RunStorageError("review head chunk contract is incomplete")
         records = list(manifest.get("chunks") or [])
+        stored_prompts = None if for_reuse else [""] * chunks
         if schema == RUN_STORAGE_SCHEMA_VERSION and manifest.get("branch_provenance"):
             entries, accepted = self._valid_provenance_prefix(
                 manifest,
                 current_contract=stored_contract,
+                prompts=stored_prompts,
             )
         else:
             entries, accepted = self._valid_prefix(
                 manifest,
                 hashes,
                 current_contract=stored_contract,
+                prompts=stored_prompts,
             )
         if len(accepted) != len(records):
             raise RunStorageError("review head stored prefix failed validation")
@@ -2190,9 +2287,13 @@ class RunStorageController:
         contract: dict[str, Any],
         *,
         smart_regenerate_only: bool = False,
+        resume_safe: bool = True,
     ) -> dict[str, Any] | None:
         """Return the latest validated compatible disk head deterministically."""
 
+        if not _reusable_sampling_contract(contract, resume_safe=resume_safe):
+            self.notes.append("auto-resume disabled: current sampling identity is unobservable or unsupported")
+            return None
         if not self.revisions_root.exists():
             return None
         compatible_lineage = str(contract.get("nonce_lineage_sha256", ""))
@@ -2215,6 +2316,9 @@ class RunStorageController:
         ), reverse=True)
         for revision_id, manifest in ordered:
             stored_contract = manifest.get("contract") or {}
+            if not _reusable_manifest(manifest):
+                self.notes.append(f"review head {revision_id} is read-only: observable Sampling v6 required")
+                continue
             if str(stored_contract.get("nonce_lineage_sha256", "")) != compatible_lineage:
                 mismatched_contracts.append((revision_id, stored_contract))
                 continue
@@ -2343,7 +2447,7 @@ class RunStorageController:
                 if selected_take is not None:
                     source_lineage = str(selected_take.get("lineage_sha256", ""))
             candidate = self._validated_take_selection(
-                contract, source_lineage=source_lineage,
+                contract, source_lineage=source_lineage, resume_safe=resume_safe,
             )
             if source_lineage != str(contract.get("nonce_lineage_sha256", "")):
                 source_manifest = candidate.get("manifest")
@@ -2389,11 +2493,13 @@ class RunStorageController:
             candidate = self.find_latest_review_head(
                 contract,
                 smart_regenerate_only=smart_only,
+                resume_safe=resume_safe,
             )
             if candidate is None and not smart_only and resume_safe:
                 self._plan_import = self._find_plan_import(
                     contract,
                     stop_before=self.review_manual_regenerate_from,
+                    resume_safe=resume_safe,
                 )
                 candidate = self._plan_import
             if candidate is None and smart_only:
@@ -2715,6 +2821,8 @@ class RunStorageController:
         if review_queue:
             if self.validated_prefix is None:
                 raise RunStorageError("Review Decision has no fixed ValidatedPrefix")
+            if self.validated_prefix.entries and not _reusable_sampling_contract(contract, resume_safe=safe):
+                raise RunStorageError("Review prefix has no reusable Sampling v6 identity")
             best_entries = list(self.validated_prefix.entries)
             best_records = list(self.validated_prefix.records)
             if self._plan_import is not None:
@@ -2742,6 +2850,9 @@ class RunStorageController:
             candidates.sort(key=lambda m: (len(m.get("chunks") or []),
                 int((m.get("branch_provenance") or {}).get("canonical_sequence", 0))), reverse=True)
             for candidate in candidates:
+                if not _reusable_sampling_contract(contract, resume_safe=safe) or not _reusable_manifest(candidate):
+                    self.notes.append(f"stored revision {candidate.get('revision_id', '')} is read-only or unobservable")
+                    continue
                 if len(candidate.get("chunks") or []) <= len(best_entries):
                     continue
                 if int(candidate.get("run_storage_schema_version", -1)) not in RUN_STORAGE_READABLE_SCHEMA_VERSIONS:

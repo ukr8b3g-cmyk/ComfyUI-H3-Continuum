@@ -7,7 +7,7 @@ import json
 from typing import Any
 
 
-GRAPH_CONTRACT_VERSION = 3
+GRAPH_CONTRACT_VERSION = 4
 
 CHECKPOINT_REF2VA = "ref2va"
 CHECKPOINT_FL2VA = "fl2va"
@@ -93,7 +93,7 @@ def build_upstream_graph_contract(
     require_audio_vae: bool = False,
     reference_audio_route: str | None = None,
 ) -> tuple[dict[str, Any], bool, list[str]]:
-    """Fingerprint MODEL/CLIP/VAE routes feeding the Continuum sampler."""
+    """Fingerprint MODEL/CLIP/VAE/SAMPLER routes feeding Continuum."""
     if not isinstance(prompt, dict):
         return {"version": GRAPH_CONTRACT_VERSION}, False, ["ComfyUI PROMPT graph is unavailable"]
     node_id = str(unique_id)
@@ -107,6 +107,7 @@ def build_upstream_graph_contract(
     specs = [
         ("model", "model", True),
         ("clip", "clip", True),
+        ("sampler", "sampler", True),
         ("video_vae", "video_vae", bool(require_video_vae)),
     ]
     if require_reference_audio_vae:

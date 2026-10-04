@@ -424,12 +424,14 @@ setTimeout(async () => {{
     canonical_storage_revision_id: "storage-ready",
     revisions: [{{
       revision_id: "storage-ready", status: "review_ready",
+      sampling_contract_version: 6, generation_reusable: true,
       review_unit: {{ start: 1, end: 1, physical_group: 1 }},
     }}],
     canonical_head_revision_id: "take-1",
     active_revisions: {{ "1": "take-1" }},
     group_revisions: [{{
       revision_id: "take-1", revision_order: "1",
+      sampling_contract_version: 6, generation_reusable: true,
       group: {{ start: 1, end: 1, physical_group: 1 }},
     }}],
   }};

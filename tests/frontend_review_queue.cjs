@@ -11,6 +11,7 @@ function project(n=1,total=3,id='r1',run='fixture') {
   let parent=null;
   const groups=Array.from({length:n},(_,i)=>{
     const g={revision_id:`${id}-g${i+1}`,parent_revision_id:parent,lineage_sha256:'lineage',
+      sampling_contract_version:6,generation_reusable:true,
       revision_order:String(i+1),take_number:1,group:{start:i+1,end:i+1,physical_group:i+1}};
     parent=g.revision_id;return g;
   });
@@ -19,6 +20,7 @@ function project(n=1,total=3,id='r1',run='fixture') {
     canonical_chain:groups.map(g=>g.revision_id),
     active_revisions:Object.fromEntries(groups.map(g=>[String(g.group.physical_group),g.revision_id])),
     group_revisions:groups,revisions:[{revision_id:id,status:n===total?'complete':'review_ready',
+      sampling_contract_version:6,generation_reusable:true,
       updated_utc:`2026-09-08T00:00:0${n}Z`,review_unit:{start:n,end:n,physical_group:n}}]};
 }
 function environment() {
@@ -464,8 +466,8 @@ await test('mode policy and transient UI serialization remain stable',async e=>{
 });
 await test('history catalog preserves lineage eligibility and compact summary',async e=>{
  const n=e.makeNode();e.w(n,'generation_mode').value='Review Each Chunk';const p=project(3,3);
- p.group_revisions.push({revision_id:'old',lineage_sha256:'other',group:{start:1,end:1,physical_group:1}},
- {revision_id:'orphan',parent_revision_id:'missing',lineage_sha256:'lineage',group:{start:2,end:2,physical_group:2}});
+ p.group_revisions.push({revision_id:'old',lineage_sha256:'other',sampling_contract_version:6,generation_reusable:true,group:{start:1,end:1,physical_group:1}},
+ {revision_id:'orphan',parent_revision_id:'missing',lineage_sha256:'lineage',sampling_contract_version:6,generation_reusable:true,group:{start:2,end:2,physical_group:2}});
  await e.load(n,p);assert.equal(e.f.takeCatalog(n).length,3);
  e.w(n,'Render History').callback();const body=e.w(n,'Render History / Takes');
  assert(body.computeSize(400)[1]<=124);const drawn=[];
@@ -674,6 +676,26 @@ await test('failed graph load releases hydration gate for subsequent manual node
  e.w(n,'generation_mode').value='Review Each Chunk';e.app.extension.nodeCreated(n);
  await n.__h3ContinuumConfigurePending?.promise;await n.__h3ContinuumHistoryRequest?.promise;await sleep();
  assert(e.visible(n,'Use it and continue'));
+});
+await test('Sampling v5 history stays visible and actions remain read-only',async e=>{
+ const p=project(2);for(const item of [...p.group_revisions,...p.revisions]){
+   item.sampling_contract_version=5;item.generation_reusable=false;
+ }
+ const n=e.makeNode();await e.load(n,p);
+ assert.equal(e.f.takeCatalog(n).length,2);
+ assert.match(e.f.reviewStatus(n),/read-only/);
+ const before=[e.w(n,'take_action').value,e.w(n,'take_revision_id').value];
+ e.f.selectTakeAction(n,'Use This Take');
+ assert.deepEqual([e.w(n,'take_action').value,e.w(n,'take_revision_id').value],before);
+ assert(!e.visible(n,'Use it and continue'));
+});
+await test('archived v5 lineage remains browsable after a v6 canonical run',async e=>{
+ const old=project(2,'fixture',3,'old');for(const item of old.group_revisions){
+   item.sampling_contract_version=5;item.generation_reusable=false;item.lineage_sha256='old-lineage';
+ }
+ const current=project(1);current.group_revisions.push(...old.group_revisions);
+ const n=e.makeNode();await e.load(n,current);
+ assert.equal(e.f.takeCatalog(n).length,3);
 });
 console.log(JSON.stringify(results,null,2));if(results.some(r=>!r.pass))process.exitCode=1;
 })();
