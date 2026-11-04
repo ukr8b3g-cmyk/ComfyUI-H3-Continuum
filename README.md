@@ -9,6 +9,126 @@ retry a section, and continue from compatible saved Takes.
 [Checksums](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/download/v3.10.2/SHA256SUMS.txt) ·
 [日本語](README_JA.md)
 
+## Quick Start — A different prompt for each chunk
+
+Write all chunk instructions in **Sequence Prompt** before the first run. The examples use **Chunks = 2** and **Seconds per Chunk = 5**. Choose one of the three formats.
+
+The REF2VA templates are based on a format shared by **hatt2**. Fill in the fields you need.
+
+### 1. Chunk numbers — `Prompt Format = Timeline`
+
+Put each header on its own line. Text above the first header is shared across chunks.
+
+**Template**
+
+```text
+subject_definitions:
+summary:
+retention_analysis: [reference generation]
+detailed_description:
+overall_soundscape:
+non_diegetic_music:
+
+[Chunk 1]
+Describe the first action here.
+
+[Chunk 2]
+Describe what happens next here.
+```
+
+**Example**
+
+```text
+subject_definitions: The woman in the reference image.
+retention_analysis: [reference generation] Keep her face and red coat.
+overall_soundscape: Soft wind and flowing water.
+
+[Chunk 1]
+She walks to the railing and rests her hand on it.
+
+[Chunk 2]
+With her hand still on the railing, she turns to look at the river.
+```
+
+### 2. Time ranges — `Prompt Format = Timeline`
+
+Use time ranges measured from the start of the video and aligned with the chunk duration set in the Sampler.
+
+**Template**
+
+```text
+subject_definitions:
+summary:
+retention_analysis: [reference generation]
+detailed_description:
+overall_soundscape:
+non_diegetic_music:
+
+[0-5s]
+Describe the first action here.
+
+[5-10s]
+Describe what happens next here.
+```
+
+**Example**
+
+```text
+subject_definitions: The woman in the reference image.
+retention_analysis: [reference generation] Keep her face and red coat.
+overall_soundscape: Soft wind and flowing water.
+
+[0-5s]
+She walks to the railing and rests her hand on it.
+
+[5-10s]
+With her hand still on the railing, she turns to look at the river.
+```
+
+### 3. Separate prompt blocks — `Prompt Format = List`
+
+Put `---` on its own line. The blocks go to chunks in order, so repeat shared details in each block.
+
+**Template**
+
+```text
+subject_definitions:
+summary:
+retention_analysis: [reference generation]
+detailed_description: Describe the first action here.
+overall_soundscape:
+non_diegetic_music:
+
+---
+
+subject_definitions:
+summary:
+retention_analysis: [reference generation]
+detailed_description: Describe what happens next here.
+overall_soundscape:
+non_diegetic_music:
+```
+
+**Example**
+
+```text
+subject_definitions: The woman in the reference image.
+retention_analysis: [reference generation] Keep her face and red coat.
+overall_soundscape: Soft wind and flowing water.
+
+She walks to the railing and rests her hand on it.
+
+---
+
+subject_definitions: The woman in the reference image.
+retention_analysis: [reference generation] Keep her face and red coat.
+overall_soundscape: Soft wind and flowing water.
+
+With her hand still on the railing, she turns to look at the river.
+```
+
+`Auto` can detect these formats. Select the matching format explicitly if you are trying them for the first time. To review Chunk 1 before generating Chunk 2, use **Review Each Chunk** and keep the same Sequence Prompt when continuing.
+
 ## 3.10.2 — hotfix: preserve Review history and regeneration requests
 
 - Keep finalized Takes and named savepoints available after interrupted or

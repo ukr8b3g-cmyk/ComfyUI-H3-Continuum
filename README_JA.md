@@ -9,6 +9,126 @@ MiniMax H3の映像・音声をチャンクに分けて生成し、結果を確�
 [チェックサム](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/download/v3.10.2/SHA256SUMS.txt) ·
 [English](README.md)
 
+## クイックスタート — チャンクごとに違うプロンプトを使う
+
+最初の実行前に、すべてのチャンクの指示を **Sequence Prompt** に書きます。以下は **Chunks = 2**、**Seconds per Chunk = 5** の例です。3形式のうち1つを選んでください。
+
+REF2VAのテンプレートは **hatt2** さんの提案をもとにしています。必要な項目だけ記入してください。
+
+### 1. チャンク番号 — `Prompt Format = Timeline`
+
+見出しは単独の行に置きます。最初の見出しより前の文章は全チャンクに共通です。
+
+**テンプレート**
+
+```text
+subject_definitions:
+summary:
+retention_analysis: [reference generation]
+detailed_description:
+overall_soundscape:
+non_diegetic_music:
+
+[Chunk 1]
+Describe the first action here.
+
+[Chunk 2]
+Describe what happens next here.
+```
+
+**記入例**
+
+```text
+subject_definitions: The woman in the reference image.
+retention_analysis: [reference generation] Keep her face and red coat.
+overall_soundscape: Soft wind and flowing water.
+
+[Chunk 1]
+She walks to the railing and rests her hand on it.
+
+[Chunk 2]
+With her hand still on the railing, she turns to look at the river.
+```
+
+### 2. 秒数 — `Prompt Format = Timeline`
+
+Samplerで設定した尺に合わせて、動画の先頭からの時間範囲を書きます。
+
+**テンプレート**
+
+```text
+subject_definitions:
+summary:
+retention_analysis: [reference generation]
+detailed_description:
+overall_soundscape:
+non_diegetic_music:
+
+[0-5s]
+Describe the first action here.
+
+[5-10s]
+Describe what happens next here.
+```
+
+**記入例**
+
+```text
+subject_definitions: The woman in the reference image.
+retention_analysis: [reference generation] Keep her face and red coat.
+overall_soundscape: Soft wind and flowing water.
+
+[0-5s]
+She walks to the railing and rests her hand on it.
+
+[5-10s]
+With her hand still on the railing, she turns to look at the river.
+```
+
+### 3. 区切り線で分ける — `Prompt Format = List`
+
+`---` を単独の行に置きます。上から順に各チャンクへ渡るため、共通設定も各ブロックに書きます。
+
+**テンプレート**
+
+```text
+subject_definitions:
+summary:
+retention_analysis: [reference generation]
+detailed_description: Describe the first action here.
+overall_soundscape:
+non_diegetic_music:
+
+---
+
+subject_definitions:
+summary:
+retention_analysis: [reference generation]
+detailed_description: Describe what happens next here.
+overall_soundscape:
+non_diegetic_music:
+```
+
+**記入例**
+
+```text
+subject_definitions: The woman in the reference image.
+retention_analysis: [reference generation] Keep her face and red coat.
+overall_soundscape: Soft wind and flowing water.
+
+She walks to the railing and rests her hand on it.
+
+---
+
+subject_definitions: The woman in the reference image.
+retention_analysis: [reference generation] Keep her face and red coat.
+overall_soundscape: Soft wind and flowing water.
+
+With her hand still on the railing, she turns to look at the river.
+```
+
+`Auto` でも形式を判別できます。まずは表記に対応する形式を明示すると確認しやすくなります。Chunk 1を先に確認したい場合は **Review Each Chunk** を選び、継続時も同じSequence Promptを使います。
+
 ## 3.10.2 — ホットフィックス：Review履歴と再生成指定を保護
 
 - Continueの失敗・中断後も、確定済みTakeと名前付き保存点を保持します。
