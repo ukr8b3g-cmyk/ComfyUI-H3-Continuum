@@ -17,14 +17,16 @@ from pathlib import Path
 _PROFILE = json.loads(Path(__file__).with_name("preview_override_provider_v1.json").read_text(encoding="utf-8"))
 
 
-def _load_public_profile(path):
+def _load_public_profile(path, *, existing_profiles=None):
     # A partial update must not break the old profile or ordinary generation.
+    existing_profiles = (_PROFILE,) if existing_profiles is None else existing_profiles
     try:
         profile = json.loads(Path(path).read_text(encoding="utf-8"))
         if (type(profile) is not dict or profile.keys() != _PROFILE.keys()
                 or type(profile["id"]) is not str or type(profile["source_sha256"]) is not str
-                or profile["id"] == _PROFILE["id"]
-                or profile["source_sha256"] == _PROFILE["source_sha256"]):
+                or any(profile["id"] == existing["id"]
+                       or profile["source_sha256"] == existing["source_sha256"]
+                       for existing in existing_profiles)):
             return None
         return profile
     except (OSError, ValueError):
@@ -33,6 +35,11 @@ def _load_public_profile(path):
 
 _PUBLIC_PROFILE = _load_public_profile(Path(__file__).with_name("preview_override_provider_public_v1.json"))
 _PROFILES = (_PROFILE,) + ((_PUBLIC_PROFILE,) if _PUBLIC_PROFILE is not None else ())
+_AUDIO_SCALE_PROFILE = _load_public_profile(
+    Path(__file__).with_name("preview_override_provider_audio_scale_v1.json"),
+    existing_profiles=_PROFILES,
+)
+_PROFILES += ((_AUDIO_SCALE_PROFILE,) if _AUDIO_SCALE_PROFILE is not None else ())
 _FIELDS = frozenset(("max_resolution", "node_id", "jpeg_quality", "suppress_default",
                      "preview_frames", "preview_fps", "vae", "tiny_vae", "audio_vae", "frames"))
 

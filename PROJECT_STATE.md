@@ -1,5 +1,15 @@
 # Public source status
 
+## KJ Preview Override profile — source update
+
+Add the audited audio-scale lookup implementation identified by
+`kj-preview-audio-scale-23f4979-phase-a`. Existing profiles, Take reuse checks,
+storage formats and official workflow files are preserved. The bounded KJ
+profile passed CPU and JavaScript checks. Two isolated GPU queues verified
+that a new v6 Take could continue to Chunk 2 with the original Chunk 1 raw
+payload intact. Runtime restart confirmed registration and the installed code
+matched the tested adapter. Package version remains 3.10.2.
+
 ## F1/F2/F3 repairs — source update
 
 Per-Run OS exclusion covers stale owner recovery and the complete writer lifetime.

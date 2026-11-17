@@ -21,9 +21,11 @@ from .test_issue31_attention_signature import core_attention
 from .test_issue31_spectrum_signature import spectrum, binding
 
 
-@pytest.fixture(params=["local", "public"])
+@pytest.fixture(params=["local", "public", "legacy"])
 def kj(require_comfy_core, request):
-    root = os.environ.get("H3_KJ_PREVIEW_TEST_ROOT" if request.param == "local" else "H3_KJ_PREVIEW_PUBLIC_TEST_ROOT")
+    root = os.environ.get({"local": "H3_KJ_PREVIEW_TEST_ROOT",
+                           "public": "H3_KJ_PREVIEW_PUBLIC_TEST_ROOT",
+                           "legacy": "H3_KJ_PREVIEW_LEGACY_TEST_ROOT"}[request.param])
     if not root:
         pytest.skip("real audited KJ Preview Override provider is not configured")
     package = types.ModuleType("issue31_kj_preview_tests_" + request.param)
@@ -315,6 +317,7 @@ def test_missing_or_malformed_optional_profile_does_not_break_existing_paths(tmp
 
 @pytest.mark.parametrize("field", ["id", "source_sha256"])
 def test_optional_profile_collision_cannot_disable_original_profile(kj, tmp_path, monkeypatch, field):
+    active, _ = adapter._provider_source(kj.__file__)
     candidate = dict(adapter._PUBLIC_PROFILE)
     candidate[field] = adapter._PROFILE[field]
     path = tmp_path / "public.json"
@@ -323,6 +326,6 @@ def test_optional_profile_collision_cannot_disable_original_profile(kj, tmp_path
     assert loaded is None
     monkeypatch.setattr(adapter, "_PROFILES", (adapter._PROFILE,))
     item = wrapper(kj)
-    expected = "_local." in kj.__name__
+    expected = active["id"] == adapter._PROFILE["id"]
     assert adapter.preview_override_signature(item)[1] is expected
     assert observe(signatures._Model())[1]

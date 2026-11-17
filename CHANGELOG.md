@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased — KJ Preview Override compatibility
+
+Recognize the audited KJ Preview Override implementation that reads
+`model_sampling.audio_scale` through the model patcher. Keep the two previous
+profiles and their sampling identities. Unknown source or runtime code and
+unsupported preview VAEs remain ineligible for Take reuse. Use a new Run to
+check the added profile. Saved read-only Takes keep their existing status.
+
 ## Unreleased — Run exclusion and metadata recovery
 
 Protect stale Run lock recovery with a per-Run nonblocking OS guard held until

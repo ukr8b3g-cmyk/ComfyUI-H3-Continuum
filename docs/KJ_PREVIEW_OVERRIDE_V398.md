@@ -2,6 +2,41 @@
 
 The audited Preview Override wrapper can keep its transient image list without changing the MODEL sampling identity. The adapter retains fixed settings, source and loaded implementation checks, the complete audit-profile digest, and Core's cross-key/list wrapper execution order. It does not add a generic exception for any field named `frames`.
 
+## Audio-scale lookup provider
+
+The adapter additionally recognizes the exact Preview Override source
+with LF-normalized SHA-256
+`23f497938135ce5428190bdfcaebbeb9fc67294e0e9b3c37f283bad640d81929`.
+Its profile is `kj-preview-audio-scale-23f4979-phase-a`, stored in
+`preview_override_provider_audio_scale_v1.json`. This identifies file contents,
+not a blanket KJNodes version range or a newly verified upstream release.
+
+Compared with the audited public provider below, only the wrapper's audio-scale
+lookup changes: it reads `model_sampling.audio_scale` through
+`ModelPatcher.get_model_object`, including object patches. A missing scale disables
+audio preview. The four sibling/Core file hashes remain exactly as listed below.
+The scale affects optional preview audio; this profile still requires preview
+VAE/Audio VAE to be absent and Tiny VAE to be `none`.
+
+The two older JSON profiles and their successful descriptors remain unchanged.
+The extra profile is optional: missing, malformed or colliding data does not
+replace either older profile. Full source, loaded code, defaults, class/state,
+dependency and setting checks still apply; unknown implementations remain
+non-reusable. No generation, storage-format or workflow change is included.
+
+Use a new Run for this newly recognized implementation. Previously saved unsafe
+or v5 Takes remain readable and are not promoted, rewritten or deleted. A profile
+change is retained in the sampling identity; adding support does not merge
+different implementations into one identity.
+
+The development log records CPU and JavaScript checks and two targeted GPU
+queues for this profile. They confirm Review saves a reusable first Take and
+Continue From Here preserves Chunk 1 while generating Chunk 2.
+
+日本語：音声プレビュー倍率をobject patch経由で取得する上記SHA-256の実装だけを追加対象にします。
+既存2種の署名・保存Take・Workflowは保持し、未知コードや未対応のプレビューVAE設定の拒否は維持します。
+確認には新規Runを使用してください。旧read-only Takeの扱いは維持されます。対象のGPU検証ではChunk 1を保持し、Chunk 2だけを生成できました。
+
 ## 3.9.9 public-provider repair
 
 The source checkout additionally accepts the pinned upstream implementation from

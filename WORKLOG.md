@@ -1,5 +1,25 @@
 # Public development log
 
+## 2026-11-17 — KJ Preview Override profile update
+
+Audit the exact audio-scale lookup source and its unchanged KJ and Core
+dependencies. Admit it through a separate profile while retaining the earlier
+profiles and the existing source, loaded-code and runtime-state checks. Cover
+profile collisions, altered code, unsupported preview VAE settings, old
+read-only history, and passthrough through the real wrapper on CPU. Existing
+provider contracts and revision IDs match their previous values. JavaScript
+Review checks also exercise the saved reusable and read-only Take data.
+
+With an isolated GPU backend, generate Chunk 1 in Review Each Chunk, then
+explicitly select its Take with Continue From Here. Both Takes are reusable
+under Sampling v6. The second queue reuses Chunk 1 and generates only Chunk 2,
+preserving the first raw payload's SHA-256. Both queues use the same KJ wrapper
+and the original preview frames do not change its signature. The test uses
+512×512, 24 fps, two 5-second chunks, Euler/simple at eight steps and PyTorch
+attention. Both audio/video outputs decode fully. The installed variant uses
+identical adapter/profile bytes, and its subsequent startup registers the
+existing twelve Continuum nodes.
+
 ## 2026-10-29 — F1/F2/F3 repairs (source update)
 
 Limit production changes to Run lock recovery/lifetime, reconnect accepted-target
