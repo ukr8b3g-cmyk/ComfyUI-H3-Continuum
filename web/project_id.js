@@ -737,11 +737,23 @@ function setReviewSeedControlFixed(node) {
     return String(control.value || "").toLowerCase() === "fixed";
 }
 
-function requireFixedSeedForReview(node) {
+function requireFixedSeedForReview(node, submittedSeed, output) {
     if (!isModernSamplerClass(node.comfyClass)) return;
     if (findWidget(node, GENERATION_MODE_WIDGET)?.value !== GENERATION_MODE_REVIEW) return;
     const control = String(baseSeedControlWidget(node)?.value || "").toLowerCase();
     if (control === "fixed") return;
+    // External INTs may reach Core as a link or as an inlined primitive.
+    // The Sampler's local after-generate control drives neither value.
+    if (Array.isArray(submittedSeed) && submittedSeed.length === 2
+            && Number.isInteger(submittedSeed[1]) && submittedSeed[1] >= 0
+            && Object.hasOwn(output, submittedSeed[0])) return;
+    if (Number.isInteger(submittedSeed)) {
+        const slot = node.inputs?.find(input => input.name === "base_seed" && input.link != null);
+        const graph = node.graph || app.graph;
+        const origin = slot && graph?.links?.[slot.link]?.origin_id;
+        const source = origin != null && graph?.getNodeById?.(origin);
+        if (source && ![2, 4].includes(Number(source.mode))) return;
+    }
     throw new Error(
         "H3 Continuum V3.8: Run = Review Each Chunk requires "
         + "Control After Generate = fixed. This keeps Base Seed unchanged so the "
@@ -2272,8 +2284,55 @@ async function loadTakeHistory(node, options = {}) {
 // Sampler `executed`: that event exists only for nodes returning UI output.
 const reviewPrompts = new Map();
 const reviewEarlyTerminals = new Map();
+const earlyReferencePlans = new Map();
 let reviewSubmissionCount = 0;
 let reviewQueueSequence = 0;
+
+function referenceExecutionNode(nodeId) {
+    let graph = app.rootGraph || app.graph;
+    let node;
+    for (const id of nodeId.split(":")) {
+        node = graph?.getNodeById?.(id) || graph?._nodes?.find(item => String(item.id) === id);
+        graph = node?.subgraph;
+    }
+    return node;
+}
+
+function referenceRouteKey(node, settings = reviewSettingsSnapshot(node)) {
+    // The plan includes Run-specific reuse information as well as the assignment.
+    return settings && `${takeRunName(node)}\n${settings}`;
+}
+
+function applySubmittedReferencePlan(records, nodeId, text) {
+    const target = records.referenceTargets?.get(nodeId);
+    if (!target || records.referenceEpoch !== reviewGraphEpoch) return;
+    const { node, key, sequence } = target;
+    if (!key || referenceExecutionNode(nodeId) !== node
+            || sequence < (node.__h3ContinuumReferenceSequence || 0)) return;
+    const current = referenceRouteKey(node);
+    if (key === current) {
+        node.__h3ContinuumReferenceRouteKey = key;
+        node.__h3ContinuumReferencePlan = text;
+        node.__h3ContinuumReferenceSequence = sequence;
+    }
+    node.__h3ContinuumV39ReferenceUxRefresh?.(current);
+}
+
+function receiveReferencePlan({ detail }) {
+    const text = detail?.output?.h3_reference_plan?.[0];
+    const promptId = String(detail?.prompt_id || "");
+    const nodeId = String(detail?.display_node || (detail?.node ?? ""));
+    if (typeof text !== "string" || !promptId || !nodeId) return;
+    const records = reviewPrompts.get(promptId);
+    if (records) applySubmittedReferencePlan(records, nodeId, text);
+    else if (reviewSubmissionCount) {
+        if (!earlyReferencePlans.has(promptId)) {
+            if (earlyReferencePlans.size >= 64) return;
+            earlyReferencePlans.set(promptId, new Map());
+        }
+        earlyReferencePlans.get(promptId).set(nodeId, text);
+    }
+}
 
 function reviewRevisionKey(project) {
     const r = canonicalStorageRevision(project);
@@ -2395,22 +2454,36 @@ function installReviewQueueAdapter() {
     api.queuePrompt = async function(number, data, options, ...rest) {
         const output = { ...(data?.output || {}) };
         const records = [];
+        records.referenceTargets = new Map();
+        records.referenceEpoch = reviewGraphEpoch;
         for (const [nodeId, item] of Object.entries(output)) {
             if (!isModernSamplerClass(item?.class_type) || !reviewPromptIncludes(output, nodeId, options)) continue;
             const node = app.graph?.getNodeById?.(nodeId)
                 || app.graph?._nodes?.find(n => String(n.id) === nodeId);
-            if (!node || !isModernSamplerClass(node.comfyClass)) continue;
-            requireFixedSeedForReview(node);
-            const normalizedInputs = { ...(item.inputs || {}) };
-            normalizeRunStorageState(node, normalizedInputs);
-            const inputs = buildReviewQueueInputs(node, normalizedInputs);
-            output[nodeId] = { ...item, inputs };
-            records.push({ node, nodeId, runName: reviewPromptRunName(inputs),
-                settings: reviewSettingsSnapshot(node), setup: node.__h3ContinuumModeSetup,
-                baseline: reviewRevisionKey(node.__h3ContinuumTakeProject),
-                intent: Object.freeze({ ...inputs }), sequence: ++reviewQueueSequence });
+            let record;
+            if (node && isModernSamplerClass(node.comfyClass)) {
+                requireFixedSeedForReview(node, item.inputs?.base_seed, output);
+                const normalizedInputs = { ...(item.inputs || {}) };
+                normalizeRunStorageState(node, normalizedInputs);
+                const inputs = buildReviewQueueInputs(node, normalizedInputs);
+                output[nodeId] = { ...item, inputs };
+                record = { node, nodeId, runName: reviewPromptRunName(inputs),
+                    settings: reviewSettingsSnapshot(node), setup: node.__h3ContinuumModeSetup,
+                    baseline: reviewRevisionKey(node.__h3ContinuumTakeProject),
+                    intent: Object.freeze({ ...inputs }), sequence: ++reviewQueueSequence };
+                records.push(record);
+            }
+            // The websocket event carries the prompt ID that node.onExecuted lacks.
+            if (item.class_type === V39_NODE_CLASS) {
+                const inspector = referenceExecutionNode(nodeId);
+                if (inspector?.comfyClass === V39_NODE_CLASS) {
+                    records.referenceTargets.set(nodeId, { node: inspector,
+                        key: referenceRouteKey(inspector, inspector === record?.node ? record.settings : undefined),
+                        sequence: record?.sequence ?? ++reviewQueueSequence });
+                }
+            }
         }
-        if (!records.length) return previous.call(this, number, data, options, ...rest);
+        if (!records.length && !records.referenceTargets.size) return previous.call(this, number, data, options, ...rest);
         reviewSubmissionCount++;
         try {
             const response = await previous.call(this, number, {...data, output}, options, ...rest);
@@ -2427,13 +2500,20 @@ function installReviewQueueAdapter() {
                 }
                 r.node.__h3ContinuumProductionUxRefresh?.();
             }
+            for (const [nodeId, text] of earlyReferencePlans.get(promptId) || []) {
+                applySubmittedReferencePlan(records, nodeId, text);
+            }
+            earlyReferencePlans.delete(promptId);
             const early = reviewEarlyTerminals.get(promptId);
             reviewEarlyTerminals.delete(promptId);
             if (early) await refreshV38TakeHistoryAfterExecution(early);
             return response;
         } finally {
             reviewSubmissionCount--;
-            if (!reviewSubmissionCount) reviewEarlyTerminals.clear();
+            if (!reviewSubmissionCount) {
+                reviewEarlyTerminals.clear();
+                earlyReferencePlans.clear();
+            }
         }
     };
     api.__h3ContinuumReviewQueueAdapter = true;
@@ -2926,7 +3006,14 @@ function configureProductionReviewUx(node) {
             this.__h3ContinuumTakeLoadToken = Number(this.__h3ContinuumTakeLoadToken || 0) + 1;
             for (const [id, records] of reviewPrompts) {
                 const remaining = records.filter(record => record.node !== this);
-                if (remaining.length) reviewPrompts.set(id, remaining);
+                if (records.referenceTargets) {
+                    for (const [nodeId, target] of records.referenceTargets) {
+                        if (target.node === this) records.referenceTargets.delete(nodeId);
+                    }
+                    remaining.referenceTargets = records.referenceTargets;
+                    remaining.referenceEpoch = records.referenceEpoch;
+                }
+                if (remaining.length || remaining.referenceTargets?.size) reviewPrompts.set(id, remaining);
                 else reviewPrompts.delete(id);
             }
             return previous?.apply(this, args);
@@ -3023,9 +3110,7 @@ function configureV39ReferenceUx(node) {
         }
         installProductionSerializationGuard(node);
     }
-    const routeKey = () => reviewSettingsSnapshot(node);
-    const refresh = () => {
-        const key = routeKey();
+    const refresh = (key = referenceRouteKey(node)) => {
         if (node.__h3ContinuumReferenceRouteKey !== key) {
             node.__h3ContinuumReferenceRouteKey = key;
             node.__h3ContinuumReferencePlan = null;
@@ -3048,16 +3133,6 @@ function configureV39ReferenceUx(node) {
             refreshV39ReferenceImagesForSampler(node);
             node.__h3ContinuumV39ReferenceUxRefresh?.();
         });
-        const previousExecuted = node.onExecuted;
-        node.onExecuted = function(message, ...args) {
-            const result = previousExecuted?.call(this, message, ...args);
-            const text = message?.h3_reference_plan?.[0];
-            if (typeof text === "string") {
-                this.__h3ContinuumReferencePlan = text;
-                this.__h3ContinuumV39ReferenceUxRefresh?.();
-            }
-            return result;
-        };
         const previousConnectionsChange = node.onConnectionsChange;
         node.onConnectionsChange = function(...args) {
             const result = previousConnectionsChange?.apply(this, args);
@@ -3612,6 +3687,7 @@ app.registerExtension({
 
     setup() {
         installReviewQueueAdapter();
+        api.addEventListener("executed", receiveReferencePlan);
         api.addEventListener("reconnected", reloadReviewHistory);
         api.addEventListener("status", reconcileReviewQueueStatus);
         for (const eventName of [

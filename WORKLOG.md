@@ -1,5 +1,20 @@
 # Public development log
 
+## 2026-11-18 — Review preflight and inactive reference slots
+
+Reproduced the wired-seed Review stop and the stale, disconnected reference assignment on the previous main. Tested wired and unwired seeds, inactive selectors, and validation after reconnect. See the [3.10.3 release checks](docs/RELEASE_NOTES_V3103.md) for the CPU and GPU results.
+
+## 2026-11-18 — Four local regression repairs
+
+Correlate Reference Inspector results with their submitted prompt and handle
+results that arrive before the Queue response. Exercise assignment edits,
+overlapping submissions, graph replacement and nested execution IDs in the
+JavaScript fixture. Cover duplicate Run refusals and real revision conflicts
+in both Manager locales. Compare overlapping chunk selectors with valid
+adjacent ranges and check that recovery edits only the selected image.
+Exercise State and V2 Session loading with real CPU safetensors, malformed
+JSON mirrors and invalid authoritative metadata.
+
 ## 2026-11-17 — KJ Preview Override profile update
 
 Audit the exact audio-scale lookup source and its unchanged KJ and Core

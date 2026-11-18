@@ -302,6 +302,27 @@ externalCase('J21 malformed saved selector remains disabled and unchanged', () =
     const f = assignmentFixture({ external: true, saved: 'invalid' }); assert.equal(f.control.value, 'invalid');
     assert(f.checkbox(3).disabled); assert(visit(f.helper.panel, (item) => item.textContent === 'All 1–16').disabled);
 });
+for (const [saved, chunk] of [['1,1', 1], ['1-3,3', 3], ['2-4,1-3', 2]]) {
+    externalCase(`overlapping saved selector ${saved} requires an explicit edit`, () => {
+        const f = assignmentFixture({ saved });
+        f.helper.widgets[2].value = '8';
+        configureV39ReferenceImages(f.helper); f.refresh();
+        assert(f.text().includes(`Image 1: invalid saved selection. Chunk ${chunk} appears more than once.`));
+        assert(!f.text().includes('No references assigned'));
+        assert(f.checkbox(1).disabled); assert(!f.checkbox(1).checked);
+        assert.equal(f.control.value, saved); assert.equal(f.calls.native, 0);
+        f.action('Reset to Off');
+        assert.equal(f.control.value, 'off'); assert.equal(f.helper.widgets[2].value, '8');
+        assert.equal(f.calls.native, 1); assert(!f.checkbox(1).disabled);
+        const box = f.checkbox(2); box.checked = true; box.onchange();
+        assert.equal(f.control.value, '2');
+    });
+}
+externalCase('adjacent non-overlapping ranges stay valid without rewriting their saved text', () => {
+    const f = assignmentFixture({ saved: '1-2,3' });
+    assert.match(f.text(), /Chunks 1, 2, 3/); assert(!f.checkbox(3).disabled);
+    assert.equal(f.control.value, '1-2,3'); assert.equal(f.calls.native, 0);
+});
 console.log(JSON.stringify(externalCases));
 assert.equal(externalCases.filter((item) => !item.pass).length, 0, 'external Chunk assignment contracts failed');
 console.log('V3.9 Reference Images UI contract PASS');

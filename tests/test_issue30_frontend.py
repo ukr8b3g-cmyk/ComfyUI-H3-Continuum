@@ -30,7 +30,7 @@ def issue30_results():
     result = run_frontend("frontend_issue30_ui.cjs")
     assert result.returncode == 0, result.stdout + result.stderr
     records = json.loads(result.stdout)
-    assert len(records) == 9
+    assert len(records) == 16
     return {record["name"]: record for record in records}
 
 
@@ -43,6 +43,13 @@ def issue30_results():
     "Reference Inspector stays current after 1 configure passes",
     "Reference Inspector stays current after 2 configure passes",
     "Reference Inspector stays current after 100 configure passes",
+    "Reference Inspector rejects a late result after an assignment edit",
+    "Reference Inspector isolates prompt order, sampler and graph identity",
+    "Reference Inspector handles execution before the Queue HTTP response",
+    "Reference Inspector resolves a nested execution ID without changing its inputs",
+    "removing one queued Sampler keeps only the other Sampler eligible",
+    "H3ContinuumSamplerV38 Review checks the effective seed input",
+    "H3ContinuumSamplerV39 Review checks the effective seed input",
 ])
 def test_issue30_frontend_paths(issue30_results, name):
     record = issue30_results[name]

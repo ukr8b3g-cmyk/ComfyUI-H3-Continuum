@@ -1,6 +1,24 @@
 # Changelog
 
-## Unreleased — KJ Preview Override compatibility
+## 3.10.3 — Review and reference input fixes
+
+- Review honors a seed wired from an external INT. Local seed controls still apply to an unwired seed, and the backend checks the effective seed before reusing a Take.
+- Per-chunk Reference Images preserves inactive assignments. Connecting an image activates validation, including duplicate chunk checks.
+
+- The V3.9 Reference Plan Inspector displays a result only when it can match
+  the submitted prompt, Sampler and settings. An earlier Queue finishing after
+  a reference edit can no longer restore an obsolete verified plan.
+- Project / Take Manager keeps the selected Project, trial and savepoint when
+  an operation such as adding the same Run twice is refused. A Project
+  revision conflict still requires a refresh.
+- Per-chunk Reference Images identifies the repeated chunk in a saved range.
+  Use **Reset to Off** on the affected image to clear its assignment and
+  select chunks again. Opening the workflow preserves the original text.
+- State and V2 Session loading accepts valid embedded safetensors metadata
+  when the accompanying JSON mirror contains an array, null or another
+  non-object value. The loader logs the unusable mirror.
+
+### KJ Preview Override compatibility
 
 Recognize the audited KJ Preview Override implementation that reads
 `model_sampling.audio_scale` through the model patcher. Keep the two previous
@@ -8,7 +26,7 @@ profiles and their sampling identities. Unknown source or runtime code and
 unsupported preview VAEs remain ineligible for Take reuse. Use a new Run to
 check the added profile. Saved read-only Takes keep their existing status.
 
-## Unreleased — Run exclusion and metadata recovery
+### Run exclusion and metadata recovery
 
 Protect stale Run lock recovery with a per-Run nonblocking OS guard held until
 release. Preserve legacy owner checks; leave the guard file in place.
@@ -19,10 +37,9 @@ the verified scope. Reconnect now ignores explicitly empty accepted Queue target
 State loading uses the legacy JSON sidecar only when embedded metadata is absent,
 and rejects corrupt embedded metadata. Saved formats, Take reuse contracts and
 workflow files remain unchanged. Targeted CPU/JavaScript and local browser checks
-passed; no new GPU acceptance. This source update does not create a new Release
-or Registry package.
+passed when these changes first landed on main.
 
-## Unreleased — Second Pass documentation
+### Second Pass documentation
 
 Add current V3.9 English/Japanese wiring diagrams, socket tables, low-denoise
 schedule guidance and latent/pixel upscaler boundaries. Correct stale V3.8-only

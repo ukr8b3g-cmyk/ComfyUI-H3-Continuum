@@ -40,6 +40,27 @@ def test_valid_embedded_metadata_wins_over_stale_sidecar(metadata_state):
     assert (tensor_path.read_bytes(), json_path.read_bytes()) == before
 
 
+@pytest.mark.parametrize("sidecar", ["[]", "null", '"old"', "4", "false"])
+def test_non_object_mirror_does_not_block_valid_state(metadata_state, caplog, sidecar):
+    state, _, tensor_path, json_path = metadata_state
+    json_path.write_text(sidecar, encoding="utf-8")
+    before = (tensor_path.read_bytes(), json_path.read_bytes())
+    loaded = state_io.load_state(prefix="metadata", slot=1)
+    assert loaded["clip_index"] == state["clip_index"]
+    for key in ("video_tail", "audio_tail"):
+        assert torch.equal(loaded[key], state[key])
+    assert "Ignoring unreadable" in caplog.text
+    assert (tensor_path.read_bytes(), json_path.read_bytes()) == before
+
+
+def test_legacy_state_still_requires_usable_sidecar(metadata_state):
+    state, _, tensor_path, json_path = metadata_state
+    save_file({k: state[k] for k in ("video_tail", "audio_tail")}, str(tensor_path))
+    json_path.write_text("null", encoding="utf-8")
+    with pytest.raises((TypeError, ValueError)):
+        state_io.load_state(prefix="metadata", slot=1)
+
+
 @pytest.mark.parametrize("sidecar_exists", [True, False])
 def test_only_missing_embedded_metadata_can_use_legacy_sidecar(metadata_state, sidecar_exists):
     state, _, tensor_path, json_path = metadata_state

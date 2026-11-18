@@ -1,13 +1,19 @@
-# ComfyUI-H3-Continuum 3.10.2 — V3.9
+# ComfyUI-H3-Continuum 3.10.3 — V3.9
 
 MiniMax H3の映像・音声をチャンクに分けて生成し、結果を確認しながら
 一部分の再生成や、互換性のある保存Takeからの継続ができます。
 **現在のWorkflowはV3.9です。V3.8X2も別のWorkflowとして保持しています。**
 
-[v3.10.2本体ZIP](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/download/v3.10.2/ComfyUI-H3-Continuum-v3.10.2.zip) ·
-[Release](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/tag/v3.10.2) ·
-[チェックサム](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/download/v3.10.2/SHA256SUMS.txt) ·
+[v3.10.3本体ZIP](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/download/v3.10.3/ComfyUI-H3-Continuum-v3.10.3.zip) ·
+[Release](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/tag/v3.10.3) ·
+[チェックサム](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/download/v3.10.3/SHA256SUMS.txt) ·
 [English](README.md)
+
+## 3.10.3の変更点
+
+**Review Each Chunk**では、外部INTから固定シードを渡すと、Sampler側の未使用の設定が「randomize」でもキューに進めます。Reference Imagesの**Per chunk**では、未接続欄に以前のチャンク指定を残しておけます。画像を再接続すると、その指定を再び検証します。
+
+Inspectorは送信した設定に対応するPlanを表示します。Project／Take Managerは操作が拒否されても選択を維持し、State／Sessionは付属JSONが使えない場合にも正常な埋め込み記録を読み込めます。[修正内容と検証結果](docs/RELEASE_NOTES_V3103.md)
 
 ## クイックスタート — チャンクごとに違うプロンプトを使う
 
@@ -619,7 +625,7 @@ V3.8の途中Review制約と、V3.9の検証済み出力区間への条件継承
 | 現行Reference Images | [V3.9 Referenceガイド](docs/V39_REFERENCE_INLINE.md) |
 | V3.8X2からの更新 | [移行・保持する仕様](docs/V38_RELEASE_AND_MIGRATION.md) |
 | 更新履歴・旧版画像・実装説明 | [日本語の履歴資料](docs/README_HISTORY_JA.md) / [CHANGELOG](CHANGELOG.md) |
-| 最新版の検証記録 | [v3.10.2詳細](docs/RELEASE_NOTES_V3102.md) / [配布検証](PACKAGE_VALIDATION.txt) |
+| 最新版の検証記録 | [v3.10.3詳細](docs/RELEASE_NOTES_V3103.md) / [配布検証](PACKAGE_VALIDATION.txt) |
 | 不具合報告 | [GitHub Issues](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/issues) — Workflow、Status、`auto-resume disabled:`の理由を添えてください |
 
 過去のRelease・タグは保持しています。mainの文書更新で、公開済みのタグや配布物を置き換えることはありません。

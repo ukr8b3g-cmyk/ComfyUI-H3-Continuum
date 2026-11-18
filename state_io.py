@@ -150,6 +150,8 @@ def load_state(*, prefix: str, slot: int) -> dict[str, Any]:
         try:
             with json_path.open("r", encoding="utf-8") as handle:
                 mirror = json.load(handle)
+            if not isinstance(mirror, dict):
+                raise ValueError("expected a JSON object")
             if mirror.get("_state_id") != state.get("_state_id"):
                 LOG.warning("Ignoring stale Continuum JSON mirror: %s", json_path.name)
         except (OSError, ValueError, TypeError) as exc:

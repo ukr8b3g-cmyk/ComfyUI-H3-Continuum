@@ -199,6 +199,19 @@ def test_external_assignment_range_uses_actual_chunks_without_rewriting_saved_va
     assert bundle.selectors == original
 
 
+@pytest.mark.parametrize("saved", ["1,1", "1-3,3", "invalid"])
+def test_unused_reference_retains_text_and_is_validated_when_connected(saved):
+    helper = H3ContinuumReferenceImagesV39()
+    inputs = dict(reference_use="Per chunk", reference_image_1=object(),
+                  reference_r1_chunks="2", reference_r2_chunks=saved)
+    bundle, = helper.pack(**inputs)
+    _, _, selectors = effective_reference_inputs(bundle, chunks=2)
+    assert selectors["R1"] == "2" and selectors["R2"] == "off"
+    assert inputs["reference_r2_chunks"] == bundle.selectors[1] == saved
+    with pytest.raises(ValueError, match="invalid V3.9 Reference chunk selection"):
+        helper.pack(**inputs, reference_image_2=object())
+
+
 def test_new_workflow_rewires_all_nine_slots_and_isolates_saved_runs():
     directory = Path(__file__).resolve().parents[1] / "examples" / "workflows"
     old = json.loads((directory / "MiniMax_H3_Continuum_V38X2.json").read_text(encoding="utf-8"))

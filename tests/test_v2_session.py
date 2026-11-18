@@ -1,4 +1,6 @@
 import torch
+import pytest
+from safetensors.torch import load_file, save_file
 
 from ComfyUI_H3_Continuum_Join.state import make_plan
 from ComfyUI_H3_Continuum_Join.v2 import session_io
@@ -33,7 +35,8 @@ def _latent(frame_count=124):
     }
 
 
-def test_session_roundtrip_and_last_state(tmp_path, monkeypatch):
+@pytest.fixture
+def saved_session(tmp_path, monkeypatch):
     plan = make_plan(
         continuation=False,
         clip_index=1,
@@ -73,10 +76,40 @@ def test_session_roundtrip_and_last_state(tmp_path, monkeypatch):
 
     monkeypatch.setattr(session_io, "session_directory", lambda: tmp_path)
     tensor_path, json_path = session_io.save_session(session, prefix="test", slot=1)
+    return session, tensor_path, json_path
+
+
+def test_session_roundtrip_and_last_state(saved_session):
+    session, tensor_path, json_path = saved_session
     assert tensor_path.exists() and json_path.exists()
     loaded = session_io.load_session(prefix="test", slot=1)
     assert torch.equal(loaded["chunks"][0]["video"], session["chunks"][0]["video"])
     assert loaded["session_id"] == session["session_id"]
+
+
+@pytest.mark.parametrize("sidecar", ["[]", "null", '"old"', "4", "false"])
+def test_non_object_mirror_does_not_block_valid_session(saved_session, caplog, sidecar):
+    session, tensor_path, json_path = saved_session
+    json_path.write_text(sidecar, encoding="utf-8")
+    before = (tensor_path.read_bytes(), json_path.read_bytes())
+    loaded = session_io.load_session(prefix="test", slot=1)
+    assert loaded["session_id"] == session["session_id"]
+    for key in ("video", "audio"):
+        assert torch.equal(loaded["chunks"][0][key], session["chunks"][0][key])
+    assert "Ignoring unreadable" in caplog.text
+    assert (tensor_path.read_bytes(), json_path.read_bytes()) == before
+
+
+@pytest.mark.parametrize("header", [{}, {session_io._HEADER_KEY: "{broken"}])
+def test_session_rejects_invalid_authority_even_with_valid_mirror(saved_session, header):
+    _, tensor_path, json_path = saved_session
+    original_mirror = json_path.read_bytes()
+    tensors = {k: v.clone() for k, v in load_file(str(tensor_path)).items()}
+    save_file(tensors, str(tensor_path), metadata=header)
+    with pytest.raises(ValueError):
+        session_io.load_session(prefix="test", slot=1)
+    assert json_path.read_bytes() == original_mirror
+
 
 def test_model_fingerprint_can_add_continuum_wrapper_without_mutating_model():
     from types import SimpleNamespace

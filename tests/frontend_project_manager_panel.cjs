@@ -177,6 +177,22 @@ await test('revision conflict requires explicit refresh not silent overwrite',as
     await e.action('Rename','Project');assert.match(e.status(),/another tab/);assert(e.control('Rename','Project').disabled);assert(!e.control('Refresh').disabled);assert.equal(e.calls.length,0);e.close();
 });
 for (const locale of ['en','ja']) {
+    await test(`${locale}: refusing a duplicate Run preserves the selected Project, trial and savepoint`,async()=>{
+        const e=environment(locale);await e.ready();
+        const ja=locale==='ja', trial=ja?'試行 / Run':'Trial / Run', point=ja?'名前付き保存点':'Named savepoints';
+        e.find('input',trial+' '+(ja?'名前':'Name')).value='Same Run';
+        const before=structuredClone(e.getState()), count=e.requests.length;
+        const reason='This Run is already attached to the Project';
+        e.setHook(()=>Promise.resolve(Response.json({error:reason},{status:409})));
+        await e.action(ja?'現在のRunを追加':'Add current Run');
+        assert.equal(e.status(),reason);
+        assert.equal(e.requests.length,count+1);assert.equal(e.requests.at(-1).body.action,'attach_attempt');
+        assert(!e.control(ja?'名前を変更':'Rename','Project').disabled);
+        e.setHook(null);await e.action(ja?'更新':'Refresh');
+        assert.equal(e.find('select','Project').value,projectId);
+        assert.equal(e.find('select',trial).value,'a1');assert.equal(e.find('select',point).value,'s1');
+        assert.deepEqual(e.getState(),before);assert.equal(e.calls.length,0);e.close();
+    });
     const reasons = [
         ['read-only', {error:'This saved Take is read-only for Sampling v6; use a new attempt'}, true],
         ['raw integrity', {error:'Saved raw data failed its size/SHA-256 check'}, true],
@@ -197,6 +213,8 @@ for (const locale of ['en','ja']) {
                 ? (locale==='ja'?'別のタブでProjectが更新されました。更新して内容を確認してから操作してください。':'This Project changed in another tab. Refresh and review it before trying a new update.')
                 : (body.error || 'HTTP 409');
             assert.equal(e.status(),expected);
+            assert.equal(e.control(locale==='ja'?'名前を変更':'Rename','Project').disabled,
+                body.code==='project_revision_conflict');
             assert.equal(e.requests.length,requests+1);assert.equal(e.calls.length,0);
             assert.equal(JSON.stringify(e.getState()),state);assert.equal(JSON.stringify(e.node.widgets),widgets);
             assert(e.control(locale==='ja'?'未確認の更新を再確認':'Retry pending update').hidden);

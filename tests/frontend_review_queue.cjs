@@ -570,14 +570,16 @@ await test('V39 helper settings invalidate transient observed Plan',async e=>{
  n.__h3ContinuumIntuitiveUxRefresh();
  const before=JSON.stringify(n.serialize());
  const observed='Reference Plan Inspector (runtime verified)\nGroup 1 [C1] generated — R1=<Picture 1>';
- n.onExecuted({h3_reference_plan:[observed]});
+ const first=await e.queue(n);
+ await e.emit('executed',{prompt_id:first.prompt_id,node:String(n.id),output:{h3_reference_plan:[observed]}});
  assert.equal(e.w(n,'Reference Plan Inspector').value,observed);
  assert.equal(JSON.stringify(n.serialize()),before);
  assert.equal((await e.inputs(n)).reference_r1_chunks,undefined);
  e.w(helper,'reference_r1_chunks').value='2';
  n.__h3ContinuumIntuitiveUxRefresh();
  assert.match(e.w(n,'Reference Plan Inspector').value,/Configured only/);
- n.onExecuted({h3_reference_plan:[observed]});
+ const next=await e.queue(n);
+ await e.emit('executed',{prompt_id:next.prompt_id,node:String(n.id),output:{h3_reference_plan:[observed]}});
  n.onConnectionsChange(1,0,true);
  assert.match(e.w(n,'Reference Plan Inspector').value,/Configured only/);
  e.app.extension.loadedGraphNode(n);

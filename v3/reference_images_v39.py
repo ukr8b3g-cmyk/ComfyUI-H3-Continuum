@@ -104,7 +104,7 @@ class H3ContinuumReferenceImagesV39:
         images = tuple(kwargs.get(f"reference_image_{index}") for index in range(1, 10))
         selectors = tuple(
             (_canonical_selector(kwargs.get(f"reference_r{index}_chunks", "off"))
-             if reference_use == REFERENCE_USE_PER_CHUNK else
+             if reference_use == REFERENCE_USE_PER_CHUNK and images[index - 1] is not None else
              str(kwargs.get(f"reference_r{index}_chunks", "off")))
             for index in range(1, 10)
         )

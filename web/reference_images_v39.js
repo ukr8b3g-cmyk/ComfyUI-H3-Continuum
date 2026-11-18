@@ -14,18 +14,21 @@ const element = (tag, value = "") => {
 
 function savedChunks(value) {
     const text = String(value ?? "off").trim().toLowerCase();
-    if (text === "off") return new Set();
-    if (text === "all") return new Set(Array.from({ length: MAX }, (_, i) => i + 1));
+    if (text === "off") return { chunks: new Set() };
+    if (text === "all") return { chunks: new Set(Array.from({ length: MAX }, (_, i) => i + 1)) };
     const result = new Set();
     for (const token of text.split(",")) {
         const match = token.trim().match(/^(\d+)(?:\s*-\s*(\d+))?$/);
-        if (!match) return null;
+        if (!match) return { error: "invalid saved selection." };
         const first = Number(match[1]);
         const last = Number(match[2] || match[1]);
-        if (first < 1 || last > MAX || first > last) return null;
-        for (let n = first; n <= last; n += 1) result.add(n);
+        if (first < 1 || last > MAX || first > last) return { error: "invalid saved selection." };
+        for (let n = first; n <= last; n += 1) {
+            if (result.has(n)) return { error: `invalid saved selection. Chunk ${n} appears more than once.` };
+            result.add(n);
+        }
     }
-    return result;
+    return { chunks: result };
 }
 
 function linkedSamplers(node) {
@@ -177,8 +180,9 @@ export function configureV39ReferenceImages(node) {
         for (let n = first; n <= last; n += 1) header.append(element("th", String(n)));
         header.append(element("th", "All / Off"));
         table.append(header);
+        const selections = new Map(rows.map(slot => [slot, savedChunks(selectors[slot - 1].value)]));
         for (const slot of rows) {
-            const selected = savedChunks(selectors[slot - 1].value);
+            const selected = selections.get(slot).chunks;
             const row = element("tr");
             row.append(element("td", `Image ${slot} · @R${slot}`));
             for (let n = first; n <= last; n += 1) {
@@ -186,7 +190,7 @@ export function configureV39ReferenceImages(node) {
                 const checkbox = element("input");
                 checkbox.type = "checkbox";
                 checkbox.checked = selected?.has(n) || false;
-                checkbox.disabled = selected === null;
+                checkbox.disabled = !selected;
                 checkbox.setAttribute("aria-label", `Image ${slot}, Chunk ${n}`);
                 checkbox.onchange = () => {
                     const updated = new Set(selected);
@@ -198,10 +202,12 @@ export function configureV39ReferenceImages(node) {
             }
             const actions = element("td");
             for (const [label, on] of [["All", true], ["Off", false]]) {
-                const button = element("button", known ? label : `${label} 1–16`);
+                const reset = !selected && !on;
+                const button = element("button", reset ? "Reset to Off" : known ? label : `${label} 1–16`);
                 button.type = "button";
-                button.disabled = selected === null;
+                button.disabled = !selected && !reset;
                 button.onclick = () => {
+                    if (reset) { setSelection(slot, new Set()); return; }
                     const updated = new Set(selected);
                     for (let n = 1; n <= count; n += 1) {
                         if (on) updated.add(n); else updated.delete(n);
@@ -215,9 +221,9 @@ export function configureV39ReferenceImages(node) {
         }
         panel.append(table);
         for (const slot of rows) {
-            const selected = savedChunks(selectors[slot - 1].value);
-            if (selected === null) {
-                panel.append(element("div", `Image ${slot}: invalid saved selection.`));
+            const { chunks: selected, error } = selections.get(slot);
+            if (error) {
+                panel.append(element("div", `Image ${slot}: ${error}`));
                 continue;
             }
             if (!known) {
@@ -229,7 +235,10 @@ export function configureV39ReferenceImages(node) {
             const future = [...selected].filter((n) => n > count).sort((a, b) => a - b);
             panel.append(element("div", `Image ${slot} → Chunks ${active.join(", ") || "none"}${future.length ? ` · saved beyond range: ${future.join(", ")}` : ""}`));
         }
-        if (rows.every((slot) => ![...(savedChunks(selectors[slot - 1].value) || [])].some((n) => n <= count))) {
+        if (rows.every(slot => {
+            const selected = selections.get(slot).chunks;
+            return selected && ![...selected].some(n => n <= count);
+        })) {
             panel.append(element("div", known ? "No references assigned. Check the chunks to use." : "No saved assignments. Check the chunks to use."));
         }
         reservePanelSpace(Math.min(360, 77 + rows.length * 36 + (count > 6 ? 32 : 0) + (known ? 0 : 40)));

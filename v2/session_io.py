@@ -65,6 +65,8 @@ def load_session(*,prefix,slot):
     if json_path.is_file():
         try:
             with json_path.open("r",encoding="utf-8") as handle: mirror=json.load(handle)
+            if not isinstance(mirror, dict):
+                raise ValueError("expected a JSON object")
             if mirror.get("_session_commit_id")!=session.get("_session_commit_id"): LOG.warning("Ignoring stale Continuum session JSON mirror: %s",json_path.name)
         except (OSError,ValueError,TypeError) as exc: LOG.warning("Ignoring unreadable session JSON mirror %s: %s",json_path.name,exc)
     return validate_session(session)

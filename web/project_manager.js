@@ -91,7 +91,7 @@ async function request(url, body) {
     if (!response.ok) {
         const conflict = response.status === 409 && value?.code === "project_revision_conflict";
         throw Object.assign(new Error(conflict ? text().conflict : (value?.error || `HTTP ${response.status}`)), {
-            status: response.status, uncertain: body !== undefined && response.status >= 500,
+            status: response.status, revisionConflict: conflict, uncertain: body !== undefined && response.status >= 500,
         });
     }
     if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -203,7 +203,7 @@ export function openProjectManager(event) {
         if (closed) return;
         if (value) acceptProject(value);
         else {
-            if (error?.status === 409) project = null;
+            if (error?.revisionConflict) project = null;
             status.textContent = String(error?.message || t.unavailable);
         }
         updateControls();
@@ -294,7 +294,7 @@ export function openProjectManager(event) {
             acceptProject(value);
         } catch (error) {
             if (!error.uncertain && pendingWrite === operation) pendingWrite = null;
-            if (error.status === 409) project = null;
+            if (error.revisionConflict) project = null;
             if (error.uncertain) error.message += ` ${t.uncertain}`;
             if (closed) opened?.writeSettled(null, error);
             throw error;
