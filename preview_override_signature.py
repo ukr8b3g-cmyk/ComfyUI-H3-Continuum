@@ -25,7 +25,8 @@ def _load_public_profile(path, *, existing_profiles=None):
         if (type(profile) is not dict or profile.keys() != _PROFILE.keys()
                 or type(profile["id"]) is not str or type(profile["source_sha256"]) is not str
                 or any(profile["id"] == existing["id"]
-                       or profile["source_sha256"] == existing["source_sha256"]
+                       or (profile["source_sha256"], profile["core_preview_sha256"], profile["core_dispatch_sha256"])
+                       == (existing["source_sha256"], existing["core_preview_sha256"], existing["core_dispatch_sha256"])
                        for existing in existing_profiles)):
             return None
         return profile
@@ -40,6 +41,10 @@ _AUDIO_SCALE_PROFILE = _load_public_profile(
     existing_profiles=_PROFILES,
 )
 _PROFILES += ((_AUDIO_SCALE_PROFILE,) if _AUDIO_SCALE_PROFILE is not None else ())
+_CORE046_PROFILE = _load_public_profile(
+    Path(__file__).with_name("preview_override_provider_audio_scale_core046_v1.json"), existing_profiles=_PROFILES,
+)
+_PROFILES += ((_CORE046_PROFILE,) if _CORE046_PROFILE is not None else ())
 _FIELDS = frozenset(("max_resolution", "node_id", "jpeg_quality", "suppress_default",
                      "preview_frames", "preview_fps", "vae", "tiny_vae", "audio_vae", "frames"))
 
@@ -100,6 +105,17 @@ def _provider_source(path):
     data = Path(path).read_bytes().replace(b"\r\n", b"\n")
     digest = hashlib.sha256(data).hexdigest()
     matches = [profile for profile in _PROFILES if profile.get("source_sha256") == digest]
+    if len(matches) > 1:
+        # The same KJ source can be audited against several Core implementations.
+        for module_name, field in (("latent_preview", "core_preview_sha256"),
+                                   ("comfy.patcher_extension", "core_dispatch_sha256")):
+            module = sys.modules.get(module_name)
+            path = getattr(module, "__file__", None)
+            if not path:
+                raise ValueError("provider source is outside the audited profile")
+            core_data = Path(path).read_bytes().replace(b"\r\n", b"\n")
+            core_digest = hashlib.sha256(core_data).hexdigest()
+            matches = [profile for profile in matches if profile[field] == core_digest]
     if len(matches) != 1:
         raise ValueError("provider source is outside the audited profile")
     return matches[0], data.decode("utf-8-sig")

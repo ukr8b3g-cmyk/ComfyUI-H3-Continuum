@@ -1,19 +1,19 @@
-# ComfyUI-H3-Continuum 3.10.3 — V3.9
+# ComfyUI-H3-Continuum 3.10.4 — V3.9
 
 Generate long-form MiniMax H3 video and audio in chunks, review each result,
 retry a section, and continue from compatible saved Takes.
 **V3.9 is the current workflow; V3.8X2 remains available separately.**
 
-[Download v3.10.3](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/download/v3.10.3/ComfyUI-H3-Continuum-v3.10.3.zip) ·
-[Release notes](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/tag/v3.10.3) ·
-[Checksums](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/download/v3.10.3/SHA256SUMS.txt) ·
+[Download v3.10.4](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/download/v3.10.4/ComfyUI-H3-Continuum-v3.10.4.zip) ·
+[Release notes](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/tag/v3.10.4) ·
+[Checksums](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/releases/download/v3.10.4/SHA256SUMS.txt) ·
 [日本語](README_JA.md)
 
-## What's new in 3.10.3
+## What's new in 3.10.4
 
-**Review Each Chunk** now accepts a fixed seed supplied by a connected INT even when the Sampler's unused seed control says “randomize.” In **Per chunk** Reference Images, a disconnected slot can retain its assignment for later. Reconnecting the image validates that assignment again.
+Review can continue from new Takes with the audited KJ Preview Override on ComfyUI Core 0.46.0 and 0.46.2. The updated Turbo Sample keeps KJ enabled with its optional video/audio preview VAE inputs disconnected and Tiny VAE set to `none`. Start a new Run to verify the fix.
 
-The Inspector now shows the plan for the submitted settings. Project / Take Manager keeps your selection after a refused operation, and State / Session loading can recover a valid embedded record when its JSON mirror is unusable. [Details and verification](docs/RELEASE_NOTES_V3103.md)
+CPU/JavaScript regression passed 2,379 tests with 2 skipped. The 95-case JavaScript Review test passed separately. Two GPU queues on Core 0.46.2 and RTX 5060 Ti confirmed that **Continue From Here** kept Chunk 1 byte-for-byte and generated Chunk 2. [Details and verification](docs/RELEASE_NOTES_V3104.md)
 
 ## Quick Start — A different prompt for each chunk
 
@@ -665,7 +665,7 @@ They do not establish support for other KJ/Spectrum builds or preview-VAE paths.
 | Current Reference Images | [V3.9 Reference guide](docs/V39_REFERENCE_INLINE.md) |
 | Updating from V3.8X2 | [Migration and retained contracts](docs/V38_RELEASE_AND_MIGRATION.md) |
 | History, earlier screenshots and implementation notes | [README history](docs/README_HISTORY.md) / [CHANGELOG](CHANGELOG.md) |
-| Current release and GPU verification | [v3.10.3 notes](docs/RELEASE_NOTES_V3103.md) / [package validation](PACKAGE_VALIDATION.txt) |
+| Current release and GPU verification | [v3.10.4 notes](docs/RELEASE_NOTES_V3104.md) / [package validation](PACKAGE_VALIDATION.txt) |
 | Bug reports | [GitHub Issues](https://github.com/ukr8b3g-cmyk/ComfyUI-H3-Continuum/issues) — include the workflow, status text and `auto-resume disabled:` reason |
 
 Historical Releases and tags remain available. Documentation updates on `main`

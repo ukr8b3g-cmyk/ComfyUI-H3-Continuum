@@ -15,6 +15,12 @@ def test_turbo_sample_is_installable_and_keeps_prompt_and_explicit_settings():
         assert archive.read(NAME) == payload
     graph = json.loads(payload)
     nodes = {n["id"]: n for n in graph["nodes"]}
+    preview = next(n for n in nodes.values() if n["type"] == "ModelPreviewOverrideKJ")
+    ports = {port["name"]: port["link"] for port in preview["inputs"]}
+    assert ports["vae"] is None and ports["audio_vae"] is None
+    assert any(link[0] == ports["model"] and link[3] == preview["id"] for link in graph["links"])
+    assert all(link[4] == 0 for link in graph["links"] if link[3] == preview["id"])
+    assert preview["widgets_values"][-2] == "none"
     named = nodes[312]["widgets_values_named"]
     assert nodes[312]["widgets_values"] == list(named.values())
     assert (named["prompt_mode"], named["chunks"], named["chunk_seconds"]) == ("Auto", 2, 8)

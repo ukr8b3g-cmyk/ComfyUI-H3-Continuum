@@ -1,6 +1,7 @@
 """Phase A: real audited KJ wrapper, CPU-only observation and Run Storage gates."""
 from __future__ import annotations
 
+import hashlib
 import importlib
 import json
 import os
@@ -31,7 +32,18 @@ def kj(require_comfy_core, request):
     package = types.ModuleType("issue31_kj_preview_tests_" + request.param)
     package.__path__ = [str(Path(root) / "nodes")]
     sys.modules[package.__name__] = package
-    return importlib.import_module(package.__name__ + ".preview_override_node")
+    provider = importlib.import_module(package.__name__ + ".preview_override_node")
+    # Positive-profile fixtures also run on the old Core. Only the audio-scale
+    # provider is admitted for the new Core preview implementation.
+    core = Path(provider.latent_preview.__file__).read_bytes().replace(b"\r\n", b"\n")
+    source = Path(provider.__file__).read_bytes().replace(b"\r\n", b"\n")
+    older_sources = {adapter._PROFILE["source_sha256"], adapter._PUBLIC_PROFILE["source_sha256"]}
+    if (hashlib.sha256(core).hexdigest() == "572f6224fb912d5df9583497356f4fb2b3af56a7949e87fe431912c59f12cb39"
+            and hashlib.sha256(source).hexdigest() in older_sources):
+        descriptor, safe = adapter.preview_override_signature(wrapper(provider))
+        assert not safe and descriptor["unsupported"] == "provider source is outside the audited profile"
+        pytest.skip("Legacy KJ provider is correctly refused on this Core")
+    return provider
 
 
 def wrapper(kj, **settings):

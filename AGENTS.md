@@ -2,7 +2,7 @@
 
 ## Scope
 
-MiniMax H3 Continuum for ComfyUI. Package 3.10.3 provides the V3.9 Sampler and Reference Images helper, while retaining the separate V3.8X2 workflow. Source publication does not imply a GitHub Release or Registry package publication.
+MiniMax H3 Continuum for ComfyUI. Package 3.10.4 provides the V3.9 Sampler and Reference Images helper, while retaining the separate V3.8X2 workflow. Source publication does not imply a GitHub Release or Registry package publication.
 
 Sampling Contract v6 and Graph Contract v4 apply to new generation. Keep original v5 history readable, without reusing its Takes in v6 generation or rewriting stored manifests. Public node IDs, socket/widget order, official workflows, Run Storage v3 and State/Session formats remain unchanged.
 

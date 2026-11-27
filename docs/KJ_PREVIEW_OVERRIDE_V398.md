@@ -2,6 +2,10 @@
 
 The audited Preview Override wrapper can keep its transient image list without changing the MODEL sampling identity. The adapter retains fixed settings, source and loaded implementation checks, the complete audit-profile digest, and Core's cross-key/list wrapper execution order. It does not add a generic exception for any field named `frames`.
 
+## Core 0.46.0 and 0.46.2
+
+The audio-scale KJ provider also supports the exact Core preview source shared by these two tags, with the audited dispatcher. The distinct profile preserves the original sampling identity on older Core. Phase A preview settings still apply.
+
 ## Audio-scale lookup provider
 
 The adapter additionally recognizes the exact Preview Override source

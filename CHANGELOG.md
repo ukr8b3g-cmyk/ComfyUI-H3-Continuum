@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.10.4 — KJ Preview Override and Review continuation
+
+Added an audited KJ Preview Override profile for Core 0.46.0 and 0.46.2. Disconnected the Turbo Sample’s preview VAE inputs. See the [release notes](docs/RELEASE_NOTES_V3104.md) for CPU, JavaScript and two-queue GPU results.
+
 ## 3.10.3 — Review and reference input fixes
 
 - Review honors a seed wired from an external INT. Local seed controls still apply to an unwired seed, and the backend checks the effective seed before reusing a Take.

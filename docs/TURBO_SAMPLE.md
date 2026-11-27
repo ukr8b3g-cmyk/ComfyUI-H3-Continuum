@@ -24,8 +24,8 @@ or a verified quality preset. Available in Templates as
   optional audio/video inputs retain sample filenames; select real files before
   enabling them. Reselect model/LoRA paths if you do not use a `minimax` subfolder.
 - Requires KJNodes (SageAttention and Model Preview Override), rgthree, and Spectrum
-  node definitions. Spectrum is OFF. Preview Override has video/audio VAE connected;
-  this is outside the audited v3.9.8 Preview Phase A Take-reuse profile.
+  node definitions. Spectrum is OFF. Preview Override uses Tiny VAE `none` and leaves its two optional VAE inputs disconnected.
+  For Review, enable Progress and Review Each Chunk in a new Run. Connecting a preview VAE makes new Takes read-only.
 - Thai lyric accuracy, unchanged background, identity preservation and subjective
   video/audio quality are not established by adding this sample. Thai is outside
   H3's explicitly listed stable dialogue languages. No new GPU test is claimed.
@@ -40,5 +40,5 @@ or a verified quality preset. Available in Templates as
 示します。画像・モデル・LoRAは各自で導入して選択してください。
 4-step/768p LoRAに対して6 steps・Draft解像度という添付の設定を保持しています。
 推奨設定や画質の合格を意味しません。タイ語の発音、人物・背景保持も未保証です。
-KJ Preview OverrideのVAE接続はv3.9.8の限定Take再利用検証の範囲外です。
+KJのプレビュー用VAE入力は両方未接続、Tiny VAEはnoneです。Reviewは新規RunでProgressとReview Each Chunkを有効にします。プレビュー用VAEを接続すると、新しいTakeは読み取り専用になります。
 今回はサンプル追加とCPU検証のみで、実環境反映・新規GPU試験・Release更新は行いません。

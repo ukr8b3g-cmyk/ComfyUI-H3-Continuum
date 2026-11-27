@@ -1,5 +1,9 @@
 # Public development log
 
+## 2026-11-28 — Issue #42 GPU verification
+
+Added an audited KJ Preview Override profile for Core 0.46.0 and 0.46.2. Disconnected the Turbo Sample’s preview VAE inputs. See the [release notes](docs/RELEASE_NOTES_V3104.md) for CPU, JavaScript and two-queue GPU results.
+
 ## 2026-11-18 — Review preflight and inactive reference slots
 
 Reproduced the wired-seed Review stop and the stale, disconnected reference assignment on the previous main. Tested wired and unwired seeds, inactive selectors, and validation after reconnect. See the [3.10.3 release checks](docs/RELEASE_NOTES_V3103.md) for the CPU and GPU results.

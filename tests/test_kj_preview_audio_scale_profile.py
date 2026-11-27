@@ -101,7 +101,7 @@ def test_real_wrapper_preserves_cpu_av_inputs_and_executor_result(kj, monkeypatc
     import comfy.utils
 
     active, _ = adapter._provider_source(kj.__file__)
-    patched_scale = active['id'] == adapter._AUDIO_SCALE_PROFILE['id']
+    patched_scale = active['source_sha256'] == adapter._AUDIO_SCALE_PROFILE['source_sha256']
     reads = []
     class Sampling:
         @property
@@ -147,3 +147,28 @@ def test_real_wrapper_preserves_cpu_av_inputs_and_executor_result(kj, monkeypatc
     assert len(item.frames) == 1
     assert all(torch.equal(a,b) for a,b in zip((noise,latent,mask,sigmas),originals))
     assert not torch.cuda.is_initialized()
+
+
+def test_same_kj_requires_exact_core_pair(tmp_path, monkeypatch):
+    preview = tmp_path / "latent_preview.py"
+    dispatcher = tmp_path / "patcher_extension.py"
+    provider = tmp_path / "kj.py"
+    provider.write_bytes(b"provider")
+    dispatcher.write_bytes(b"dispatcher")
+    common = dict(source_sha256=hashlib.sha256(provider.read_bytes()).hexdigest(),
+                  core_dispatch_sha256=hashlib.sha256(dispatcher.read_bytes()).hexdigest())
+    profiles = tuple(dict(common, core_preview_sha256=hashlib.sha256(body).hexdigest())
+                     for body in (b"old\n", b"new\n"))
+    monkeypatch.setattr(adapter, "_PROFILES", profiles)
+    monkeypatch.setitem(adapter.sys.modules, "latent_preview", SimpleNamespace(__file__=preview))
+    monkeypatch.setitem(adapter.sys.modules, "comfy.patcher_extension", SimpleNamespace(__file__=dispatcher))
+    for body, expected in zip((b"old\n", b"new\r\n"), profiles):
+        preview.write_bytes(body)
+        assert adapter._provider_source(provider)[0] is expected
+    preview.write_bytes(b"unknown")
+    with pytest.raises(ValueError, match="outside the audited profile"):
+        adapter._provider_source(provider)
+    preview.write_bytes(b"new\n")
+    dispatcher.write_bytes(b"unknown")
+    with pytest.raises(ValueError, match="outside the audited profile"):
+        adapter._provider_source(provider)
